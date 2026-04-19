@@ -1,0 +1,363 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Tenant (mỗi khách hàng doanh nghiệp) ────────────────────────────────────
+model Tenant {
+  id          String   @id @default(cuid())
+  name        String
+  industry    String?
+  slug        String   @unique
+  setupDone   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  // Channels đang được theo dõi (TELEGRAM, ZALO, LARK)
+  // Message từ channel không trong list sẽ bị drop ở webhook
+  enabledChannels String[] @default(["TELEGRAM", "ZALO", "LARK"])
+
+  // Plan / quota (cho SaaS tiering sau này)
+  plan       String @default("free")         // free | basic | pro | enterprise
+  maxGroups  Int    @default(50)              // số nhóm tối đa được monitor
+  maxMessagesPerMonth Int @default(10000)     // quota message/tháng
+
+  // Webhook secret — mỗi tenant 1 secret riêng (OpenClaw hook dùng để auth)
+  webhookSecret   String  @unique @default(cuid())
+
+  // ── Super-admin / License ─────────────────────────────────────────────────
+  active           Boolean   @default(true)   // false = bị tạm ngưng, block truy cập
+  suspendedReason  String?                    // lý do ngưng (hết hạn, nợ phí, vi phạm)
+  licenseKey       String?   @unique          // key kích hoạt (nil = bản dùng thử)
+  licenseExpiresAt DateTime?                  // hạn sử dụng, null = vĩnh viễn
+  contactName      String?                    // tên người liên hệ bên khách
+  contactPhone     String?                    // sđt liên hệ
+  contactEmail     String?                    // email liên hệ
+  notes            String?                    // ghi chú nội bộ (chỉ super-admin thấy)
+
+  // Usage counter — reset mỗi đầu tháng
+  messagesThisMonth Int     @default(0)
+  usageResetAt      DateTime @default(now())
+
+  users                User[]
+  groups               Group[]
+  notificationChannels NotificationChannel[]
+  alerts               Alert[]
+  customers            Customer[]
+  deals                Deal[]
+  alertRules           AlertRule[]
+  classificationConfig ClassificationConfig?
+
+  @@map("tenants")
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+model User {
+  id           String   @id @default(cuid())
+  tenantId     String
+  name         String
+  email        String?
+  passwordHash String?
+  role         UserRole @default(STAFF)
+  createdAt    DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+enum UserRole {
+  OWNER
+  MANAGER
+  STAFF
+}
+
+// ─── NotificationChannel ──────────────────────────────────────────────────────
+model NotificationChannel {
+  id          String          @id @default(cuid())
+  tenantId    String
+  label       String
+  channelType ChannelType
+  purpose     ChannelPurpose  @default(BOTH)
+  target      String          // webhook URL, chat_id, email, zalo_id
+  minPriority Priority        @default(HIGH)
+  schedule    String?         // cron expression, null = real-time
+  enabled     Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("notification_channels")
+}
+
+enum ChannelType {
+  ZALO
+  TELEGRAM
+  LARK
+  EMAIL
+}
+
+enum ChannelPurpose {
+  ALERT    // real-time cảnh báo
+  DIGEST   // tổng hợp định kỳ
+  BOTH
+}
+
+// ─── Group (nhóm Zalo/Telegram) ───────────────────────────────────────────────
+model Group {
+  id              String      @id @default(cuid())
+  tenantId        String
+  externalId      String      // group_id từ Zalo/Telegram
+  channelType     SourceChannel
+  name            String
+  category        String?     // "Khách hàng" | "Đại lý" | "Nội bộ" | ...
+  avatarUrl       String?     // URL avatar group từ Zalo
+  botEnabled      Boolean     @default(true)
+  monitorEnabled  Boolean     @default(true)
+  memberCount     Int?
+  lastMessageAt   DateTime?
+  isActive        Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  messages Message[]
+  alerts   Alert[]
+
+  @@unique([tenantId, externalId, channelType])
+  @@map("groups")
+}
+
+enum SourceChannel {
+  ZALO
+  TELEGRAM
+  LARK
+}
+
+// ─── Message ──────────────────────────────────────────────────────────────────
+model Message {
+  id          String      @id @default(cuid())
+  groupId     String
+  externalId  String      // messageId từ Zalo
+  senderType  SenderType  @default(CONTACT)
+  senderId    String
+  senderName  String?
+  contentType ContentType @default(TEXT)
+  content     String?
+  attachments Json?       // mediaUrls, mediaPaths
+  quoteMsgId  String?
+  quoteText   String?
+  sentAt      DateTime
+  createdAt   DateTime    @default(now())
+
+  group    Group            @relation(fields: [groupId], references: [id])
+  analysis MessageAnalysis?
+  alerts   Alert[]
+
+  @@unique([groupId, externalId])
+  @@map("messages")
+}
+
+enum ContentType {
+  TEXT
+  IMAGE
+  VIDEO
+  FILE
+  STICKER
+  VOICE
+  LINK
+}
+
+enum SenderType {
+  SELF     // bot tự gửi
+  CONTACT  // người dùng gửi
+}
+
+// ─── MessageAnalysis (kết quả AI) ─────────────────────────────────────────────
+model MessageAnalysis {
+  id         String    @id @default(cuid())
+  messageId  String    @unique
+  label      Label
+  sentiment  Sentiment
+  priority   Priority
+  confidence Float
+  reason     String?
+  action     Action
+  model      String    // tên model AI đã dùng
+  createdAt  DateTime  @default(now())
+
+  message Message @relation(fields: [messageId], references: [id])
+
+  @@map("message_analyses")
+}
+
+enum Label {
+  OPPORTUNITY
+  COMPLAINT
+  RISK
+  POSITIVE
+  NEUTRAL
+}
+
+enum Sentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum Action {
+  FOLLOW_UP
+  URGENT
+  IGNORE
+}
+
+// ─── Alert ────────────────────────────────────────────────────────────────────
+model Alert {
+  id         String      @id @default(cuid())
+  tenantId   String
+  groupId    String
+  messageId  String?
+  label      Label
+  priority   Priority
+  summary    String
+  status     AlertStatus @default(OPEN)
+  notified   Boolean     @default(false)
+  assignedTo String?     // userId được delegate
+  createdAt  DateTime    @default(now())
+  resolvedAt DateTime?
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id])
+  group   Group    @relation(fields: [groupId], references: [id])
+  message Message? @relation(fields: [messageId], references: [id])
+
+  @@map("alerts")
+}
+
+enum AlertStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  IGNORED
+}
+
+// ─── Customer (CRM mini) ──────────────────────────────────────────────────────
+model Customer {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String?
+  phone       String?
+  email       String?
+  zaloId      String?       // senderId từ Zalo
+  avatarUrl   String?       // URL avatar từ Zalo
+  tag         CustomerTag  @default(COLD)
+  note        String?
+  revenue     Float        @default(0)
+  firstSeen   DateTime     @default(now())
+  lastActivity DateTime    @default(now())
+  totalMessages Int        @default(0)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  deals  Deal[]
+
+  @@unique([tenantId, phone])
+  @@unique([tenantId, email])
+  @@unique([tenantId, zaloId])
+  @@map("customers")
+}
+
+enum CustomerTag {
+  HOT
+  WARM
+  COLD
+  CLOSED_WON
+  CLOSED_LOST
+}
+
+// ─── Deal (Sales Pipeline) ────────────────────────────────────────────────────
+model Deal {
+  id          String     @id @default(cuid())
+  tenantId    String
+  customerId  String?
+  title       String
+  stage       DealStage  @default(NEW)
+  value       Float      @default(0)
+  description String?
+  assignedTo  String?    // userId
+  dueDate     DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  closedAt    DateTime?
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id])
+  customer Customer? @relation(fields: [customerId], references: [id])
+
+  @@map("deals")
+}
+
+enum DealStage {
+  NEW
+  CONTACTED
+  INTERESTED
+  PROPOSAL
+  WON
+  LOST
+}
+
+// ─── ClassificationConfig (tune AI analysis per tenant) ──────────────────────
+model ClassificationConfig {
+  id       String @id @default(cuid())
+  tenantId String @unique
+
+  // Keywords tuỳ chỉnh theo ngành
+  positiveKeywords    String[] @default([])
+  negativeKeywords    String[] @default([])
+  opportunityKeywords String[] @default([])
+  complaintKeywords   String[] @default([])
+  riskKeywords        String[] @default([])
+
+  // Ngưỡng response time
+  replyTimeoutMinutes Int     @default(60)   // > X phút chưa reply = chậm
+  requireQuoteReply   Boolean @default(false) // có bắt buộc quote message gốc khi reply không
+
+  // Custom AI system prompt override
+  customPrompt String?
+
+  // Industry preset cho AI
+  industry String? // "real_estate" | "insurance" | "retail" | ...
+
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("classification_configs")
+}
+
+// ─── AlertRule (custom alert conditions) ──────────────────────────────────────
+model AlertRule {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  enabled     Boolean  @default(true)
+  keywords    String[] // any match
+  groupIds    String[] // scope to these groups (empty = all)
+  labels      String[] // trigger when label in list (e.g. ['COMPLAINT', 'RISK'])
+  minPriority Priority @default(HIGH)
+  notifyVia   String[] // ['zalo', 'telegram', 'lark', 'email']
+  cooldownMin Int      @default(10)
+  lastFiredAt DateTime?
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("alert_rules")
+}

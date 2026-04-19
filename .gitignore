@@ -1,0 +1,73 @@
+# Secrets — KHÔNG commit
+.env
+.env.local
+.env.*.local
+**/.env
+!**/.env.example
+
+# Node
+node_modules/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Prisma — giữ schema + migrations, bỏ generated client
+backend/node_modules/
+backend/prisma/.env
+backend/src/generated/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+!.vscode/settings.json.example
+
+# Docker volumes / runtime
+postgres-data/
+redis-data/
+caddy-data/
+caddy-config/
+uploads/
+data/
+
+# Database dumps
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.sql.backup
+
+# Logs
+logs/
+*.log
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Temporary
+tmp/
+temp/
+.cache/
+
+# Backups
+*.bak
+*.backup
+*.backup.*

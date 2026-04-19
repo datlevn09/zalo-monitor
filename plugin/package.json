@@ -1,0 +1,10 @@
+{
+  "name": "@zalo-monitor/hooks",
+  "version": "1.0.0",
+  "description": "Forward OpenClaw message events to Zalo Monitor backend",
+  "type": "module",
+  "openclaw": {
+    "hooks": ["./hooks/zalo-monitor"]
+  },
+  "dependencies": {}
+}

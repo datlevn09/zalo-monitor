@@ -1,0 +1,14 @@
+{$DOMAIN} {
+    # Tự động HTTPS qua Let's Encrypt
+    encode gzip zstd
+
+    # Dashboard (Next.js)
+    reverse_proxy /api/* backend:3001
+    reverse_proxy /webhook/* backend:3001
+    reverse_proxy /ws backend:3001
+
+    # Các route còn lại → dashboard
+    reverse_proxy dashboard:3000
+}
+
+# HTTP → HTTPS redirect (tự động bởi Caddy)
