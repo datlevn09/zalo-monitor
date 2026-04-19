@@ -16,7 +16,10 @@ export const webhookRoutes: FastifyPluginAsync = async (app) => {
     // Fallback: chấp nhận WEBHOOK_SECRET global (cho hooks legacy trước khi có per-tenant)
     const tenant = await db.tenant.findUnique({
       where: { id: tenantId },
-      select: { enabledChannels: true, webhookSecret: true, active: true },
+      select: {
+        enabledChannels: true, webhookSecret: true, active: true,
+        monitorDMs: true, allowedDMIds: true,
+      },
     })
     if (!tenant) return reply.status(404).send({ error: 'Tenant not found' })
     if (!tenant.active) return reply.status(403).send({ error: 'Tenant suspended' })
@@ -36,6 +39,16 @@ export const webhookRoutes: FastifyPluginAsync = async (app) => {
     const channel = detectChannel(raw, msg)
     if (!tenant.enabledChannels.includes(channel)) {
       return reply.status(200).send({ ok: true, skipped: true, reason: 'channel_disabled', channel })
+    }
+
+    // PRIVACY: skip DMs (tin nhắn 1-1) mặc định.
+    // Tenant phải opt-in qua Settings nếu muốn theo dõi (vì tài khoản Zalo
+    // chạy OpenClaw là Zalo cá nhân — mọi DM bao gồm cả vợ/bạn đều đi qua hook).
+    if (!msg.isGroup) {
+      const inAllowlist = tenant.allowedDMIds.includes(msg.threadId)
+      if (!tenant.monitorDMs && !inAllowlist) {
+        return reply.status(200).send({ ok: true, skipped: true, reason: 'dm_not_monitored' })
+      }
     }
 
     // Telegram command handling — khi user DM bot với "/lệnh"

@@ -10,6 +10,8 @@ type Tenant = {
   industry: string | null
   enabledChannels: string[]
   setupDone: boolean
+  monitorDMs: boolean
+  allowedDMIds: string[]
 }
 
 const CHANNELS = [
@@ -93,6 +95,51 @@ export default function SettingsPage() {
             </div>
           )
         })}
+      </Section>
+
+      {/* Privacy — DM monitoring */}
+      <Section
+        title="🔒 Quyền riêng tư"
+        description="Tài khoản Zalo chạy OpenClaw là Zalo cá nhân. Tin nhắn 1-1 (DM) mặc định KHÔNG được lưu để bảo vệ privacy của chủ tài khoản."
+      >
+        <div className="flex items-center gap-3 px-4 py-3.5">
+          <div className="w-10 h-10 rounded-2xl bg-amber-500 flex items-center justify-center text-white font-bold shrink-0">
+            💬
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Theo dõi tin nhắn 1-1 (DM)</p>
+            <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+              Chỉ bật nếu bán hàng qua Zalo cá nhân. Tin nhắn với vợ/bạn/gia đình sẽ bị lưu!
+            </p>
+          </div>
+          <button
+            onClick={async () => {
+              setSaving(true)
+              const next = !tenant.monitorDMs
+              await api('/api/tenants/current', {
+                method: 'PATCH',
+                body: JSON.stringify({ monitorDMs: next }),
+              })
+              setTenant({ ...tenant, monitorDMs: next })
+              setSaving(false); setSaved(true)
+              setTimeout(() => setSaved(false), 2000)
+            }}
+            disabled={saving}
+            className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${tenant.monitorDMs ? 'bg-amber-500' : 'bg-gray-300 dark:bg-white/15'} ${saving ? 'opacity-50' : ''}`}
+          >
+            <span
+              className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform"
+              style={{ transform: tenant.monitorDMs ? 'translateX(20px)' : 'translateX(0)' }}
+            />
+          </button>
+        </div>
+        {tenant.monitorDMs && (
+          <div className="px-4 py-3 bg-amber-50 dark:bg-amber-500/10 border-t border-amber-200 dark:border-amber-500/30">
+            <p className="text-xs text-amber-800 dark:text-amber-300">
+              ⚠️ Đang theo dõi TẤT CẢ DM — cân nhắc dùng allowlist (nhập ID Zalo của khách cụ thể) thay vì bật toàn bộ.
+            </p>
+          </div>
+        )}
       </Section>
 
       {/* Save indicator */}

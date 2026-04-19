@@ -24,6 +24,7 @@ export const tenantRoutes: FastifyPluginAsync = async (app) => {
       select: {
         id: true, name: true, slug: true, industry: true,
         enabledChannels: true, setupDone: true,
+        monitorDMs: true, allowedDMIds: true,
       },
     })
     if (!tenant) return reply.status(404).send({ error: 'Not found' })
@@ -35,13 +36,21 @@ export const tenantRoutes: FastifyPluginAsync = async (app) => {
     const tenantId = req.headers['x-tenant-id'] as string
     if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
 
-    const body = req.body as { name?: string; industry?: string; enabledChannels?: string[] }
+    const body = req.body as {
+      name?: string
+      industry?: string
+      enabledChannels?: string[]
+      monitorDMs?: boolean
+      allowedDMIds?: string[]
+    }
     const updated = await db.tenant.update({
       where: { id: tenantId },
       data: {
         ...(body.name ? { name: body.name } : {}),
         ...(body.industry !== undefined ? { industry: body.industry } : {}),
         ...(body.enabledChannels ? { enabledChannels: body.enabledChannels } : {}),
+        ...(body.monitorDMs !== undefined ? { monitorDMs: body.monitorDMs } : {}),
+        ...(body.allowedDMIds !== undefined ? { allowedDMIds: body.allowedDMIds } : {}),
       },
     })
     return updated

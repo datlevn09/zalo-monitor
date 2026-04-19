@@ -20,6 +20,15 @@ model Tenant {
   // Message từ channel không trong list sẽ bị drop ở webhook
   enabledChannels String[] @default(["TELEGRAM", "ZALO", "LARK"])
 
+  // Theo dõi tin nhắn 1-1 (DM) hay không. Mặc định FALSE — privacy mặc định:
+  // chỉ theo dõi nhóm công việc, tin nhắn cá nhân (vợ, bạn...) bị bỏ qua.
+  // Opt-in: tenant tự bật trong Settings nếu bán hàng qua Zalo cá nhân.
+  monitorDMs Boolean @default(false)
+
+  // Allowlist per-DM: dù monitorDMs=false, tin nhắn 1-1 với những externalId này vẫn được lưu.
+  // Dùng cho trường hợp bán hàng qua Zalo cá nhân — chỉ chọn đúng khách muốn theo dõi.
+  allowedDMIds String[] @default([])
+
   // Plan / quota (cho SaaS tiering sau này)
   plan       String @default("free")         // free | basic | pro | enterprise
   maxGroups  Int    @default(50)              // số nhóm tối đa được monitor
