@@ -1,106 +1,132 @@
 # Zalo Monitor
 
-> AI-powered chat monitoring dashboard cho doanh nghiệp Việt. Theo dõi Zalo / Telegram / Lark groups — phân loại bằng AI, cảnh báo real-time, quản lý pipeline bán hàng.
+> AI-powered dashboard theo dõi tin nhắn Zalo / Telegram / Lark cho doanh nghiệp Việt. Phân loại bằng AI, cảnh báo real-time, pipeline bán hàng — **miễn phí, open source**.
 
-Sản phẩm đóng gói cho reseller: bạn deploy trên VPS, cấp license cho khách, khách cài hook vào OpenClaw của họ → dashboard nhận tin nhắn, phân tích, cảnh báo.
-
----
+![License](https://img.shields.io/badge/license-MIT-blue) ![Node](https://img.shields.io/badge/node-18%2B-green) ![Stack](https://img.shields.io/badge/stack-Next.js%2015%20%2B%20Fastify-black)
 
 ## Tính năng
 
-**Dành cho chủ doanh nghiệp (khách hàng):**
-- Theo dõi mọi nhóm chat Zalo/Telegram/Lark trong 1 dashboard
-- AI tự phân loại: cơ hội / khiếu nại / rủi ro / tích cực
-- Cảnh báo real-time khi có vấn đề khẩn cấp
-- Pipeline Kanban quản lý deal
-- Auto-extract khách hàng (phone, email, avatar) từ tin nhắn
-- Báo cáo hàng ngày / tuần / tháng qua Zalo, Telegram, Lark, Email
-- Chat với AI để query data bằng ngôn ngữ tự nhiên
-- Dark mode + iOS-style UI
-
-**Dành cho reseller (publisher):**
-- Super Admin panel quản lý nhiều tenant
-- Cấp / gia hạn license key (1/3/6/12 tháng)
-- Suspend / activate tenant
-- Monitor MRR, usage, tenants sắp hết hạn
-- Multi-tenant isolation (mỗi khách 1 webhook secret riêng)
+- 📱 Theo dõi mọi nhóm chat **Zalo / Telegram / Lark** trong 1 dashboard iOS-style
+- 🤖 **AI tự phân loại** tin nhắn: cơ hội / khiếu nại / rủi ro / tích cực (Claude Haiku + keyword fallback)
+- 🚨 Cảnh báo real-time khi có vấn đề khẩn cấp (gửi qua Zalo/Telegram/Lark/Email)
+- 💼 Pipeline Kanban quản lý deal bán hàng
+- 👥 Auto-extract khách hàng (phone, email, avatar) từ tin nhắn
+- 📊 Báo cáo hàng ngày / tuần / tháng
+- 🎙️ Chat với AI bằng tiếng Việt tự nhiên để query data
+- 🌓 Dark mode + responsive mobile
+- 🔐 Multi-tenant: 1 instance phục vụ nhiều doanh nghiệp, mỗi doanh nghiệp 1 webhook secret riêng
+- 🛡️ Super Admin panel quản lý tenants, license, usage
 
 ## Kiến trúc
 
 ```
-┌─ Khách A: OpenClaw ──┐    ┌──────────────────────┐
-│  Zalo + Telegram     │───▶│                      │
-└──────────────────────┘    │   Backend (Fastify)  │    ┌────────────────┐
-                             │   + PostgreSQL       │◀──▶│  Dashboard     │
-┌─ Khách B: OpenClaw ──┐    │   + Redis (BullMQ)   │    │  (Next.js)     │
-│  Lark + Zalo         │───▶│                      │    └────────────────┘
-└──────────────────────┘    └──────────────────────┘
-      (hook forward)                (AI + storage)          (khách dùng)
+┌─ Máy có OpenClaw ────┐   ┌─────────────────────┐
+│  (Zalo/Telegram/Lark)│─▶ │  Backend (Fastify)  │
+└──────────────────────┘   │  + PostgreSQL       │◀─▶ Dashboard (Next.js)
+        (hook forward)     │  + Redis (BullMQ)   │     (iOS-style UI)
+                            └─────────────────────┘
+                                 (AI + storage)
 ```
 
-- **OpenClaw** (của mỗi khách): đăng nhập Zalo/Telegram/Lark, phát event khi có tin nhắn
-- **Hook** (`plugin/hooks/zalo-monitor/`): cài trên OpenClaw khách, forward event về backend
-- **Backend**: nhận webhook, lưu DB, enqueue AI classify, gửi cảnh báo
-- **Dashboard**: khách xem real-time qua WebSocket, super-admin quản lý tenants
+- **OpenClaw** (không phải 1 phần repo này): đăng nhập Zalo/Telegram/Lark, phát event khi có tin nhắn
+- **Hook** (`plugin/hooks/zalo-monitor/`): cài lên OpenClaw, forward event về backend
+- **Backend**: nhận webhook, AI classify, gửi cảnh báo, API cho dashboard
+- **Dashboard**: realtime qua WebSocket, quản lý khách + deal + rules
 
 ## Stack
 
 - **Backend**: Node 18+, Fastify, Prisma, PostgreSQL 16, Redis 7, BullMQ, Anthropic SDK
 - **Dashboard**: Next.js 15, Tailwind 4, React 19
 - **Deploy**: Docker Compose + Caddy (auto HTTPS)
-- **AI**: Claude Haiku (có keyword fallback nếu không có API key)
+- **AI**: Claude Haiku (có keyword fallback nếu không set API key)
 
-## Cài đặt nhanh (dev)
+## Quickstart (dev local)
+
+Yêu cầu: Docker, Node 18+.
 
 ```bash
-git clone <repo-url> zalo-monitor
+git clone https://github.com/<your-user>/zalo-monitor.git
 cd zalo-monitor
-cp .env.example .env
-# Điền các biến bắt buộc: POSTGRES_PASSWORD, JWT_SECRET, SUPER_ADMIN_TOKEN
-# Sinh secret: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
-docker compose up -d                 # khởi postgres + redis
-cd backend  && npm install && npx prisma db push && npm run dev
-cd dashboard && npm install && npm run dev
+# 1. Setup env
+cp .env.example .env
+# Điền các biến BẮT BUỘC: POSTGRES_PASSWORD, JWT_SECRET, SUPER_ADMIN_TOKEN
+# Sinh secret nhanh: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# 2. Chạy postgres + redis qua Docker
+docker compose up -d
+
+# 3. Chạy backend
+cd backend
+npm install
+npx prisma db push
+npm run dev      # http://localhost:3001
+
+# 4. Chạy dashboard (terminal khác)
+cd ../dashboard
+npm install
+npm run dev      # http://localhost:3000
 ```
 
+Truy cập:
 - Dashboard: http://localhost:3000
+- Setup wizard: http://localhost:3000/setup (tạo tenant đầu tiên)
 - Super Admin: http://localhost:3000/super-admin (dùng `SUPER_ADMIN_TOKEN`)
-- Backend: http://localhost:3001
 
 ## Deploy production
 
-Xem [DEPLOY.md](./DEPLOY.md) — 3 options:
-- **A. VPS + Caddy** (tự hosting, auto HTTPS cho khách)
-- **B. SaaS centralized** (reseller host tất cả khách trên 1 backend)
-- **C. Cloudflare Tunnel** (không cần mở port, đi qua Cloudflare)
+Xem [DEPLOY.md](./DEPLOY.md) — 3 options (VPS + Caddy, SaaS, Cloudflare Tunnel).
 
-## Khách cài hook OpenClaw
+Tóm tắt nhanh:
+```bash
+cp .env.example .env
+# Điền DOMAIN, POSTGRES_PASSWORD, JWT_SECRET, SUPER_ADMIN_TOKEN, LETSENCRYPT_EMAIL
+docker compose -f docker-compose.prod.yml up -d
+```
+Caddy tự fetch SSL cert → HTTPS ngay.
 
-Khách vào setup wizard trong dashboard:
-1. Điền thông tin doanh nghiệp
-2. Copy lệnh install (1 dòng) → paste vào terminal trên máy OpenClaw của họ:
+## Cài hook vào OpenClaw của bạn
+
+Hook = phần forward tin nhắn từ OpenClaw → backend. Sau khi dashboard chạy xong:
+
+1. Vào setup wizard → tạo tenant
+2. Copy lệnh install (tự sinh URL backend + secret), paste vào terminal máy chạy OpenClaw:
    ```bash
-   curl -fsSL "https://your-backend.com/api/setup/inject.sh?tenantId=xxx" | bash
+   curl -fsSL "https://<your-backend>/api/setup/inject.sh?tenantId=xxx" | bash
    ```
-3. Installer tự tải hook, ghi config, self-test ping — dashboard tự báo "✅ Hook đã kết nối"
-4. Cài kênh thông báo (Zalo/Telegram/Lark/Email)
+3. Installer tự tải hook, ghi config, self-test ping → dashboard hiện "✅ Hook đã kết nối"
 
-Xem [plugin/hooks/zalo-monitor/HOOK.md](./plugin/hooks/zalo-monitor/HOOK.md) cho chi tiết.
+Chi tiết: [plugin/hooks/zalo-monitor/HOOK.md](./plugin/hooks/zalo-monitor/HOOK.md).
 
-## Cấp license cho khách (reseller)
+## Cấu hình tùy chọn
 
-1. Khách tự đăng ký tenant qua `/setup` → status `trial`
-2. Khách thanh toán
-3. Bạn vào `/super-admin` → chọn tenant → chọn số tháng → **Gia hạn**
-4. Hệ thống tự sinh license key (`ZM-XXXX-XXXX-XXXX`) + set hạn + kích hoạt
-5. Hết hạn → tenant tự động bị block (`403 LICENSE_EXPIRED`)
+- **AI classify**: set `ANTHROPIC_API_KEY` trong `backend/.env`. Không set → dùng keyword fallback (free).
+- **Email (forgot-password)**: set `SMTP_*` trong backend/.env. Gmail App Password hoặc Resend đều OK.
+- **Google OAuth**: set `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI`. Đăng ký tại [console.cloud.google.com](https://console.cloud.google.com/apis/credentials).
+- **Ngành nghề**: dashboard có preset cho real estate, retail, insurance, v.v. — tự chỉnh keyword trong tab Cấu hình AI.
 
-## Contact & hỗ trợ
+## Contribute
+
+PR welcome. Xem [CONTRIBUTING.md](./CONTRIBUTING.md).
+
+Issue / feature request: mở issue tại GitHub.
+
+Roadmap ý tưởng:
+- Gán khách → nhân viên phụ trách + auto follow-up
+- Mẫu tin nhắn nhanh (canned replies)
+- SMS OTP login
+- Dashboard khách xem license của chính họ
+- Webhook secret rotation UI
+
+## Tác giả & hỗ trợ
+
+Build bởi [@dat.thong.dong](https://datthongdong.com) — Lê Đạt
 
 - Web: https://datthongdong.com
-- Zalo/Tele/Facebook/Email — xem footer dashboard
+- Zalo: 0869999664
+- Telegram: [@Datlevn09](https://t.me/Datlevn09)
+- Email: datle@outlook.com
 
 ## License
 
-Proprietary. Xem [LICENSE](./LICENSE). Không được sao chép, tái phân phối, hay làm sản phẩm phái sinh.
+MIT — xem [LICENSE](./LICENSE). Dùng free, sửa free, bán kiếm tiền cũng được. Chỉ xin giữ dòng copyright trong source.

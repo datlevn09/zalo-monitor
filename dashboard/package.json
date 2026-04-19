@@ -2,8 +2,8 @@
   "name": "zalo-monitor-dashboard",
   "version": "1.0.0",
   "description": "AI chat monitoring dashboard — Next.js 15 + Tailwind 4. Tenant + super-admin UI for Zalo Monitor.",
-  "license": "SEE LICENSE IN ../LICENSE",
-  "private": true,
+  "license": "MIT",
+  "author": "Đạt Thông Dong <datle@outlook.com> (https://datthongdong.com)",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
