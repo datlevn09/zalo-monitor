@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../services/db.js'
-import { createHash } from 'crypto'
+import { createHash, randomBytes } from 'crypto'
+import { sendMail } from '../services/mailer.js'
 
 function hashPassword(p: string) {
   return createHash('sha256').update(p).digest('hex')
@@ -27,18 +28,67 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
     return users.map(u => ({ ...u, assignedAlerts: countMap.get(u.id) ?? 0 }))
   })
 
+  // Invite — OWNER nhập email + role, hệ thống gửi email "Set password" cho người được mời.
+  // Tạo user với random password + reset token (hạn 7 ngày — dài hơn forgot-password vì chưa
+  // login bao giờ). Khi người được mời click link → đặt pass → tự login.
   app.post('/invite', async (req, reply) => {
     const tenantId = req.headers['x-tenant-id'] as string
-    const body = req.body as { name: string; email: string; password: string; role?: 'MANAGER' | 'STAFF' }
+    if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
+
+    const body = req.body as { name: string; email: string; role?: 'MANAGER' | 'STAFF' }
+    if (!body.name || !body.email) return reply.status(400).send({ error: 'Thiếu tên hoặc email' })
+
+    // Check duplicate trong tenant
+    const existing = await db.user.findFirst({ where: { tenantId, email: body.email } })
+    if (existing) return reply.status(409).send({ error: 'Email đã tồn tại trong doanh nghiệp này' })
+
+    const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { name: true } })
+    const inviteToken = randomBytes(32).toString('hex')
+    const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 ngày
+
+    // Random password — user sẽ set lại qua link, giá trị này không dùng được để login
+    const tempPass = randomBytes(16).toString('hex')
 
     const user = await db.user.create({
       data: {
-        tenantId, name: body.name, email: body.email,
-        passwordHash: hashPassword(body.password),
+        tenantId,
+        name: body.name,
+        email: body.email,
+        passwordHash: hashPassword(tempPass),
         role: body.role ?? 'STAFF',
+        resetToken: inviteToken,
+        resetTokenExpires: expires,
       },
     })
-    return { id: user.id, email: user.email, role: user.role }
+
+    const base = process.env.DASHBOARD_URL ?? 'http://localhost:3000'
+    const inviteLink = `${base}/reset-password?token=${inviteToken}&invite=1`
+
+    await sendMail({
+      to: body.email,
+      subject: `[${tenant?.name ?? 'Zalo Monitor'}] Bạn được mời tham gia dashboard`,
+      text: `Xin chào ${body.name},
+
+Bạn được mời tham gia dashboard Zalo Monitor của ${tenant?.name ?? 'doanh nghiệp'} với vai trò ${body.role ?? 'STAFF'}.
+
+Bấm vào link dưới đây để đặt mật khẩu và bắt đầu sử dụng:
+
+${inviteLink}
+
+Link hết hạn sau 7 ngày.
+
+— Zalo Monitor`,
+      html: `<p>Xin chào <b>${body.name}</b>,</p>
+<p>Bạn được mời tham gia dashboard <b>${tenant?.name ?? 'Zalo Monitor'}</b> với vai trò <code>${body.role ?? 'STAFF'}</code>.</p>
+<p>
+  <a href="${inviteLink}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:white;border-radius:12px;text-decoration:none;font-weight:600;">
+    Đặt mật khẩu & đăng nhập
+  </a>
+</p>
+<p style="color:#6b7280;font-size:12px;">Link hết hạn sau 7 ngày.</p>`,
+    }).catch(err => req.log.error(err, 'Failed to send invite email'))
+
+    return { id: user.id, email: user.email, role: user.role, invited: true }
   })
 
   app.patch('/:id', async (req, reply) => {

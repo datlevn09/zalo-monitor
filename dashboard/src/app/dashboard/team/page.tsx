@@ -64,14 +64,14 @@ export default function TeamPage() {
             <input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
               placeholder="Email" type="email"
               className="w-full mb-3 px-4 py-2.5 bg-gray-50 dark:bg-white/5 rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            <input value={form.password} onChange={e => setForm({ ...form, password: e.target.value })}
-              placeholder="Mật khẩu tạm" type="password"
-              className="w-full mb-3 px-4 py-2.5 bg-gray-50 dark:bg-white/5 rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-blue-500" />
             <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
-              className="w-full mb-4 px-4 py-2.5 bg-gray-50 dark:bg-white/5 rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-blue-500">
+              className="w-full mb-3 px-4 py-2.5 bg-gray-50 dark:bg-white/5 rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="STAFF">Staff</option>
               <option value="MANAGER">Manager</option>
             </select>
+            <p className="text-xs text-gray-500 dark:text-zinc-400 mb-4">
+              Hệ thống sẽ gửi email với link đặt mật khẩu cho người được mời (hạn 7 ngày).
+            </p>
             <div className="flex gap-2">
               <button onClick={() => setShowInvite(false)} className="flex-1 py-2.5 bg-gray-100 dark:bg-white/10 rounded-xl text-sm font-medium">Huỷ</button>
               <button onClick={invite} className="flex-1 py-2.5 bg-blue-500 hover:bg-blue-600 text-white rounded-xl text-sm font-medium">Mời</button>

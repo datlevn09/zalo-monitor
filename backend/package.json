@@ -12,7 +12,8 @@
     "db:migrate": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "init-secrets": "tsx scripts/init-secrets.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
