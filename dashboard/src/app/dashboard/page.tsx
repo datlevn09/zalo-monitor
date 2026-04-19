@@ -31,11 +31,18 @@ export default function OverviewPage() {
   const [data, setData] = useState<Overview | null>(null)
   const [live, setLive] = useState(false)
   const [showDigest, setShowDigest] = useState(false)
+  const [myGroupsCount, setMyGroupsCount] = useState<number | null>(null)
+  const [installCmd, setInstallCmd] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   const load = () => api<Overview>('/api/stats/overview').then(setData).catch(() => undefined)
 
   useEffect(() => {
     load()
+    // Check user đã cài hook chưa (bằng số groups họ sở hữu)
+    api<any[]>('/api/groups?scope=mine').then(gs => setMyGroupsCount(gs.length)).catch(() => undefined)
+    api<{ oneLineCommand: string }>('/api/auth/my-install-command').then(d => setInstallCmd(d.oneLineCommand)).catch(() => undefined)
+
     const close = connectWebSocket((event) => {
       if (event === 'message:new' || event === 'alert:new' || event === 'analysis:result') {
         setLive(true)
@@ -47,10 +54,43 @@ export default function OverviewPage() {
     return () => { close(); clearInterval(i) }
   }, [])
 
+  function copyCmd() {
+    if (!installCmd) return
+    navigator.clipboard.writeText(installCmd)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   const s = data?.stats
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
+      {/* Onboarding banner — hiện nếu user chưa cài hook nào cho Zalo của họ */}
+      {myGroupsCount === 0 && installCmd && (
+        <div className="mb-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-500/10 dark:to-indigo-500/10 border border-blue-200 dark:border-blue-500/30 rounded-2xl p-4 md:p-5">
+          <div className="flex items-start gap-3">
+            <div className="text-2xl">👋</div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Chào mừng! Cài hook để bắt đầu theo dõi Zalo của bạn</p>
+              <p className="text-xs text-gray-600 dark:text-zinc-400 mt-0.5 mb-3">
+                Chạy lệnh sau trên máy có OpenClaw + Zalo cá nhân của bạn. Tin nhắn sẽ forward về đây và chỉ bạn (và OWNER/MANAGER) thấy được.
+              </p>
+              <div className="bg-gray-900 dark:bg-black/60 rounded-xl p-2.5 font-mono text-[11px] text-green-400 break-all whitespace-pre-wrap">
+                {installCmd}
+              </div>
+              <div className="flex gap-2 mt-2">
+                <button onClick={copyCmd} className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg">
+                  {copied ? '✓ Đã copy' : '📋 Copy lệnh'}
+                </button>
+                <Link href="/dashboard/settings" className="px-3 py-1.5 bg-white dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 text-xs font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-white/15">
+                  Hướng dẫn chi tiết
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="mb-6 md:mb-8 flex items-start md:items-center justify-between flex-col md:flex-row gap-3">
         <div>
