@@ -64,6 +64,13 @@ model User {
   role         UserRole @default(STAFF)
   createdAt    DateTime @default(now())
 
+  // Forgot-password flow
+  resetToken         String?   @unique
+  resetTokenExpires  DateTime?
+
+  // Google OAuth (nullable — dùng email+password vẫn được)
+  googleId String? @unique
+
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@unique([tenantId, email])

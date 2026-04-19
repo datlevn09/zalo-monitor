@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { getTenantId, connectWebSocket } from '@/lib/api'
+import { getToken, getTenantId, connectWebSocket } from '@/lib/api'
 import { Footer } from '@/components/Footer'
 import { Header } from '@/components/Header'
 
@@ -28,7 +28,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [live, setLive] = useState(false)
 
   useEffect(() => {
-    if (!getTenantId()) router.replace('/setup')
+    // Ưu tiên JWT — không có token → login. Không có tenant → setup wizard.
+    if (!getToken()) router.replace('/login')
+    else if (!getTenantId()) router.replace('/setup')
     else setReady(true)
   }, [router])
 

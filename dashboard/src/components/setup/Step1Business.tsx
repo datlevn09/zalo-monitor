@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { SetupState } from '@/app/setup/page'
+import { setToken, setTenantId } from '@/lib/api'
 
 const INDUSTRIES = [
   'Bất động sản', 'Bảo hiểm', 'Phân phối / Bán lẻ',
@@ -36,6 +37,9 @@ export function Step1Business({ onDone }: { onDone: (s: SetupState) => void }) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Lỗi server')
+      // Auto-login với JWT backend vừa cấp
+      if (data.token) setToken(data.token)
+      setTenantId(data.tenantId)
       onDone({ tenantId: data.tenantId, slug: data.slug, webhookUrl: data.webhookUrl })
     } catch (err: any) {
       setError(err.message)

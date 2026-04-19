@@ -23,6 +23,7 @@ import { exportRoutes } from './routes/export.js'
 import { configRoutes } from './routes/config.js'
 import { superAdminRoutes } from './routes/super-admin.js'
 import { registerTenantGuard } from './services/tenant-guard.js'
+import { registerAuthGuard } from './services/auth-guard.js'
 import { wsManager } from './services/websocket.js'
 import { registerScheduledJobs } from './services/scheduler.js'
 import { generateDigestForTenant } from './services/digest.js'
@@ -33,6 +34,9 @@ const app = Fastify({ logger: true })
 await app.register(cors, { origin: true })
 await app.register(jwt, { secret: process.env.JWT_SECRET ?? 'dev-secret' })
 await app.register(websocket)
+
+// Bắt buộc JWT cho mọi route /api/* (trừ /api/auth, /api/setup, /api/super-admin, /webhook)
+registerAuthGuard(app)
 
 // Block suspended / expired tenants trước khi vào bất kỳ route nào
 registerTenantGuard(app)

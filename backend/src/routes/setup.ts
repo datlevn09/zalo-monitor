@@ -41,7 +41,7 @@ setInterval(() => {
 }, 60_000).unref?.()
 
 export const setupRoutes: FastifyPluginAsync = async (app) => {
-  // Step 1: Tạo tenant + owner account
+  // Step 1: Tạo tenant + owner account, trả JWT để auto-login
   app.post('/tenant', async (req, reply) => {
     const body = step1Schema.safeParse(req.body)
     if (!body.success) return reply.status(400).send({ error: body.error.flatten() })
@@ -49,6 +49,8 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     const { businessName, industry, ownerName, email, password } = body.data
     const slug = slugify(businessName)
 
+    // Trùng email trong cùng tenant là không xảy ra với tenant mới, nhưng email
+    // có thể đã tồn tại ở tenant khác — OK, vì unique là (tenantId, email)
     const tenant = await db.tenant.create({
       data: {
         name: businessName,
@@ -63,10 +65,17 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
           },
         },
       },
+      include: { users: { take: 1, orderBy: { createdAt: 'asc' } } },
     })
 
+    const owner = tenant.users[0]
+    const token = app.jwt.sign(
+      { userId: owner.id, tenantId: tenant.id, role: 'OWNER' },
+      { expiresIn: '30d' }
+    )
+
     const webhookUrl = `${resolveBackendUrl(req)}/webhook/message`
-    return { tenantId: tenant.id, slug, webhookUrl }
+    return { tenantId: tenant.id, slug, webhookUrl, token, user: { id: owner.id, name: owner.name, email: owner.email, role: 'OWNER' } }
   })
 
   // Step 2: Trả về lệnh inject + script để copy vào terminal OpenClaw
