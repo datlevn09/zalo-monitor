@@ -12,6 +12,12 @@ export const messageRoutes: FastifyPluginAsync = async (app) => {
     const group = await db.group.findFirst({ where: { id: groupId, tenantId } })
     if (!group) return reply.status(404).send({ error: 'Group not found' })
 
+    // Per-user: STAFF chỉ đọc được message của group họ sở hữu (hoặc group shared ownerUserId=null)
+    const auth = req.authUser
+    if (auth && auth.role === 'STAFF' && group.ownerUserId && group.ownerUserId !== auth.userId) {
+      return reply.status(403).send({ error: 'Group thuộc người khác, không có quyền xem' })
+    }
+
     const messages = await db.message.findMany({
       where: { groupId },
       orderBy: { sentAt: 'desc' },

@@ -80,7 +80,17 @@ model User {
   // Google OAuth (nullable — dùng email+password vẫn được)
   googleId String? @unique
 
+  // Mỗi user có 1 Zalo cá nhân riêng → cần webhook secret riêng.
+  // OpenClaw hook của họ sẽ ký bằng secret này, backend biết message thuộc user nào.
+  webhookSecret String @unique @default(cuid())
+
+  // Privacy per-user: mỗi người tự quyết có theo dõi DM của mình không (default KHÔNG).
+  // Allowlist các DM cụ thể được theo dõi (ID Zalo của khách).
+  monitorDMs   Boolean  @default(false)
+  allowedDMIds String[] @default([])
+
   tenant Tenant @relation(fields: [tenantId], references: [id])
+  ownedGroups Group[] @relation("GroupOwner")
 
   @@unique([tenantId, email])
   @@map("users")
@@ -127,6 +137,9 @@ enum ChannelPurpose {
 model Group {
   id              String      @id @default(cuid())
   tenantId        String
+  // User nào "sở hữu" Zalo mà nhóm này đến từ (per-user privacy).
+  // null = legacy (từ khi chưa có per-user model) — visible cho tất cả trong tenant.
+  ownerUserId     String?
   externalId      String      // group_id từ Zalo/Telegram
   channelType     SourceChannel
   name            String
@@ -139,11 +152,13 @@ model Group {
   isActive        Boolean     @default(true)
   createdAt       DateTime    @default(now())
 
-  tenant   Tenant    @relation(fields: [tenantId], references: [id])
-  messages Message[]
-  alerts   Alert[]
+  tenant    Tenant  @relation(fields: [tenantId], references: [id])
+  ownerUser User?   @relation("GroupOwner", fields: [ownerUserId], references: [id])
+  messages  Message[]
+  alerts    Alert[]
 
   @@unique([tenantId, externalId, channelType])
+  @@index([tenantId, ownerUserId])
   @@map("groups")
 }
 

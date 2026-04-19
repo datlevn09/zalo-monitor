@@ -14,6 +14,8 @@ type Tenant = {
   allowedDMIds: string[]
 }
 
+type InstallCommand = { oneLineCommand: string; dockerCommand: string }
+
 const CHANNELS = [
   { key: 'TELEGRAM', label: 'Telegram', icon: '✈️', tint: 'bg-sky-500',   desc: 'Theo dõi nhóm Telegram' },
   { key: 'ZALO',     label: 'Zalo',     icon: 'Z',  tint: 'bg-blue-500',  desc: 'Theo dõi nhóm Zalo cá nhân' },
@@ -25,13 +27,24 @@ export default function SettingsPage() {
   const [enabled, setEnabled] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [install, setInstall] = useState<InstallCommand | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [privacy, setPrivacy] = useState<{ monitorDMs: boolean; allowedDMIds: string[] } | null>(null)
 
   useEffect(() => {
     api<Tenant>('/api/tenants/current').then(t => {
       setTenant(t)
       setEnabled(new Set(t.enabledChannels))
     })
+    api<InstallCommand>('/api/auth/my-install-command').then(setInstall).catch(() => undefined)
+    api<{ monitorDMs: boolean; allowedDMIds: string[] }>('/api/auth/my-privacy').then(setPrivacy).catch(() => undefined)
   }, [])
+
+  function copy(text: string) {
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   async function toggle(key: string) {
     const next = new Set(enabled)
@@ -97,50 +110,83 @@ export default function SettingsPage() {
         })}
       </Section>
 
-      {/* Privacy — DM monitoring */}
-      <Section
-        title="🔒 Quyền riêng tư"
-        description="Tài khoản Zalo chạy OpenClaw là Zalo cá nhân. Tin nhắn 1-1 (DM) mặc định KHÔNG được lưu để bảo vệ privacy của chủ tài khoản."
-      >
-        <div className="flex items-center gap-3 px-4 py-3.5">
-          <div className="w-10 h-10 rounded-2xl bg-amber-500 flex items-center justify-center text-white font-bold shrink-0">
-            💬
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Theo dõi tin nhắn 1-1 (DM)</p>
-            <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-              Chỉ bật nếu bán hàng qua Zalo cá nhân. Tin nhắn với vợ/bạn/gia đình sẽ bị lưu!
+      {/* Hook install — cho Zalo cá nhân của user này */}
+      {install && (
+        <Section
+          title="📲 Zalo của tôi"
+          description="Lệnh cài hook vào OpenClaw chạy trên máy có Zalo cá nhân của bạn. Mỗi nhân viên chạy lệnh của chính họ trên máy họ."
+        >
+          <div className="px-4 py-3.5 space-y-3">
+            <div className="bg-gray-900 dark:bg-black/60 rounded-xl p-3 font-mono text-xs text-green-400 break-all whitespace-pre-wrap">
+              {install.oneLineCommand}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => copy(install.oneLineCommand)}
+                className="flex-1 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg"
+              >
+                {copied ? '✓ Đã copy' : '📋 Copy lệnh'}
+              </button>
+              <button
+                onClick={() => copy(install.dockerCommand)}
+                className="flex-1 py-2 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 text-gray-700 dark:text-zinc-300 text-xs font-medium rounded-lg"
+              >
+                🐳 Copy Docker
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-500 dark:text-zinc-400">
+              Paste vào terminal máy có OpenClaw → tin nhắn Zalo của bạn sẽ forward về đây, stamp là "của bạn". Team khác không đọc được DM của bạn.
             </p>
           </div>
-          <button
-            onClick={async () => {
-              setSaving(true)
-              const next = !tenant.monitorDMs
-              await api('/api/tenants/current', {
-                method: 'PATCH',
-                body: JSON.stringify({ monitorDMs: next }),
-              })
-              setTenant({ ...tenant, monitorDMs: next })
-              setSaving(false); setSaved(true)
-              setTimeout(() => setSaved(false), 2000)
-            }}
-            disabled={saving}
-            className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${tenant.monitorDMs ? 'bg-amber-500' : 'bg-gray-300 dark:bg-white/15'} ${saving ? 'opacity-50' : ''}`}
-          >
-            <span
-              className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform"
-              style={{ transform: tenant.monitorDMs ? 'translateX(20px)' : 'translateX(0)' }}
-            />
-          </button>
-        </div>
-        {tenant.monitorDMs && (
-          <div className="px-4 py-3 bg-amber-50 dark:bg-amber-500/10 border-t border-amber-200 dark:border-amber-500/30">
-            <p className="text-xs text-amber-800 dark:text-amber-300">
-              ⚠️ Đang theo dõi TẤT CẢ DM — cân nhắc dùng allowlist (nhập ID Zalo của khách cụ thể) thay vì bật toàn bộ.
-            </p>
+        </Section>
+      )}
+
+      {/* Privacy — DM monitoring (per-user) */}
+      {privacy && (
+        <Section
+          title="🔒 Quyền riêng tư của tôi"
+          description="Mỗi người tự quyết có theo dõi DM trên Zalo CÁ NHÂN của mình không. Cài đặt này chỉ áp dụng cho tin nhắn từ Zalo của bạn, không ảnh hưởng người khác."
+        >
+          <div className="flex items-center gap-3 px-4 py-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500 flex items-center justify-center text-white font-bold shrink-0">
+              💬
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Theo dõi tin nhắn 1-1 (DM) của tôi</p>
+              <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                Chỉ bật nếu bạn bán hàng qua Zalo cá nhân. Chat với vợ/bạn/gia đình cũng sẽ bị lưu.
+              </p>
+            </div>
+            <button
+              onClick={async () => {
+                setSaving(true)
+                const next = !privacy.monitorDMs
+                await api('/api/auth/my-privacy', {
+                  method: 'PATCH',
+                  body: JSON.stringify({ monitorDMs: next }),
+                })
+                setPrivacy({ ...privacy, monitorDMs: next })
+                setSaving(false); setSaved(true)
+                setTimeout(() => setSaved(false), 2000)
+              }}
+              disabled={saving}
+              className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${privacy.monitorDMs ? 'bg-amber-500' : 'bg-gray-300 dark:bg-white/15'} ${saving ? 'opacity-50' : ''}`}
+            >
+              <span
+                className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform"
+                style={{ transform: privacy.monitorDMs ? 'translateX(20px)' : 'translateX(0)' }}
+              />
+            </button>
           </div>
-        )}
-      </Section>
+          {privacy.monitorDMs && (
+            <div className="px-4 py-3 bg-amber-50 dark:bg-amber-500/10 border-t border-amber-200 dark:border-amber-500/30">
+              <p className="text-xs text-amber-800 dark:text-amber-300">
+                ⚠️ Đang theo dõi TẤT CẢ DM trên Zalo của bạn. Nên dùng allowlist (chỉ cho phép vài khách cụ thể) thay vì bật toàn bộ.
+              </p>
+            </div>
+          )}
+        </Section>
+      )}
 
       {/* Save indicator */}
       {saved && (

@@ -77,6 +77,55 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     }
   })
 
+  // ── /my-privacy — GET/PATCH privacy settings per-user (monitorDMs, allowedDMIds)
+  app.get('/my-privacy', async (req, reply) => {
+    const auth = req.headers.authorization
+    if (!auth?.startsWith('Bearer ')) return reply.status(401).send({ error: 'No token' })
+    let p: any
+    try { p = app.jwt.verify(auth.slice(7)) } catch { return reply.status(401).send({ error: 'Invalid token' }) }
+    const user = await db.user.findUnique({
+      where: { id: p.userId },
+      select: { monitorDMs: true, allowedDMIds: true },
+    })
+    if (!user) return reply.status(404).send({ error: 'User not found' })
+    return user
+  })
+
+  app.patch('/my-privacy', async (req, reply) => {
+    const auth = req.headers.authorization
+    if (!auth?.startsWith('Bearer ')) return reply.status(401).send({ error: 'No token' })
+    let p: any
+    try { p = app.jwt.verify(auth.slice(7)) } catch { return reply.status(401).send({ error: 'Invalid token' }) }
+    const body = req.body as { monitorDMs?: boolean; allowedDMIds?: string[] }
+    const updated = await db.user.update({
+      where: { id: p.userId },
+      data: {
+        ...(body.monitorDMs !== undefined ? { monitorDMs: body.monitorDMs } : {}),
+        ...(body.allowedDMIds !== undefined ? { allowedDMIds: body.allowedDMIds } : {}),
+      },
+      select: { monitorDMs: true, allowedDMIds: true },
+    })
+    return updated
+  })
+
+  // ── /my-install-command — user đã login lấy lệnh cài hook cho Zalo CÁ NHÂN của họ
+  app.get('/my-install-command', async (req, reply) => {
+    const auth = req.headers.authorization
+    if (!auth?.startsWith('Bearer ')) return reply.status(401).send({ error: 'No token' })
+    let p: any
+    try { p = app.jwt.verify(auth.slice(7)) } catch { return reply.status(401).send({ error: 'Invalid token' }) }
+
+    const proto = (req.headers['x-forwarded-proto'] as string) ?? (req.protocol ?? 'http')
+    const host  = (req.headers['x-forwarded-host'] as string) ?? (req.headers['host'] as string)
+    const backendUrl = process.env.PUBLIC_BACKEND_URL?.replace(/\/$/, '') ?? `${proto}://${host}`
+    const qs = `tenantId=${p.tenantId}&userId=${p.userId}`
+
+    return {
+      oneLineCommand: `curl -fsSL "${backendUrl}/api/setup/inject.sh?${qs}" | bash`,
+      dockerCommand:  `docker exec openclaw bash -c 'curl -fsSL "${backendUrl}/api/setup/inject.sh?${qs}" | bash'`,
+    }
+  })
+
   // ── Forgot password — gửi email kèm link reset ─────────────────────────
   app.post('/forgot-password', async (req, reply) => {
     const body = forgotSchema.safeParse(req.body)

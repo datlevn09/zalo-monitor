@@ -9,11 +9,16 @@ export const webhookRoutes: FastifyPluginAsync = async (app) => {
     const tenantId = req.headers['x-tenant-id'] as string
     if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
 
-    const secret = req.headers['x-webhook-secret']
+    const secret = req.headers['x-webhook-secret'] as string | undefined
     if (!secret) return reply.status(401).send({ error: 'Missing webhook secret' })
 
-    // Xác thực: secret phải khớp với webhookSecret riêng của tenant
-    // Fallback: chấp nhận WEBHOOK_SECRET global (cho hooks legacy trước khi có per-tenant)
+    // Priority: tìm user có webhookSecret khớp → dùng user đó (per-user model).
+    // Fallback: tenant-level secret (legacy hooks trước khi có per-user).
+    const hookUser = await db.user.findFirst({
+      where: { tenantId, webhookSecret: secret },
+      select: { id: true, monitorDMs: true, allowedDMIds: true },
+    })
+
     const tenant = await db.tenant.findUnique({
       where: { id: tenantId },
       select: {
@@ -26,9 +31,15 @@ export const webhookRoutes: FastifyPluginAsync = async (app) => {
 
     const globalSecret = process.env.WEBHOOK_SECRET
     const validSecret =
+      hookUser !== null ||
       secret === tenant.webhookSecret ||
       (globalSecret && globalSecret !== 'change-this-secret' && secret === globalSecret)
     if (!validSecret) return reply.status(401).send({ error: 'Invalid webhook secret' })
+
+    // Privacy settings: ưu tiên per-user nếu biết, fallback tenant-level
+    const monitorDMs   = hookUser?.monitorDMs   ?? tenant.monitorDMs
+    const allowedDMIds = hookUser?.allowedDMIds ?? tenant.allowedDMIds
+    const ownerUserId  = hookUser?.id ?? null
 
     const raw = req.body as Record<string, any>
 
@@ -42,11 +53,10 @@ export const webhookRoutes: FastifyPluginAsync = async (app) => {
     }
 
     // PRIVACY: skip DMs (tin nhắn 1-1) mặc định.
-    // Tenant phải opt-in qua Settings nếu muốn theo dõi (vì tài khoản Zalo
-    // chạy OpenClaw là Zalo cá nhân — mọi DM bao gồm cả vợ/bạn đều đi qua hook).
+    // Per-user: mỗi người tự quyết có theo dõi DM của mình không.
     if (!msg.isGroup) {
-      const inAllowlist = tenant.allowedDMIds.includes(msg.threadId)
-      if (!tenant.monitorDMs && !inAllowlist) {
+      const inAllowlist = allowedDMIds.includes(msg.threadId)
+      if (!monitorDMs && !inAllowlist) {
         return reply.status(200).send({ ok: true, skipped: true, reason: 'dm_not_monitored' })
       }
     }
@@ -62,8 +72,8 @@ export const webhookRoutes: FastifyPluginAsync = async (app) => {
       if (handled) return reply.status(200).send({ ok: true, handled: 'telegram_command' })
     }
 
-    // Auto-discover group nếu chưa có
-    const group = await upsertGroup(tenantId, msg, channel)
+    // Auto-discover group nếu chưa có, stamp owner để filter theo user sau này
+    const group = await upsertGroup(tenantId, msg, channel, ownerUserId)
 
     // Lưu message
     const message = await db.message.upsert({
@@ -108,7 +118,12 @@ export const webhookRoutes: FastifyPluginAsync = async (app) => {
   })
 }
 
-async function upsertGroup(tenantId: string, msg: NormalizedMessage, channel: 'ZALO' | 'TELEGRAM' | 'LARK') {
+async function upsertGroup(
+  tenantId: string,
+  msg: NormalizedMessage,
+  channel: 'ZALO' | 'TELEGRAM' | 'LARK',
+  ownerUserId: string | null
+) {
   const isDM = !msg.isGroup
   const fallbackName = isDM
     ? (msg.senderName ? `DM: ${msg.senderName}` : `DM ${msg.threadId.slice(-6)}`)
@@ -122,9 +137,10 @@ async function upsertGroup(tenantId: string, msg: NormalizedMessage, channel: 'Z
         channelType: channel,
       },
     },
-    update: {},
+    update: ownerUserId ? { ownerUserId } : {}, // back-fill owner nếu group tạo từ trước khi có user model
     create: {
       tenantId,
+      ownerUserId,
       externalId: msg.threadId,
       channelType: channel,
       name: msg.groupName ?? fallbackName,

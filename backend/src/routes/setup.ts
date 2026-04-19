@@ -78,9 +78,11 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     return { tenantId: tenant.id, slug, webhookUrl, token, user: { id: owner.id, name: owner.name, email: owner.email, role: 'OWNER' } }
   })
 
-  // Step 2: Trả về lệnh inject + script để copy vào terminal OpenClaw
+  // Step 2: Trả về lệnh inject + script để copy vào terminal OpenClaw.
+  // Accept userId để sinh command per-user — secret đó chỉ thuộc 1 user,
+  // tin nhắn Zalo của họ sẽ được stamp ownerUserId khi về backend.
   app.get('/inject-command', async (req, reply) => {
-    const { tenantId } = req.query as { tenantId: string }
+    const { tenantId, userId } = req.query as { tenantId: string; userId?: string }
     if (!tenantId) return reply.status(400).send({ error: 'tenantId required' })
 
     const tenant = await db.tenant.findUnique({
@@ -92,13 +94,17 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     const backendUrl = resolveBackendUrl(req)
     const webhookUrl = `${backendUrl}/webhook/message`
 
+    // Query embedding: tenantId required, userId optional (fallback tenant-level cho legacy)
+    const qs = userId ? `tenantId=${tenantId}&userId=${userId}` : `tenantId=${tenantId}`
+
     return {
       webhookUrl,
       tenantId,
+      userId: userId ?? null,
       // Chạy trực tiếp trên máy cài OpenClaw (host mode)
-      oneLineCommand: `curl -fsSL "${backendUrl}/api/setup/inject.sh?tenantId=${tenantId}" | bash`,
+      oneLineCommand: `curl -fsSL "${backendUrl}/api/setup/inject.sh?${qs}" | bash`,
       // OpenClaw chạy trong Docker — exec vào container openclaw
-      dockerCommand: `docker exec openclaw bash -c 'curl -fsSL "${backendUrl}/api/setup/inject.sh?tenantId=${tenantId}" | bash'`,
+      dockerCommand: `docker exec openclaw bash -c 'curl -fsSL "${backendUrl}/api/setup/inject.sh?${qs}" | bash'`,
       admin: {
         name: process.env.ADMIN_NAME ?? 'Support',
         zalo: process.env.ADMIN_ZALO ?? '',
@@ -109,9 +115,14 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
   })
 
   // Serve inject script (OpenClaw hook installer)
-  // Script tự chứa tenant-specific secret + URL, customer copy-paste hoặc chạy trực tiếp
+  // Script tự chứa secret + URL. Nếu userId được cung cấp → dùng user.webhookSecret
+  // (per-user model: tin nhắn Zalo của user đó được stamp ownerUserId). Không có userId
+  // → fallback tenant.webhookSecret (shared, không biết ai sở hữu).
   app.get('/inject.sh', async (req, reply) => {
-    const tenantId = String((req.query as any).tenantId ?? (req.query as any).TENANT_ID ?? '').trim()
+    const q = req.query as any
+    const tenantId = String(q.tenantId ?? q.TENANT_ID ?? '').trim()
+    const userId   = String(q.userId   ?? q.USER_ID   ?? '').trim()
+
     if (!tenantId) {
       reply.header('Content-Type', 'text/plain')
       return reply.status(400).send('#!/bin/bash\necho "❌ tenantId query param required" >&2\nexit 1\n')
@@ -130,9 +141,25 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(403).send('#!/bin/bash\necho "❌ Tenant suspended" >&2\nexit 1\n')
     }
 
+    // Ưu tiên per-user secret nếu có userId hợp lệ
+    let secret = tenant.webhookSecret
+    let displayName = tenant.name
+    if (userId) {
+      const user = await db.user.findFirst({
+        where: { id: userId, tenantId },
+        select: { webhookSecret: true, name: true },
+      })
+      if (!user) {
+        reply.header('Content-Type', 'text/plain')
+        return reply.status(404).send('#!/bin/bash\necho "❌ User not found in tenant" >&2\nexit 1\n')
+      }
+      secret = user.webhookSecret
+      displayName = `${user.name} @ ${tenant.name}`
+    }
+
     const backendUrl = resolveBackendUrl(req)
     reply.header('Content-Type', 'text/plain')
-    return generateOpenClawHookInstaller(backendUrl, tenant.webhookSecret, tenantId, tenant.name)
+    return generateOpenClawHookInstaller(backendUrl, secret, tenantId, displayName)
   })
 
   // Serve hook files for download (customer OpenClaw fetch khi install)
