@@ -98,7 +98,7 @@ Xem [plugin/hooks/zalo-monitor/HOOK.md](./plugin/hooks/zalo-monitor/HOOK.md) cho
 
 ## Contact & hỗ trợ
 
-- Web: https://datthongdong.ai
+- Web: https://datthongdong.com
 - Zalo/Tele/Facebook/Email — xem footer dashboard
 
 ## License

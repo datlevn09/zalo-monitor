@@ -12,7 +12,7 @@ export function Header({ right }: { right?: React.ReactNode }) {
           <p className="text-[10px] text-gray-500 dark:text-zinc-400 truncate">
             by{' '}
             <Link
-              href="https://datthongdong.ai"
+              href="https://datthongdong.com"
               target="_blank"
               rel="noopener noreferrer"
               className="hover:underline font-medium"

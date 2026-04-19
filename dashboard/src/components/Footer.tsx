@@ -7,7 +7,7 @@ const ZALO  = 'https://zalo.me/0869999664'
 const TELE  = 'https://t.me/Datlevn09'
 const FB    = 'https://fb.com/dat.thong.dong'
 const EMAIL = 'mailto:datle@outlook.com'
-const WEB   = 'https://datthongdong.ai'
+const WEB   = 'https://datthongdong.com'
 
 export function Footer() {
   return (
@@ -19,7 +19,7 @@ export function Footer() {
           <Pill href={TELE}  tint="bg-sky-500 hover:bg-sky-600"                  icon="✈️" title="Telegram @Datlevn09">Tele</Pill>
           <Pill href={FB}    tint="bg-[#1877F2] hover:bg-[#0f67d4]"              icon="f"  title="fb.com/dat.thong.dong">FB</Pill>
           <Pill href={EMAIL} tint="bg-gray-600 hover:bg-gray-700"                icon="✉️" title="datle@outlook.com">Email</Pill>
-          <Pill href={WEB}   tint="bg-gradient-to-br from-indigo-500 to-purple-600 hover:opacity-90" icon="🌐" title="datthongdong.ai">Web</Pill>
+          <Pill href={WEB}   tint="bg-gradient-to-br from-indigo-500 to-purple-600 hover:opacity-90" icon="🌐" title="datthongdong.com">Web</Pill>
           <span className="mx-1 w-px h-4 bg-gray-200 dark:bg-white/10" />
           <ThemeToggleCompact />
         </div>
