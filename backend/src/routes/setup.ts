@@ -316,6 +316,20 @@ if [ -z "$OPENCLAW_DIR" ]; then
   OPENCLAW_DIR="\${OPENCLAW_DIR:-}"
 fi
 OPENCLAW_DIR="\${OPENCLAW_DIR:-$HOME/.openclaw}"
+
+# ⚠️  Docker warning: nếu đang chạy trong container mà không có volume mount,
+#    hook sẽ mất khi update/recreate container.
+if [ -f /proc/1/cgroup ] && grep -q "docker\|containerd\|kubepods" /proc/1/cgroup 2>/dev/null; then
+  if ! mount | grep -q "$OPENCLAW_DIR" 2>/dev/null; then
+    echo ""
+    echo "⚠️  CẢNH BÁO: Đang chạy trong Docker container."
+    echo "   Nếu thư mục OpenClaw chưa được mount ra host, hook sẽ MẤT khi update openclaw."
+    echo "   Thêm vào docker-compose.yml của openclaw:"
+    echo "     volumes:"
+    echo "       - ./openclaw-config:/home/node/.openclaw"
+    echo ""
+  fi
+fi
 HOOK_DIR="$OPENCLAW_DIR/hooks/zalo-monitor"
 
 echo "🏠 OpenClaw:   $OPENCLAW_DIR"

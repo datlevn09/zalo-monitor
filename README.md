@@ -96,6 +96,24 @@ Hook = phần forward tin nhắn từ OpenClaw → backend. Sau khi dashboard ch
    ```
 3. Installer tự tải hook, ghi config, self-test ping → dashboard hiện "✅ Hook đã kết nối"
 
+Hook sẽ **không mất** khi update OpenClaw nếu cài đúng cách:
+
+| Cách cài OpenClaw | Hook có mất khi update? |
+|---|---|
+| Native (npm / binary trực tiếp trên máy/VPS) | ✅ Không mất — lưu trong `~/.openclaw/` |
+| Docker **có** mount volume | ✅ Không mất |
+| Docker **không** mount volume | ⚠️ **Mất** khi recreate container |
+
+Nếu chạy OpenClaw bằng Docker, thêm volume vào `docker-compose.yml`:
+```yaml
+services:
+  openclaw:
+    # ...
+    volumes:
+      - ./openclaw-config:/home/node/.openclaw  # giữ hook + config qua update
+```
+> Installer sẽ tự cảnh báo nếu phát hiện đang chạy trong Docker mà chưa có volume mount.
+
 Chi tiết: [plugin/hooks/zalo-monitor/HOOK.md](./plugin/hooks/zalo-monitor/HOOK.md).
 
 ## Cấu hình tùy chọn
