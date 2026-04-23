@@ -40,32 +40,106 @@
 - **Deploy**: Docker Compose + Caddy (auto HTTPS)
 - **AI**: Claude Haiku (có keyword fallback nếu không set API key)
 
-## Quickstart (dev local)
+## Cài Zalo Monitor Backend
 
-Yêu cầu: Docker, Node 18+.
+### Option A — VPS / Máy chủ Linux (khuyến nghị)
+
+**Cách nhanh nhất — dùng script tự động:**
 
 ```bash
-git clone https://github.com/<your-user>/zalo-monitor.git
+bash <(curl -fsSL https://raw.githubusercontent.com/datlevn09/zalo-monitor/main/scripts/deploy-vps.sh) your-domain.com your@email.com
+```
+
+Script sẽ hỏi các config cần thiết rồi tự chạy docker compose.
+
+**Hoặc cài thủ công:**
+
+```bash
+git clone https://github.com/datlevn09/zalo-monitor.git
 cd zalo-monitor
 
-# 1. Setup env
 cp .env.example .env
-# Điền các biến BẮT BUỘC: POSTGRES_PASSWORD, JWT_SECRET, SUPER_ADMIN_TOKEN
-# Sinh secret nhanh: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
-# 2. Chạy postgres + redis qua Docker
+# Điền các biến BẮT BUỘC trong .env:
+# - DOMAIN=your-domain.com
+# - POSTGRES_PASSWORD=<sinh bằng: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))">
+# - JWT_SECRET=<sinh bằng command trên>
+# - SUPER_ADMIN_TOKEN=<sinh bằng command trên>
+# - LETSENCRYPT_EMAIL=admin@your-domain.com (để tự fetch SSL)
+
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Caddy sẽ tự fetch SSL cert → dashboard sẽ chạy ở `https://your-domain.com`.
+
+### Option B — Synology NAS (Docker)
+
+1. Mở **Container Manager** (cài từ Package Center nếu chưa có)
+2. **Image** → tìm `postgres:16` + `redis:7-alpine`, tải xuống
+3. **Compose** → tạo file `docker-compose.yml` (copy từ `docker-compose.prod.yml` và sửa):
+   - Xóa Caddy service
+   - Để PostgreSQL + Redis bình thường
+   - Backend expose port `3001` + Dashboard port `3000`
+   - Điền `DOMAIN=<IP-NAS>:3000` hoặc domain riêng nếu có
+
+4. Deploy và truy cập qua `http://<IP-NAS>:3000`
+
+> **Lưu ý**: nếu muốn HTTPS, dùng Cloudflare Tunnel (Option C) hoặc cài reverse proxy phía trước.
+
+### Option C — Cloudflare Tunnel (không cần VPS, không cần port-forward)
+
+Dùng Cloudflare Tunnel để expose backend mà không cần mở port trên router:
+
+```bash
+# 1. Cài cloudflared (https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
+# 2. Login vào Cloudflare
+cloudflared tunnel login
+
+# 3. Tạo tunnel
+cloudflared tunnel create zalo-monitor
+
+# 4. Config routing (~/.cloudflared/config.yml)
+tunnel: zalo-monitor
+credentials-file: /path/to/.cloudflared/<uuid>.json
+
+ingress:
+  - hostname: zalo-monitor.example.com
+    service: http://localhost:3001
+  - service: http_status:404
+
+# 5. Chạy tunnel
+cloudflared tunnel run zalo-monitor
+
+# 6. Chạy docker compose dev (bình thường)
+docker compose up -d
+```
+
+Backend sẽ accessible qua `https://zalo-monitor.example.com` (hoặc subdomain mà bạn chỉ định).
+
+### Option D — Dev local
+
+Để phát triển hoặc test trên máy:
+
+```bash
+git clone https://github.com/datlevn09/zalo-monitor.git
+cd zalo-monitor
+
+cp .env.example .env
+# Điền biến: POSTGRES_PASSWORD, JWT_SECRET, SUPER_ADMIN_TOKEN, DOMAIN=localhost:3000
+
+# 1. Chạy Postgres + Redis qua Docker
 docker compose up -d
 
-# 3. Chạy backend
+# 2. Terminal 1 — chạy Backend
 cd backend
 npm install
 npx prisma db push
-npm run dev      # http://localhost:3001
+npm run dev        # http://localhost:3001
 
-# 4. Chạy dashboard (terminal khác)
+# 3. Terminal 2 — chạy Dashboard
 cd ../dashboard
 npm install
-npm run dev      # http://localhost:3000
+npm run dev        # http://localhost:3000
 ```
 
 Truy cập:
@@ -73,55 +147,132 @@ Truy cập:
 - Setup wizard: http://localhost:3000/setup (tạo tenant đầu tiên)
 - Super Admin: http://localhost:3000/super-admin (dùng `SUPER_ADMIN_TOKEN`)
 
-## Deploy production
+## Cài Hook vào OpenClaw (sau khi có backend)
 
-Xem [DEPLOY.md](./DEPLOY.md) — 3 options (VPS + Caddy, SaaS, Cloudflare Tunnel).
+Hook là phần **cầu nối** giữa OpenClaw (nơi chạy Zalo/Telegram/Lark) và Zalo Monitor Backend. Hook sẽ forward mọi tin nhắn từ OpenClaw về backend để AI phân loại + cảnh báo.
 
-Tóm tắt nhanh:
-```bash
-cp .env.example .env
-# Điền DOMAIN, POSTGRES_PASSWORD, JWT_SECRET, SUPER_ADMIN_TOKEN, LETSENCRYPT_EMAIL
-docker compose -f docker-compose.prod.yml up -d
-```
-Caddy tự fetch SSL cert → HTTPS ngay.
+> **Chú ý**: Bạn chỉ cần cài hook **1 lần duy nhất** trên máy/server chạy OpenClaw.
 
-## Cài hook vào OpenClaw của bạn
+### Cách lấy lệnh cài
 
-Hook = phần forward tin nhắn từ OpenClaw → backend. Sau khi dashboard chạy xong:
-
-1. Vào setup wizard → tạo tenant
-2. Copy lệnh install (tự sinh URL backend + secret), paste vào terminal máy chạy OpenClaw:
+1. Vào dashboard (http://your-domain.com)
+2. **Setup** → **Bước 2: Kết nối OpenClaw**
+3. Copy lệnh có dạng:
    ```bash
-   curl -fsSL "https://<your-backend>/api/setup/inject.sh?tenantId=xxx" | bash
+   curl -fsSL "https://zalo-monitor.example.com/api/setup/inject.sh?tenantId=xxx" | bash
    ```
-3. Installer tự tải hook, ghi config, self-test ping → dashboard hiện "✅ Hook đã kết nối"
 
-Hook sẽ **không mất** khi update OpenClaw nếu cài đúng cách:
+### Cài trên từng nền tảng
 
-| Cách cài OpenClaw | Hook có mất khi update? |
-|---|---|
-| Native (npm / binary trực tiếp trên máy/VPS) | ✅ Không mất — lưu trong `~/.openclaw/` |
-| Docker **có** mount volume | ✅ Không mất |
-| Docker **không** mount volume | ⚠️ **Mất** khi recreate container |
+#### Mac / Linux / VPS (OpenClaw chạy native)
 
-Nếu chạy OpenClaw bằng Docker, thêm volume vào `docker-compose.yml`:
+Paste lệnh từ dashboard thẳng vào terminal:
+
+```bash
+curl -fsSL "https://zalo-monitor.example.com/api/setup/inject.sh?tenantId=xxx" | bash
+```
+
+Installer sẽ tự tải hook, ghi config, self-test ping → dashboard tự hiện "✅ Hook đã kết nối".
+
+#### Docker (OpenClaw chạy trong container)
+
+Nếu OpenClaw chạy bằng Docker, dùng `docker exec`:
+
+```bash
+docker exec <tên-container-openclaw> bash -c 'BACKEND_URL=https://zalo-monitor.example.com curl -fsSL "https://zalo-monitor.example.com/api/setup/inject.sh?tenantId=xxx" | bash'
+```
+
+**Quan trọng**: Nếu chạy OpenClaw trong Docker mà chưa mount volume, hook sẽ **mất khi update**. Thêm volume vào `docker-compose.yml`:
+
 ```yaml
 services:
   openclaw:
-    # ...
+    image: openclaw:latest
+    # ... other config ...
     volumes:
       - ./openclaw-config:/home/node/.openclaw  # giữ hook + config qua update
 ```
+
 > Installer sẽ tự cảnh báo nếu phát hiện đang chạy trong Docker mà chưa có volume mount.
+
+#### Synology NAS
+
+SSH vào NAS rồi chạy:
+
+```bash
+docker exec <tên-container-openclaw> bash -c 'BACKEND_URL=https://zalo-monitor.example.com curl -fsSL "https://zalo-monitor.example.com/api/setup/inject.sh?tenantId=xxx" | bash'
+```
+
+Hoặc vào **Container Manager → Containers → openclaw → Terminal** → paste lệnh.
+
+#### Windows (Git Bash / WSL)
+
+Mở **Git Bash** (được cài sẵn với Git cho Windows):
+
+```bash
+curl -fsSL "https://zalo-monitor.example.com/api/setup/inject.sh?tenantId=xxx" | bash
+```
+
+Nếu dùng **WSL**, cần cài curl trước:
+
+```bash
+sudo apt update && sudo apt install curl
+curl -fsSL "https://zalo-monitor.example.com/api/setup/inject.sh?tenantId=xxx" | bash
+```
+
+### Hook có mất khi update OpenClaw không?
+
+| Cách cài OpenClaw | Hook có mất khi update? | Ghi chú |
+|---|---|---|
+| Native (npm / binary trên máy/VPS) | ✅ **Không mất** | Hook lưu trong `~/.openclaw/` → persist qua update |
+| Docker **có** mount volume (`-v ./openclaw-config:/home/node/.openclaw`) | ✅ **Không mất** | Volume mount đảm bảo config không bị xóa |
+| Docker **không** mount volume | ⚠️ **Mất khi recreate** | Container reset → hook + config bị xóa |
+
+**Kết luận**: Dù dùng native hay Docker, hãy chắc chắn hook được lưu trữ bền vững. Nếu dùng Docker, **bắt buộc** phải mount volume.
 
 Chi tiết: [plugin/hooks/zalo-monitor/HOOK.md](./plugin/hooks/zalo-monitor/HOOK.md).
 
 ## Cấu hình tùy chọn
 
-- **AI classify**: set `ANTHROPIC_API_KEY` trong `backend/.env`. Không set → dùng keyword fallback (free).
-- **Email (forgot-password)**: set `SMTP_*` trong backend/.env. Gmail App Password hoặc Resend đều OK.
-- **Google OAuth**: set `GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI`. Đăng ký tại [console.cloud.google.com](https://console.cloud.google.com/apis/credentials).
-- **Ngành nghề**: dashboard có preset cho real estate, retail, insurance, v.v. — tự chỉnh keyword trong tab Cấu hình AI.
+### AI phân loại
+
+Để bật AI phân loại (tự động phân loại tin nhắn), set `ANTHROPIC_API_KEY` trong `backend/.env`:
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+Nếu không set, hệ thống sẽ dùng **keyword fallback** (free, nhưng chính xác thấp hơn).
+
+### Email (quên mật khẩu, báo cáo)
+
+Set các biến SMTP trong `backend/.env`:
+
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+SMTP_FROM=noreply@your-domain.com
+```
+
+Gmail: dùng [App Password](https://myaccount.google.com/apppasswords). Resend hoặc SendGrid cũng OK.
+
+### Google OAuth
+
+Để bật đăng nhập qua Google, tạo OAuth credentials tại [console.cloud.google.com](https://console.cloud.google.com/apis/credentials):
+
+```
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REDIRECT_URI=https://your-domain.com/auth/callback
+```
+
+### Ngành nghề & Keyword tùy chỉnh
+
+Dashboard có preset cho: Real Estate, Retail, Insurance, Education, v.v.
+
+Vào **Settings → Cấu hình AI** để tuỳ chỉnh keyword phân loại cho ngành của bạn.
 
 ## Contribute
 
@@ -129,7 +280,8 @@ PR welcome. Xem [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 Issue / feature request: mở issue tại GitHub.
 
-Roadmap ý tưởng:
+### Roadmap ý tưởng
+
 - Gán khách → nhân viên phụ trách + auto follow-up
 - Mẫu tin nhắn nhanh (canned replies)
 - SMS OTP login
