@@ -21,6 +21,7 @@ export function Step1Business({ onDone }: { onDone: (s: SetupState) => void }) {
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [agreed, setAgreed] = useState(false)
 
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
@@ -87,9 +88,29 @@ export function Step1Business({ onDone }: { onDone: (s: SetupState) => void }) {
         <Input type="password" placeholder="Tối thiểu 6 ký tự" value={form.password} onChange={set('password')} required minLength={6} />
       </div>
 
+      <div className="flex items-start gap-3 py-2">
+        <input
+          type="checkbox"
+          id="agree"
+          checked={agreed}
+          onChange={(e) => setAgreed(e.target.checked)}
+          className="mt-1 w-4 h-4 border border-gray-300 dark:border-white/20 rounded cursor-pointer"
+        />
+        <label htmlFor="agree" className="text-sm text-gray-700 dark:text-zinc-300 cursor-pointer">
+          Tôi đồng ý với{' '}
+          <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
+            Điều khoản sử dụng
+          </a>
+          {' '}và{' '}
+          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">
+            Chính sách bảo mật
+          </a>
+        </label>
+      </div>
+
       {error && <p className="text-sm text-red-500 bg-red-50 dark:bg-red-500/10 p-3 rounded-lg">{error}</p>}
 
-      <Button type="submit" className="w-full" disabled={loading}>
+      <Button type="submit" className="w-full" disabled={!agreed || loading}>
         {loading ? 'Đang tạo...' : 'Tiếp theo →'}
       </Button>
     </form>
