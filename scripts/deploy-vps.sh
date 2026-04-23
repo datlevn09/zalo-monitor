@@ -8,7 +8,7 @@ set -euo pipefail
 
 DOMAIN="${1:-${DOMAIN:-}}"
 EMAIL="${2:-${LETSENCRYPT_EMAIL:-}}"
-REPO_URL="${REPO_URL:-https://github.com/ledatvn/zalo-monitor.git}"
+REPO_URL="${REPO_URL:-https://github.com/datlevn09/zalo-monitor.git}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/zalo-monitor}"
 
 if [ -z "$DOMAIN" ] || [ -z "$EMAIL" ]; then
