@@ -40,7 +40,7 @@ export default function AnalyticsPage() {
   const [week, setWeek] = useState<WeekCompare | null>(null)
   const [labels, setLabels] = useState<LabelDist>([])
   const [channels, setChannels] = useState<ChannelBreak>([])
-  const [slow, setSlow] = useState<SlowReply[]>([])
+  const [slow, setSlow] = useState<SlowReply>([])
 
   useEffect(() => {
     Promise.all([

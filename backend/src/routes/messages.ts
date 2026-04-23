@@ -62,11 +62,12 @@ export const messageRoutes: FastifyPluginAsync = async (app) => {
     if (!group) return reply.status(404).send({ error: 'Group not found' })
 
     // MVP stub — per-channel implementation comes later
-    const capabilities = {
+    const capabilities: Record<string, { supported: boolean; note: string }> = {
       ZALO:     { supported: true,  note: 'Sẽ fetch qua zca-js (chưa implement)' },
       TELEGRAM: { supported: false, note: 'Telegram Bot API không hỗ trợ đọc tin cũ' },
+      LARK:     { supported: false, note: 'Lark/Feishu chưa implement' },
     }
-    const cap = capabilities[group.channelType]
+    const cap = capabilities[group.channelType] ?? { supported: false, note: 'Channel không được hỗ trợ' }
 
     return {
       ok: false,

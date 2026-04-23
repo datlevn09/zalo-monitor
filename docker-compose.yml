@@ -30,8 +30,8 @@ services:
 
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
     ports:
       - "${BACKEND_PORT:-3001}:3001"
@@ -55,6 +55,9 @@ services:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3001}
+        NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:3001}
     restart: unless-stopped
     ports:
       - "${DASHBOARD_PORT:-3000}:3000"
