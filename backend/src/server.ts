@@ -22,6 +22,7 @@ import { teamRoutes } from './routes/team.js'
 import { exportRoutes } from './routes/export.js'
 import { configRoutes } from './routes/config.js'
 import { conversationAiRoutes } from './routes/conversation-ai.js'
+import { appointmentRoutes } from './routes/appointments.js'
 import { superAdminRoutes } from './routes/super-admin.js'
 import { registerTenantGuard } from './services/tenant-guard.js'
 import { registerAuthGuard } from './services/auth-guard.js'
@@ -70,6 +71,7 @@ await app.register(exportRoutes,    { prefix: '/api/export' })
 await app.register(configRoutes,    { prefix: '/api/config' })
 await app.register(superAdminRoutes, { prefix: '/api/super-admin' })
 await app.register(conversationAiRoutes, { prefix: '/api/groups' })
+await app.register(appointmentRoutes,    { prefix: '/api/appointments' })
 
 app.get('/health', async () => ({ status: 'ok', ts: Date.now() }))
 

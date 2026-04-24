@@ -59,6 +59,7 @@ model Tenant {
   deals                Deal[]
   alertRules           AlertRule[]
   classificationConfig ClassificationConfig?
+  appointments         Appointment[]
 
   @@map("tenants")
 }
@@ -371,6 +372,34 @@ model ClassificationConfig {
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@map("classification_configs")
+}
+
+// ─── Appointment (lịch hẹn) ──────────────────────────────────────────────────
+model Appointment {
+  id           String            @id @default(cuid())
+  tenantId     String
+  title        String
+  description  String?
+  customerId   String?
+  groupId      String?
+  assignedTo   String?           // userId phụ trách
+  scheduledAt  DateTime          // thời điểm hẹn
+  remindBefore Int               @default(30) // nhắc trước X phút
+  reminderSent Boolean           @default(false)
+  status       AppointmentStatus @default(UPCOMING)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, scheduledAt])
+  @@map("appointments")
+}
+
+enum AppointmentStatus {
+  UPCOMING
+  DONE
+  CANCELLED
 }
 
 // ─── AlertRule (custom alert conditions) ──────────────────────────────────────

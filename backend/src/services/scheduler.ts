@@ -67,6 +67,39 @@ new Worker('scheduler', async (job) => {
       }
       break
     }
+    case 'remind-appointments': {
+      const now = new Date()
+      const appts = await db.appointment.findMany({
+        where: {
+          status: 'UPCOMING',
+          reminderSent: false,
+          scheduledAt: { gt: now },
+        },
+      })
+      for (const appt of appts) {
+        const remindAt = new Date(appt.scheduledAt.getTime() - appt.remindBefore * 60_000)
+        if (remindAt <= now) {
+          const channels = await db.notificationChannel.findMany({
+            where: { tenantId: appt.tenantId, enabled: true, purpose: { in: ['ALERT', 'BOTH'] } },
+          })
+          const msg = `⏰ Nhắc lịch hẹn: *${appt.title}*\n📅 ${appt.scheduledAt.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}${appt.description ? `\n📝 ${appt.description}` : ''}`
+          for (const ch of channels) {
+            try {
+              if (ch.channelType === 'TELEGRAM') {
+                await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ chat_id: ch.target, text: msg, parse_mode: 'Markdown' }),
+                })
+              }
+            } catch {}
+          }
+          await db.appointment.update({ where: { id: appt.id }, data: { reminderSent: true } })
+          console.log(`[scheduler] reminder sent: ${appt.title}`)
+        }
+      }
+      break
+    }
     default:
       console.warn(`[scheduler] Unknown job: ${job.name}`)
   }
@@ -111,4 +144,12 @@ export async function registerScheduledJobs() {
     { repeat: { pattern: '0 */6 * * *', tz: 'Asia/Ho_Chi_Minh' } },
   )
   console.log(`[scheduler] detect-anomalies registered (every 6 hours)`)
+
+  // Appointment reminders: check every 5 minutes
+  await schedulerQueue.add(
+    'remind-appointments',
+    {},
+    { repeat: { pattern: '*/5 * * * *', tz: 'Asia/Ho_Chi_Minh' } },
+  )
+  console.log(`[scheduler] remind-appointments registered (every 5 minutes)`)
 }
