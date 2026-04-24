@@ -135,6 +135,67 @@ Yêu cầu:
   return response.content[0].type === 'text' ? response.content[0].text : ''
 }
 
+export type ConversationAnalysis = {
+  summary: string
+  sentiment: 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE'
+  replies: [string, string, string]
+  model: string
+}
+
+export async function analyzeConversation(
+  messages: { content: string | null; senderName: string | null; senderType: 'SELF' | 'CONTACT'; sentAt: Date }[]
+): Promise<ConversationAnalysis> {
+  const thread = messages
+    .filter(m => m.content)
+    .slice(-30)
+    .map(m => `${m.senderType === 'SELF' ? '🤖 Bot' : `[${m.senderName ?? '?'}]`}: ${m.content}`)
+    .join('\n')
+
+  const fallback = (): ConversationAnalysis => ({
+    summary: 'Chưa cấu hình ANTHROPIC_API_KEY — không thể tóm tắt.',
+    sentiment: 'NEUTRAL',
+    replies: [
+      'Cảm ơn bạn đã liên hệ, tôi sẽ xử lý ngay!',
+      'Xin lỗi về sự bất tiện này, tôi sẽ kiểm tra và phản hồi sớm.',
+      'Chào bạn, cho tôi biết thêm để hỗ trợ tốt hơn nhé.',
+    ],
+    model: 'fallback',
+  })
+
+  if (!anthropic || !thread) return fallback()
+
+  const prompt = `Hãy phân tích đoạn hội thoại sau và trả về JSON (chỉ JSON, không giải thích):
+
+${thread}
+
+Trả về:
+{
+  "summary": "tóm tắt 2-3 câu nội dung cuộc hội thoại bằng tiếng Việt",
+  "sentiment": "POSITIVE | NEUTRAL | NEGATIVE",
+  "replies": ["câu trả lời 1 (lịch sự, ngắn gọn)", "câu trả lời 2 (quan tâm, hỏi thêm)", "câu trả lời 3 (đề xuất hướng xử lý)"]
+}
+
+Replies phải phù hợp với ngữ cảnh hội thoại, bằng tiếng Việt, tự nhiên như nhân viên kinh doanh.`
+
+  try {
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      messages: [{ role: 'user', content: prompt }],
+    })
+    const raw = res.content[0].type === 'text' ? res.content[0].text : '{}'
+    const parsed = JSON.parse(raw)
+    return {
+      summary: parsed.summary ?? '',
+      sentiment: parsed.sentiment ?? 'NEUTRAL',
+      replies: parsed.replies ?? fallback().replies,
+      model: 'claude-haiku-4-5-20251001',
+    }
+  } catch {
+    return fallback()
+  }
+}
+
 export async function classifyMessage(text: string, context: Context, kw?: TenantKeywords): Promise<ClassifyResult> {
   if (!anthropic) return fallbackClassify(text, kw)
 
