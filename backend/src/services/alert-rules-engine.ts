@@ -59,6 +59,31 @@ export async function applyAlertRules(params: {
     // Update lastFiredAt
     await db.alertRule.update({ where: { id: rule.id }, data: { lastFiredAt: now } })
 
+    // Auto-assign alert
+    if (rule.autoAssignTo) {
+      await db.alert.update({
+        where: { id: alert.id },
+        data: { assignedTo: rule.autoAssignTo, status: 'IN_PROGRESS' },
+      }).catch(() => undefined)
+    }
+
+    // Auto-create Deal
+    if (rule.autoCreateDeal) {
+      const customer = await db.customer.findFirst({
+        where: { tenantId },
+        orderBy: { lastActivity: 'desc' },
+      })
+      await db.deal.create({
+        data: {
+          tenantId,
+          customerId: customer?.id ?? null,
+          title: `[Auto] ${content.slice(0, 80)}`,
+          stage: 'NEW',
+          assignedTo: rule.autoAssignTo ?? null,
+        },
+      }).catch(() => undefined)
+    }
+
     // Send notification qua channels
     const msg = await db.message.findUnique({ where: { id: messageId } })
     if (msg) await sendAlert(tenantId, alert, msg).catch(() => undefined)

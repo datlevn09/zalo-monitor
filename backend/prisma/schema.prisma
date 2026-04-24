@@ -417,6 +417,10 @@ model AlertRule {
   lastFiredAt DateTime?
   createdAt   DateTime @default(now())
 
+  // Automation actions — thực thi tự động khi rule kích hoạt
+  autoCreateDeal  Boolean @default(false) // tự tạo Deal trong pipeline
+  autoAssignTo    String? // userId tự gán alert cho nhân viên này
+
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@map("alert_rules")

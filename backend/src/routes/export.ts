@@ -103,4 +103,48 @@ export const exportRoutes: FastifyPluginAsync = async (app) => {
     reply.header('Content-Disposition', `attachment; filename="alerts-${new Date().toISOString().slice(0,10)}.csv"`)
     return '\uFEFF' + toCsv(rows)
   })
+
+  app.get('/appointments.csv', async (req, reply) => {
+    const tenantId = req.headers['x-tenant-id'] as string
+    if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
+
+    const appts = await db.appointment.findMany({
+      where: { tenantId }, orderBy: { scheduledAt: 'asc' },
+    })
+    const rows = appts.map(a => ({
+      tieu_de: a.title,
+      mo_ta: a.description ?? '',
+      thoi_gian_hen: a.scheduledAt.toISOString(),
+      nhac_truoc_phut: a.remindBefore,
+      trang_thai: a.status,
+      da_nhac: a.reminderSent ? 'Đã nhắc' : 'Chưa',
+    }))
+    reply.header('Content-Type', 'text/csv; charset=utf-8')
+    reply.header('Content-Disposition', `attachment; filename="appointments-${new Date().toISOString().slice(0,10)}.csv"`)
+    return '\uFEFF' + toCsv(rows)
+  })
+
+  app.get('/deals.csv', async (req, reply) => {
+    const tenantId = req.headers['x-tenant-id'] as string
+    if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
+
+    const deals = await db.deal.findMany({
+      where: { tenantId }, orderBy: { createdAt: 'desc' },
+      include: { customer: { select: { name: true, phone: true } } },
+    })
+    const rows = deals.map(d => ({
+      tieu_de: d.title,
+      giai_doan: d.stage,
+      gia_tri: d.value,
+      khach_hang: d.customer?.name ?? '',
+      sdt_khach: d.customer?.phone ?? '',
+      mo_ta: d.description ?? '',
+      ngay_tao: d.createdAt.toISOString(),
+      han_chot: d.dueDate?.toISOString() ?? '',
+      ngay_dong: d.closedAt?.toISOString() ?? '',
+    }))
+    reply.header('Content-Type', 'text/csv; charset=utf-8')
+    reply.header('Content-Disposition', `attachment; filename="deals-${new Date().toISOString().slice(0,10)}.csv"`)
+    return '\uFEFF' + toCsv(rows)
+  })
 }
