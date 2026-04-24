@@ -132,4 +132,37 @@ Link hết hạn sau 7 ngày.
       data: { assignedTo: userId ?? null, status: userId ? 'IN_PROGRESS' : 'OPEN' },
     })
   })
+
+  // GET /api/team/:id/groups — danh sách nhóm của 1 thành viên
+  app.get('/:id/groups', async (req, reply) => {
+    const tenantId = req.headers['x-tenant-id'] as string
+    const { id } = req.params as { id: string }
+    const user = await db.user.findFirst({ where: { id, tenantId } })
+    if (!user) return reply.status(404).send({ error: 'Not found' })
+    return db.group.findMany({
+      where: { tenantId, ownerUserId: id },
+      orderBy: { lastMessageAt: 'desc' },
+      select: { id: true, name: true, channelType: true, lastMessageAt: true, _count: { select: { messages: true } } },
+    })
+  })
+
+  // PUT /api/team/:id/groups — gán danh sách nhóm cho thành viên (thay thế toàn bộ)
+  app.put('/:id/groups', async (req, reply) => {
+    const tenantId = req.headers['x-tenant-id'] as string
+    const auth = req.authUser
+    if (auth?.role === 'STAFF') return reply.status(403).send({ error: 'Không đủ quyền' })
+    const { id } = req.params as { id: string }
+    const { groupIds } = req.body as { groupIds: string[] }
+
+    const user = await db.user.findFirst({ where: { id, tenantId } })
+    if (!user) return reply.status(404).send({ error: 'Not found' })
+
+    // Bỏ tất cả nhóm cũ của user này
+    await db.group.updateMany({ where: { tenantId, ownerUserId: id }, data: { ownerUserId: null } })
+    // Gán nhóm mới
+    if (groupIds.length > 0) {
+      await db.group.updateMany({ where: { tenantId, id: { in: groupIds } }, data: { ownerUserId: id } })
+    }
+    return { ok: true, assigned: groupIds.length }
+  })
 }

@@ -30,11 +30,29 @@ export const groupRoutes: FastifyPluginAsync = async (app) => {
     return groups
   })
 
-  // PATCH /api/groups/:id — cập nhật category, monitorEnabled
+  // PATCH /api/groups/:id — cập nhật category, monitorEnabled, ownerUserId
   app.patch('/:id', async (req, reply) => {
+    const tenantId = req.headers['x-tenant-id'] as string
+    const auth = req.authUser
     const { id } = req.params as { id: string }
-    const body = req.body as { category?: string; monitorEnabled?: boolean; name?: string }
+    const body = req.body as { category?: string; monitorEnabled?: boolean; name?: string; ownerUserId?: string | null }
+
+    // Chỉ OWNER/MANAGER mới được phân công lại nhóm
+    if ('ownerUserId' in body && auth?.role === 'STAFF') {
+      return reply.status(403).send({ error: 'Không đủ quyền' })
+    }
+
     const group = await db.group.update({ where: { id }, data: body })
     return group
+  })
+
+  // GET /api/groups/unassigned — nhóm chưa phân công (ownerUserId = null)
+  app.get('/unassigned', async (req) => {
+    const tenantId = req.headers['x-tenant-id'] as string
+    return db.group.findMany({
+      where: { tenantId, ownerUserId: null },
+      orderBy: { lastMessageAt: 'desc' },
+      select: { id: true, name: true, channelType: true, lastMessageAt: true },
+    })
   })
 }
