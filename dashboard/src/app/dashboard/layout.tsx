@@ -182,12 +182,18 @@ function ZaloDisconnectedBanner({ hoursSincePing, onDismiss }: { hoursSincePing:
         <button onClick={onDismiss} className="shrink-0 text-white/70 hover:text-white text-lg leading-none">×</button>
       </div>
       {expanded && (
-        <div className="px-4 pb-3 text-xs space-y-1.5 bg-red-600/40">
-          <p className="font-semibold pt-2">Cách đăng nhập lại Zalo:</p>
-          <p>1. SSH vào máy chủ đang chạy OpenClaw</p>
-          <p>2. Mở trình duyệt trên máy đó → vào <code className="bg-white/20 px-1 rounded">http://localhost:18789/__openclaw__/canvas/</code></p>
-          <p>3. Scan QR bằng app Zalo trên điện thoại</p>
-          <p className="text-white/70 pt-1">Hoặc dùng SSH tunnel: <code className="bg-white/20 px-1 rounded">ssh -L 18789:localhost:18789 user@server</code> → mở localhost:18789 trên máy tính của bạn</p>
+        <div className="px-4 pb-3 text-xs space-y-2 bg-red-600/40">
+          <p className="font-semibold pt-2">Cách đăng nhập lại Zalo — làm trên máy tính (không phải điện thoại):</p>
+          <div className="space-y-1">
+            <p className="font-medium">📦 OpenClaw cài trên máy tính của bạn:</p>
+            <p>Mở trình duyệt → vào <code className="bg-white/20 px-1 rounded select-all">http://localhost:18789/__openclaw__/canvas/</code> → scan QR bằng Zalo điện thoại</p>
+          </div>
+          <div className="space-y-1">
+            <p className="font-medium">☁️ OpenClaw cài trên VPS/server:</p>
+            <p>Chạy lệnh này trên terminal máy tính của bạn để tạo tunnel:</p>
+            <code className="block bg-white/20 px-2 py-1 rounded select-all">ssh -L 18789:localhost:18789 user@&lt;ip-server&gt;</code>
+            <p>Sau đó mở trình duyệt → vào <code className="bg-white/20 px-1 rounded">http://localhost:18789/__openclaw__/canvas/</code> → scan QR</p>
+          </div>
         </div>
       )}
     </div>
