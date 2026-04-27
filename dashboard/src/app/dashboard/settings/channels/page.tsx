@@ -252,6 +252,9 @@ function ZaloChannelCard({
   const [resettingSync, setResettingSync] = useState(false)
   const [nativeMode, setNativeMode] = useState(false)
   const [showHistoryImport, setShowHistoryImport] = useState(false)
+  const [installCmd, setInstallCmd] = useState<string | null>(null)
+  const [showInstall, setShowInstall] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [pushConfig, setPushConfig] = useState<{
     backendUrl: string
     tenantId: string
@@ -279,6 +282,13 @@ function ZaloChannelCard({
   const qrPollInterval = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
   const showQrModalRef = useRef(showQrModal)
   useEffect(() => { showQrModalRef.current = showQrModal }, [showQrModal])
+
+  // Fetch install command 1 lần lúc mount
+  useEffect(() => {
+    api<{ oneLineCommand: string }>('/api/auth/my-install-command')
+      .then(d => setInstallCmd(d.oneLineCommand))
+      .catch(() => undefined)
+  }, [])
 
   // Poll connection status every 30s on mount
   useEffect(() => {
@@ -462,16 +472,24 @@ function ZaloChannelCard({
           )}
 
           {/* Reconnect / install button — nằm dưới info, bên trái */}
-          <div className="mt-2.5 flex items-center gap-2">
+          <div className="mt-2.5 flex items-center gap-2 flex-wrap">
             {notInstalled ? (
-              <a
-                href="/docs/install-zalo"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 rounded-lg transition-colors"
-              >
-                Xem hướng dẫn cài đặt
-              </a>
+              <>
+                <button
+                  onClick={() => setShowInstall(s => !s)}
+                  className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
+                >
+                  {showInstall ? 'Ẩn lệnh cài' : '📋 Lấy lệnh cài đặt'}
+                </button>
+                <a
+                  href="/docs/install-zalo"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"
+                >
+                  Hướng dẫn chi tiết →
+                </a>
+              </>
             ) : (
               <button
                 onClick={handleReconnect}
@@ -505,6 +523,33 @@ function ZaloChannelCard({
               </span>
             )}
           </div>
+
+          {/* Install command — chỉ hiện khi notInstalled + user bấm "Lấy lệnh" */}
+          {notInstalled && showInstall && (
+            <div className="mt-3 bg-gray-50 dark:bg-white/5 rounded-xl p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium text-gray-700 dark:text-zinc-300">Chạy lệnh sau trên server có OpenClaw:</p>
+                <button
+                  onClick={() => {
+                    if (!installCmd) return
+                    navigator.clipboard.writeText(installCmd)
+                    setCopied(true)
+                    setTimeout(() => setCopied(false), 2000)
+                  }}
+                  disabled={!installCmd}
+                  className="px-2.5 py-1 text-[11px] font-semibold text-white bg-blue-500 hover:bg-blue-600 disabled:opacity-50 rounded-md transition-colors shrink-0"
+                >
+                  {copied ? '✓ Đã copy' : 'Copy'}
+                </button>
+              </div>
+              <pre className="bg-gray-900 dark:bg-black text-green-400 text-[11px] font-mono p-3 rounded-lg overflow-x-auto whitespace-pre-wrap break-all select-all">
+                {installCmd ?? 'Đang tải...'}
+              </pre>
+              <p className="text-[11px] text-gray-500 dark:text-zinc-400">
+                💡 Script tự cài OpenClaw + hook + daemon. Sau đó QR sẽ hiện ngay tại đây.
+              </p>
+            </div>
+          )}
 
           {/* Sync status row */}
           {sessionHealth && !notInstalled && (
