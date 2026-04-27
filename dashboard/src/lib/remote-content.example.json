@@ -1,0 +1,33 @@
+{
+  "landing": {
+    "badge": "✨ Phiên bản mới 2.0",
+    "headline": "Quản lý khách hàng",
+    "headlineAccent": "thông minh hơn",
+    "subheadline": "Theo dõi tin nhắn Zalo, phân tích hội thoại bằng AI, và chăm sóc khách hàng từ một nơi duy nhất.",
+    "features": [
+      {
+        "icon": "💬",
+        "title": "Theo dõi nhóm Zalo",
+        "desc": "Nhận tin nhắn từ hàng chục nhóm Zalo vào một bảng điều khiển duy nhất."
+      },
+      {
+        "icon": "🤖",
+        "title": "AI phân tích hội thoại",
+        "desc": "Tóm tắt, phân loại khách hàng và gợi ý hành động tự động."
+      },
+      {
+        "icon": "🔔",
+        "title": "Cảnh báo tức thời",
+        "desc": "Nhận thông báo ngay khi có từ khoá quan trọng hoặc khách hàng cần hỗ trợ."
+      }
+    ]
+  },
+  "banner": {
+    "active": true,
+    "type": "promo",
+    "message": "Nâng cấp lên Pro ngay hôm nay và tiết kiệm 40% trong năm đầu",
+    "link": "https://datthongdong.com/pricing",
+    "linkText": "Xem giá",
+    "dismissible": true
+  }
+}

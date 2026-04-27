@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { getToken, getTenantId, connectWebSocket } from '@/lib/api'
 import { Footer } from '@/components/Footer'
 import { Header } from '@/components/Header'
+import { RemoteBanner } from '@/components/RemoteBanner'
 
 const NAV = [
   { href: '/',                    label: 'Home',       icon: IconHome,     tint: 'bg-blue-500',   exact: true },
@@ -57,6 +58,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           />
         }
       />
+
+      {/* Remote Banner — full width, below header */}
+      <RemoteBanner />
 
       {/* Sidebar (icon-only mobile, expanded desktop) + Main */}
       <div className="flex-1 min-h-0 flex flex-row">

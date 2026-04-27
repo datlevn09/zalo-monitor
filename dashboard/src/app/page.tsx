@@ -4,9 +4,42 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { getToken } from '@/lib/api'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { RemoteBanner } from '@/components/RemoteBanner'
+import { useRemoteContent } from '@/lib/remote-content'
 
 export default function LandingPage() {
   const [loggedIn, setLoggedIn] = useState(false)
+  const { content: remoteContent } = useRemoteContent()
+
+  // Default values
+  const defaultBadge = 'Theo dõi nhóm Zalo theo thời gian thực'
+  const defaultHeadline = 'Quản lý khách hàng'
+  const defaultHeadlineAccent = 'thông minh hơn'
+  const defaultSubheadline = 'Theo dõi tin nhắn Zalo, phân tích hội thoại bằng AI, và chăm sóc khách hàng từ một nơi duy nhất.'
+  const defaultFeatures = [
+    {
+      icon: '💬',
+      title: 'Theo dõi nhóm Zalo',
+      desc: 'Nhận tin nhắn từ hàng chục nhóm Zalo vào một bảng điều khiển duy nhất.',
+    },
+    {
+      icon: '🤖',
+      title: 'AI phân tích hội thoại',
+      desc: 'Tóm tắt, phân loại khách hàng và gợi ý hành động tự động.',
+    },
+    {
+      icon: '🔔',
+      title: 'Cảnh báo tức thời',
+      desc: 'Nhận thông báo ngay khi có từ khoá quan trọng hoặc khách hàng cần hỗ trợ.',
+    },
+  ]
+
+  // Apply remote overrides if available
+  const badgeText = remoteContent?.landing?.badge || defaultBadge
+  const headlineText = remoteContent?.landing?.headline || defaultHeadline
+  const headlineAccentText = remoteContent?.landing?.headlineAccent || defaultHeadlineAccent
+  const subheadlineText = remoteContent?.landing?.subheadline || defaultSubheadline
+  const featuresData = remoteContent?.landing?.features || defaultFeatures
 
   useEffect(() => {
     setLoggedIn(!!getToken())
@@ -41,25 +74,28 @@ export default function LandingPage() {
         </div>
       </nav>
 
+      {/* ── Remote Banner ──────────────────────────────── */}
+      <RemoteBanner />
+
       {/* ── Hero ───────────────────────────────────────── */}
       <section className="flex-1 flex flex-col items-center justify-center text-center px-5 py-16 md:py-24">
         {/* Badge */}
         <div className="inline-flex items-center gap-2 px-3 py-1.5 mb-6 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-semibold rounded-full border border-blue-200 dark:border-blue-500/30">
           <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-          Theo dõi nhóm Zalo theo thời gian thực
+          {badgeText}
         </div>
 
         {/* Headline */}
         <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.1] mb-5 max-w-3xl">
-          Quản lý khách hàng{' '}
+          {headlineText}{' '}
           <span className="bg-gradient-to-r from-blue-500 to-indigo-600 bg-clip-text text-transparent">
-            thông minh hơn
+            {headlineAccentText}
           </span>
         </h1>
 
         {/* Subheadline */}
         <p className="text-lg md:text-xl text-gray-500 dark:text-zinc-400 max-w-xl mb-10 leading-relaxed">
-          Theo dõi tin nhắn Zalo, phân tích hội thoại bằng AI, và chăm sóc khách hàng từ một nơi duy nhất.
+          {subheadlineText}
         </p>
 
         {/* CTA Buttons */}
@@ -91,23 +127,7 @@ export default function LandingPage() {
       {/* ── Feature highlights ─────────────────────────── */}
       <section className="max-w-5xl mx-auto w-full px-4 md:px-6 pb-12 md:pb-16">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
-          {[
-            {
-              icon: '💬',
-              title: 'Theo dõi nhóm Zalo',
-              desc: 'Nhận tin nhắn từ hàng chục nhóm Zalo vào một bảng điều khiển duy nhất.',
-            },
-            {
-              icon: '🤖',
-              title: 'AI phân tích hội thoại',
-              desc: 'Tóm tắt, phân loại khách hàng và gợi ý hành động tự động.',
-            },
-            {
-              icon: '🔔',
-              title: 'Cảnh báo tức thời',
-              desc: 'Nhận thông báo ngay khi có từ khoá quan trọng hoặc khách hàng cần hỗ trợ.',
-            },
-          ].map(f => (
+          {featuresData.map(f => (
             <div
               key={f.title}
               className="bg-white dark:bg-zinc-900 dark:ring-1 dark:ring-white/5 rounded-2xl border border-gray-200 dark:border-white/10 p-5 shadow-sm"
