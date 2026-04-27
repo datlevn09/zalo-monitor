@@ -25,6 +25,9 @@ export const tenantRoutes: FastifyPluginAsync = async (app) => {
         id: true, name: true, slug: true, industry: true,
         enabledChannels: true, setupDone: true,
         monitorDMs: true, allowedDMIds: true,
+        plan: true, maxGroups: true, maxMessagesPerMonth: true,
+        messagesThisMonth: true, maxBoardViewers: true,
+        licenseExpiresAt: true,
       },
     })
     if (!tenant) return reply.status(404).send({ error: 'Not found' })

@@ -31,7 +31,8 @@ const FETCH_TIMEOUT = 3000 // 3 seconds
 
 function getRemoteContentUrl(): string {
   if (typeof window === 'undefined') return ''
-  return process.env.NEXT_PUBLIC_REMOTE_CONTENT_URL || 'https://datthongdong.com/api/zalo-monitor'
+  // Default empty — chỉ fetch nếu env var được set (tránh CORS với domain không config)
+  return process.env.NEXT_PUBLIC_REMOTE_CONTENT_URL || ''
 }
 
 function getCachedContent(): RemoteContent | null {

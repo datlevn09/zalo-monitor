@@ -305,8 +305,8 @@ function PlanCard({ tenant, groupCount }: { tenant: TenantInfo; groupCount: numb
           <div className="flex items-center justify-between mb-1">
             <span className="text-xs text-gray-500 dark:text-zinc-400">Tin nhắn tháng này</span>
             <span className="text-xs font-medium text-gray-700 dark:text-zinc-300 tabular-nums">
-              {tenant.messagesThisMonth.toLocaleString('vi-VN')}
-              {tenant.maxMessagesPerMonth > 0 && <span className="text-gray-400">/{tenant.maxMessagesPerMonth.toLocaleString('vi-VN')}</span>}
+              {(tenant.messagesThisMonth ?? 0).toLocaleString('vi-VN')}
+              {tenant.maxMessagesPerMonth > 0 && <span className="text-gray-400">/{(tenant.maxMessagesPerMonth ?? 0).toLocaleString('vi-VN')}</span>}
             </span>
           </div>
           <div className="h-1.5 bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
