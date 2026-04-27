@@ -407,7 +407,7 @@ function ZaloQRModal({
 }) {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const qrPollInterval = useRef<NodeJS.Timeout>()
+  const qrPollInterval = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
   useEffect(() => {
     const pollQR = async () => {
