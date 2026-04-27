@@ -8,7 +8,18 @@ import {
   saApi,
 } from '@/lib/super-admin'
 
-type TenantStatus = 'active' | 'trial' | 'expired' | 'suspended'
+// ─── Plan presets ─────────────────────────────────────────────────────────────
+// maxBoardViewers: 0 = unlimited
+const PLAN_PRESETS: Record<string, { label: string; maxGroups: number; maxMessagesPerMonth: number; maxBoardViewers: number }> = {
+  free:       { label: '🆓 Free',       maxGroups: 10,  maxMessagesPerMonth: 5_000,   maxBoardViewers: 1  },
+  starter:    { label: '🌱 Starter',    maxGroups: 20,  maxMessagesPerMonth: 15_000,  maxBoardViewers: 3  },
+  basic:      { label: '📦 Basic',      maxGroups: 50,  maxMessagesPerMonth: 50_000,  maxBoardViewers: 10 },
+  pro:        { label: '🚀 Pro',        maxGroups: 150, maxMessagesPerMonth: 200_000, maxBoardViewers: 30 },
+  business:   { label: '🏢 Business',   maxGroups: 500, maxMessagesPerMonth: 500_000, maxBoardViewers: 50 },
+  enterprise: { label: '♾️ Enterprise', maxGroups: 0,   maxMessagesPerMonth: 0,       maxBoardViewers: 0  },
+}
+
+type TenantStatus = 'active' | 'trial' | 'expired' | 'suspended' | 'pending'
 
 type TenantUser = { id: string; name: string; email: string | null; role: string; createdAt: string }
 
@@ -29,6 +40,7 @@ type Tenant = {
   createdAt: string
   maxGroups: number
   maxMessagesPerMonth: number
+  maxBoardViewers: number
   messagesThisMonth: number
   usageResetAt: string
   setupDone: boolean
@@ -48,6 +60,7 @@ type Metrics = {
     active: number
     suspended: number
     expired: number
+    pending: number
     groups: number
     messages: number
     customers: number
@@ -61,6 +74,7 @@ const STATUS_CFG: Record<TenantStatus, { label: string; color: string; dot: stri
   trial:     { label: 'Dùng thử',   color: 'bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300',     dot: 'bg-blue-500' },
   expired:   { label: 'Hết hạn',    color: 'bg-orange-100 dark:bg-orange-500/15 text-orange-700 dark:text-orange-300', dot: 'bg-orange-500' },
   suspended: { label: 'Tạm ngưng',  color: 'bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300',         dot: 'bg-red-500' },
+  pending:   { label: 'Chờ duyệt',  color: 'bg-purple-100 dark:bg-purple-500/15 text-purple-700 dark:text-purple-300', dot: 'bg-purple-500' },
 }
 
 export default function SuperAdminPage() {
@@ -188,9 +202,10 @@ export default function SuperAdminPage() {
 
       {/* Metrics */}
       {metrics && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
           <Stat emoji="🏢" label="Tenants"       value={metrics.totals.tenants} />
           <Stat emoji="✅" label="Đang chạy"      value={metrics.totals.active} tint="bg-green-50 dark:bg-green-500/10" />
+          <Stat emoji="🕐" label="Chờ duyệt"      value={metrics.totals.pending ?? 0} tint="bg-purple-50 dark:bg-purple-500/10" />
           <Stat emoji="⚠️" label="Hết hạn"        value={metrics.totals.expired} tint="bg-orange-50 dark:bg-orange-500/10" />
           <Stat emoji="📨" label="Total msg"      value={metrics.totals.messages} tint="bg-blue-50 dark:bg-blue-500/10" />
         </div>
@@ -219,7 +234,7 @@ export default function SuperAdminPage() {
           placeholder="Tìm tên DN / slug / người liên hệ..."
           className="flex-1 min-w-60 px-4 py-2 bg-white dark:bg-zinc-900 dark:ring-1 dark:ring-white/5 rounded-full text-sm border-0 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
-        {(['', 'active', 'trial', 'expired', 'suspended'] as const).map((s) => (
+        {(['', 'active', 'trial', 'expired', 'suspended', 'pending'] as const).map((s) => (
           <button
             key={s}
             onClick={() => setFilter(s)}
@@ -333,11 +348,18 @@ function TenantDrawer({
     plan: initialTenant.plan,
     maxGroups: initialTenant.maxGroups,
     maxMessagesPerMonth: initialTenant.maxMessagesPerMonth,
+    maxBoardViewers: initialTenant.maxBoardViewers ?? 0,
     contactName: initialTenant.contactName ?? '',
     contactPhone: initialTenant.contactPhone ?? '',
     contactEmail: initialTenant.contactEmail ?? '',
     notes: initialTenant.notes ?? '',
   })
+
+  function applyPreset(plan: string) {
+    const preset = PLAN_PRESETS[plan]
+    if (!preset) return
+    setForm(f => ({ ...f, plan, maxGroups: preset.maxGroups, maxMessagesPerMonth: preset.maxMessagesPerMonth, maxBoardViewers: preset.maxBoardViewers }))
+  }
   const [expiryDate, setExpiryDate] = useState(
     initialTenant.licenseExpiresAt ? new Date(initialTenant.licenseExpiresAt).toISOString().split('T')[0] : ''
   )
@@ -425,6 +447,18 @@ function TenantDrawer({
     setBusy(true)
     try {
       await saApi(`/api/super-admin/tenants/${tenant.id}/reset-usage`, { method: 'POST' })
+      const updated = await saApi<Tenant>(`/api/super-admin/tenants/${tenant.id}`)
+      setTenant(updated); onChanged(updated)
+    } finally { setBusy(false) }
+  }
+
+  async function issueTrial(days: number) {
+    setBusy(true)
+    try {
+      await saApi(`/api/super-admin/tenants/${tenant.id}/issue-trial`, {
+        method: 'POST',
+        body: JSON.stringify({ days }),
+      })
       const updated = await saApi<Tenant>(`/api/super-admin/tenants/${tenant.id}`)
       setTenant(updated); onChanged(updated)
     } finally { setBusy(false) }
@@ -612,6 +646,23 @@ function TenantDrawer({
             </div>
           </Section>
 
+          {/* Pending action */}
+          {tenant.status === 'pending' && (
+            <div className="bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30 rounded-xl p-4 mb-4">
+              <p className="text-sm font-semibold text-purple-900 dark:text-purple-200 mb-3">
+                🕐 Đăng ký mới — chờ kích hoạt
+              </p>
+              <div className="flex gap-2">
+                <button onClick={() => issueTrial(30)} disabled={busy} className="flex-1 py-2 bg-purple-500 hover:bg-purple-600 text-white text-sm font-medium rounded-lg disabled:opacity-50">
+                  ✅ Cấp 30 ngày
+                </button>
+                <button onClick={() => issueTrial(7)} disabled={busy} className="px-4 py-2 bg-white dark:bg-white/10 border border-purple-200 dark:border-purple-500/30 hover:bg-gray-50 dark:hover:bg-white/15 text-purple-700 dark:text-purple-300 text-sm font-medium rounded-lg">
+                  7 ngày
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Status */}
           <Section title="⚙️ Trạng thái">
             <div className="flex gap-2">
@@ -635,32 +686,65 @@ function TenantDrawer({
 
           {/* Plan / limits */}
           <Section title="📊 Plan & Giới hạn">
+            {/* Preset buttons */}
+            <div className="mb-3">
+              <p className="text-xs text-gray-500 dark:text-zinc-400 mb-2">Chọn gói để tự điền giới hạn:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(PLAN_PRESETS).map(([key, p]) => (
+                  <button
+                    key={key}
+                    onClick={() => applyPreset(key)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                      form.plan === key
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-white/15'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Preset summary for selected plan */}
+            {PLAN_PRESETS[form.plan] && (
+              <div className="mb-3 p-2.5 bg-blue-50 dark:bg-blue-500/10 rounded-xl text-xs text-blue-700 dark:text-blue-300 flex gap-3 flex-wrap">
+                <span>👥 Nhóm: <b>{PLAN_PRESETS[form.plan].maxGroups || '∞'}</b></span>
+                <span>💬 Msg/tháng: <b>{PLAN_PRESETS[form.plan].maxMessagesPerMonth ? PLAN_PRESETS[form.plan].maxMessagesPerMonth.toLocaleString('vi-VN') : '∞'}</b></span>
+                <span>📋 Board viewers: <b>{PLAN_PRESETS[form.plan].maxBoardViewers || '∞'}</b></span>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Plan">
-                <select
+              <Field label="Plan (tên)">
+                <input
                   value={form.plan}
                   onChange={(e) => setForm({ ...form, plan: e.target.value })}
                   className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 rounded-lg text-sm text-gray-900 dark:text-zinc-100"
-                >
-                  <option value="free">Free</option>
-                  <option value="basic">Basic</option>
-                  <option value="pro">Pro</option>
-                  <option value="enterprise">Enterprise</option>
-                </select>
+                  placeholder="free / basic / pro..."
+                />
               </Field>
-              <Field label="Nhóm tối đa">
+              <Field label="Nhóm tối đa (0=∞)">
                 <input
-                  type="number"
+                  type="number" min="0"
                   value={form.maxGroups}
                   onChange={(e) => setForm({ ...form, maxGroups: Number(e.target.value) })}
                   className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 rounded-lg text-sm text-gray-900 dark:text-zinc-100"
                 />
               </Field>
-              <Field label="Msg/tháng">
+              <Field label="Msg/tháng (0=∞)">
                 <input
-                  type="number"
+                  type="number" min="0"
                   value={form.maxMessagesPerMonth}
                   onChange={(e) => setForm({ ...form, maxMessagesPerMonth: Number(e.target.value) })}
+                  className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 rounded-lg text-sm text-gray-900 dark:text-zinc-100"
+                />
+              </Field>
+              <Field label="Board viewers (0=∞)">
+                <input
+                  type="number" min="0"
+                  value={form.maxBoardViewers}
+                  onChange={(e) => setForm({ ...form, maxBoardViewers: Number(e.target.value) })}
                   className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 rounded-lg text-sm text-gray-900 dark:text-zinc-100"
                 />
               </Field>

@@ -56,6 +56,7 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
       createdAt: t.createdAt,
       maxGroups: t.maxGroups,
       maxMessagesPerMonth: t.maxMessagesPerMonth,
+      maxBoardViewers: t.maxBoardViewers,
       messagesThisMonth: t.messagesThisMonth,
       usageResetAt: t.usageResetAt,
       stats: {
@@ -64,18 +65,21 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
         customers: t._count.customers,
       },
       // Trạng thái tính toán
-      status: computeStatus(t.active, t.licenseExpiresAt),
+      status: computeStatus(t.active, t.licenseExpiresAt, t.setupDone),
     }))
   })
 
   // GET /api/super-admin/metrics — tổng quan hệ thống
   app.get('/metrics', async () => {
-    const [tenants, active, expired, totalGroups, totalMessages, totalCustomers] =
+    const [tenants, active, expired, pending, totalGroups, totalMessages, totalCustomers] =
       await Promise.all([
         db.tenant.count(),
         db.tenant.count({ where: { active: true } }),
         db.tenant.count({
           where: { licenseExpiresAt: { lt: new Date() }, active: true },
+        }),
+        db.tenant.count({
+          where: { active: false, setupDone: false },
         }),
         db.group.count(),
         db.message.count(),
@@ -104,6 +108,7 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
         active,
         suspended: tenants - active,
         expired,
+        pending,
         groups: totalGroups,
         messages: totalMessages,
         customers: totalCustomers,
@@ -120,6 +125,7 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
       plan?: string
       maxGroups?: number
       maxMessagesPerMonth?: number
+      maxBoardViewers?: number
       contactName?: string
       contactPhone?: string
       contactEmail?: string
@@ -135,9 +141,8 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
       data: {
         ...(body.plan !== undefined ? { plan: body.plan } : {}),
         ...(body.maxGroups !== undefined ? { maxGroups: body.maxGroups } : {}),
-        ...(body.maxMessagesPerMonth !== undefined
-          ? { maxMessagesPerMonth: body.maxMessagesPerMonth }
-          : {}),
+        ...(body.maxMessagesPerMonth !== undefined ? { maxMessagesPerMonth: body.maxMessagesPerMonth } : {}),
+        ...(body.maxBoardViewers !== undefined ? { maxBoardViewers: body.maxBoardViewers } : {}),
         ...(body.contactName !== undefined ? { contactName: body.contactName } : {}),
         ...(body.contactPhone !== undefined ? { contactPhone: body.contactPhone } : {}),
         ...(body.contactEmail !== undefined ? { contactEmail: body.contactEmail } : {}),
@@ -271,6 +276,7 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
       createdAt: tenant.createdAt,
       maxGroups: tenant.maxGroups,
       maxMessagesPerMonth: tenant.maxMessagesPerMonth,
+      maxBoardViewers: tenant.maxBoardViewers,
       messagesThisMonth: tenant.messagesThisMonth,
       usageResetAt: tenant.usageResetAt,
       enabledChannels: tenant.enabledChannels,
@@ -284,7 +290,7 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
         alerts: tenant._count.alerts,
       },
       groupsByChannel: groupsByChannel.map(g => ({ channel: g.channelType, count: g._count.id })),
-      status: computeStatus(tenant.active, tenant.licenseExpiresAt),
+      status: computeStatus(tenant.active, tenant.licenseExpiresAt, tenant.setupDone),
     }
   })
 
@@ -416,12 +422,37 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
     invalidateTenantCache(id)
     return updated
   })
+
+  // POST /api/super-admin/tenants/:id/issue-trial — grant trial/license to pending tenant
+  app.post('/tenants/:id/issue-trial', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const { days } = (req.body as { days?: number }) ?? {}
+    const trialDays = days ?? 30
+
+    const tenant = await db.tenant.findUnique({ where: { id } })
+    if (!tenant) return reply.status(404).send({ error: 'Tenant not found' })
+
+    const expiresAt = new Date(Date.now() + trialDays * 86400000)
+
+    const updated = await db.tenant.update({
+      where: { id },
+      data: {
+        active: true,
+        licenseExpiresAt: expiresAt,
+        suspendedReason: null,
+      },
+    })
+    invalidateTenantCache(id)
+    return updated
+  })
 }
 
 function computeStatus(
   active: boolean,
-  licenseExpiresAt: Date | null
-): 'active' | 'trial' | 'expired' | 'suspended' {
+  licenseExpiresAt: Date | null,
+  setupDone: boolean
+): 'active' | 'trial' | 'expired' | 'suspended' | 'pending' {
+  if (!active && !setupDone) return 'pending'
   if (!active) return 'suspended'
   if (!licenseExpiresAt) return 'trial'
   if (licenseExpiresAt < new Date()) return 'expired'
