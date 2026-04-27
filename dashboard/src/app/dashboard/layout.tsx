@@ -28,6 +28,18 @@ const NAV = [
   { href: '/dashboard/settings',          label: 'Cài đặt',     icon: IconSettings, tint: 'bg-gray-500' },
 ]
 
+// Canvas URL theo host của backend (OpenClaw chạy cùng máy với backend)
+function getCanvasUrl() {
+  try {
+    const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
+    const host = new URL(api).hostname
+    return `http://${host}:18789/__openclaw__/canvas/`
+  } catch {
+    return 'http://localhost:18789/__openclaw__/canvas/'
+  }
+}
+const CANVAS_URL = getCanvasUrl()
+
 type SessionHealth = {
   status: 'healthy' | 'warning' | 'dead' | 'never'
   hoursSincePing: number | null
@@ -119,7 +131,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </span>
             <div className="flex items-center gap-2 shrink-0">
               <a
-                href="http://localhost:18789/__openclaw__/canvas/"
+                href={CANVAS_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs font-semibold bg-white text-red-600 hover:bg-red-50 px-3 py-1 rounded-full transition-colors"
