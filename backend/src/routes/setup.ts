@@ -200,7 +200,11 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     })
     if (!tenant) return reply.status(404).send({ error: 'Tenant not found' })
     if (!tenant.active) return reply.status(403).send({ error: 'Suspended' })
-    if (secret !== tenant.webhookSecret) return reply.status(401).send({ error: 'Invalid secret' })
+    // Accept both tenant-level secret AND per-user secret (inject.sh uses user secret when userId provided)
+    if (secret !== tenant.webhookSecret) {
+      const userMatch = await db.user.findFirst({ where: { tenantId, webhookSecret: secret } })
+      if (!userMatch) return reply.status(401).send({ error: 'Invalid secret' })
+    }
 
     hookPings.set(tenantId, Date.now())
     wsManager.broadcast('hook:connected', { tenantId, at: Date.now() })
