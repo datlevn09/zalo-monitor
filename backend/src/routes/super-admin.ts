@@ -288,6 +288,68 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
     }
   })
 
+  // ── Permissions management (super-admin set group access for staff) ──────────
+
+  // GET /api/super-admin/tenants/:id/permissions-matrix
+  // Trả về tất cả nhóm, nhân viên, ma trận quyền — để super-admin thấy và chỉnh
+  app.get('/tenants/:id/permissions-matrix', async (req, reply) => {
+    const { id: tenantId } = req.params as { id: string }
+    const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { id: true } })
+    if (!tenant) return reply.status(404).send({ error: 'Tenant not found' })
+
+    const [groups, users, perms] = await Promise.all([
+      db.group.findMany({
+        where: { tenantId },
+        select: { id: true, name: true, channelType: true },
+        orderBy: { name: 'asc' },
+      }),
+      db.user.findMany({
+        where: { tenantId },
+        select: { id: true, name: true, email: true, role: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      db.groupPermission.findMany({
+        where: { tenantId },
+        select: { userId: true, groupId: true },
+      }),
+    ])
+
+    const matrix: Record<string, string[]> = {}
+    for (const p of perms) {
+      if (!matrix[p.userId]) matrix[p.userId] = []
+      matrix[p.userId].push(p.groupId)
+    }
+
+    return { groups, users, matrix }
+  })
+
+  // PUT /api/super-admin/tenants/:id/users/:userId/groups
+  // Super-admin gán danh sách nhóm cho 1 nhân viên (thay thế toàn bộ)
+  app.put('/tenants/:id/users/:userId/groups', async (req, reply) => {
+    const { id: tenantId, userId } = req.params as { id: string; userId: string }
+    const { groupIds } = req.body as { groupIds: string[] }
+
+    if (!Array.isArray(groupIds)) {
+      return reply.status(400).send({ error: 'groupIds must be an array' })
+    }
+
+    const [tenant, user] = await Promise.all([
+      db.tenant.findUnique({ where: { id: tenantId }, select: { id: true } }),
+      db.user.findFirst({ where: { id: userId, tenantId }, select: { id: true, role: true } }),
+    ])
+    if (!tenant) return reply.status(404).send({ error: 'Tenant not found' })
+    if (!user) return reply.status(404).send({ error: 'User not found in tenant' })
+
+    await db.groupPermission.deleteMany({ where: { tenantId, userId } })
+    if (groupIds.length > 0) {
+      await db.groupPermission.createMany({
+        data: groupIds.map(groupId => ({ tenantId, groupId, userId })),
+        skipDuplicates: true,
+      })
+    }
+    return { ok: true, userId, assigned: groupIds.length }
+  })
+
   // GET /api/super-admin/tenants/:id/license — get license info for a tenant
   app.get('/tenants/:id/license', async (req, reply) => {
     const { id } = req.params as { id: string }

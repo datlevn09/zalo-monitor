@@ -328,6 +328,7 @@ function TenantDrawer({
   const [busy, setBusy] = useState(false)
   const [showNewKeyModal, setShowNewKeyModal] = useState(false)
   const [newKey, setNewKey] = useState('')
+  const [activeTab, setActiveTab] = useState<'info' | 'permissions'>('info')
   const [form, setForm] = useState({
     plan: initialTenant.plan,
     maxGroups: initialTenant.maxGroups,
@@ -460,6 +461,29 @@ function TenantDrawer({
             </div>
             <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-white/15">×</button>
           </div>
+
+          {/* Tab bar */}
+          <div className="flex gap-1 bg-gray-100 dark:bg-white/5 rounded-xl p-1">
+            {([['info','⚙️ Thông tin'],['permissions','🔐 Phân quyền']] as const).map(([tab, label]) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                  activeTab === tab
+                    ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-zinc-100 shadow-sm'
+                    : 'text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-200'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {activeTab === 'permissions' && (
+            <PermissionsMatrix tenantId={tenant.id} />
+          )}
+
+          {activeTab === 'info' && <>
 
           {/* Overview — hosting mode, owner, team, channels */}
           <Section title="📋 Tổng quan">
@@ -683,6 +707,8 @@ function TenantDrawer({
             </div>
           </Section>
 
+          </> /* end activeTab === 'info' */}
+
           <div className="flex gap-2 pt-2 border-t border-gray-100 dark:border-white/5">
             <button onClick={saveInfo} disabled={busy} className="flex-1 py-2.5 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-xl disabled:opacity-50">
               {busy ? 'Đang lưu...' : 'Lưu thay đổi'}
@@ -728,6 +754,168 @@ function TenantDrawer({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── PermissionsMatrix ───────────────────────────────────────────────────────
+// Super-admin có thể gán nhóm cho từng nhân viên của tenant từ xa.
+// Không đọc được nội dung tin nhắn — chỉ thấy tên nhóm.
+
+type MatrixData = {
+  groups: { id: string; name: string; channelType: string }[]
+  users: { id: string; name: string; email: string | null; role: string }[]
+  matrix: Record<string, string[]>
+}
+
+const CH_ICON_SA: Record<string, string> = { ZALO: '💬', TELEGRAM: '✈️', LARK: '🪶' }
+const ROLE_BADGE: Record<string, string> = { OWNER: '👑', MANAGER: '👔', STAFF: '👤' }
+
+function PermissionsMatrix({ tenantId }: { tenantId: string }) {
+  const [data, setData] = useState<MatrixData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [localMatrix, setLocalMatrix] = useState<Record<string, Set<string>>>({})
+  const [saving, setSaving] = useState<string | null>(null) // userId being saved
+  const [saved, setSaved] = useState<string | null>(null)
+
+  useEffect(() => {
+    saApi<MatrixData>(`/api/super-admin/tenants/${tenantId}/permissions-matrix`).then(d => {
+      setData(d)
+      // Convert to Set for easy toggle
+      const m: Record<string, Set<string>> = {}
+      for (const [uid, gids] of Object.entries(d.matrix)) {
+        m[uid] = new Set(gids)
+      }
+      setLocalMatrix(m)
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [tenantId])
+
+  async function saveUser(userId: string) {
+    if (!data) return
+    setSaving(userId)
+    const groupIds = Array.from(localMatrix[userId] ?? [])
+    try {
+      await saApi(`/api/super-admin/tenants/${tenantId}/users/${userId}/groups`, {
+        method: 'PUT',
+        body: JSON.stringify({ groupIds }),
+      })
+      setSaved(userId)
+      setTimeout(() => setSaved(u => u === userId ? null : u), 2000)
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  function toggle(userId: string, groupId: string) {
+    setLocalMatrix(prev => {
+      const next = { ...prev }
+      const s = new Set(prev[userId] ?? [])
+      s.has(groupId) ? s.delete(groupId) : s.add(groupId)
+      next[userId] = s
+      return next
+    })
+  }
+
+  function selectAll(userId: string) {
+    if (!data) return
+    setLocalMatrix(prev => ({ ...prev, [userId]: new Set(data.groups.map(g => g.id)) }))
+  }
+  function clearAll(userId: string) {
+    setLocalMatrix(prev => ({ ...prev, [userId]: new Set() }))
+  }
+
+  if (loading) return <div className="text-xs text-gray-400 dark:text-zinc-500 text-center py-6">Đang tải...</div>
+  if (!data) return <div className="text-xs text-red-500 text-center py-6">Lỗi tải dữ liệu</div>
+
+  // Only show STAFF and MANAGER (OWNER sees all by default)
+  const editableUsers = data.users.filter(u => u.role !== 'OWNER')
+
+  if (editableUsers.length === 0) {
+    return (
+      <div className="text-center py-6">
+        <p className="text-sm text-gray-500 dark:text-zinc-400">Chưa có Staff/Manager nào</p>
+        <p className="text-xs text-gray-400 dark:text-zinc-500 mt-1">Owner tự động thấy tất cả nhóm</p>
+      </div>
+    )
+  }
+
+  if (data.groups.length === 0) {
+    return (
+      <div className="text-center py-6 text-sm text-gray-500 dark:text-zinc-400">
+        Tenant chưa có nhóm nào
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-gray-500 dark:text-zinc-400">
+        Owner tự động thấy tất cả nhóm. Bên dưới là phân quyền cho Staff/Manager — không ảnh hưởng nội dung tin nhắn, chỉ kiểm soát nhóm nào hiển thị trên board.
+      </p>
+
+      {editableUsers.map(user => {
+        const userGroups = localMatrix[user.id] ?? new Set()
+        const count = userGroups.size
+        const isSaving = saving === user.id
+        const isSaved = saved === user.id
+
+        return (
+          <div key={user.id} className="bg-gray-50 dark:bg-white/5 rounded-2xl p-4">
+            {/* User header */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-base">{ROLE_BADGE[user.role] ?? '👤'}</span>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">{user.name}</p>
+                  {user.email && <p className="text-xs text-gray-400 dark:text-zinc-500">{user.email}</p>}
+                </div>
+                <span className="text-xs text-gray-400 dark:text-zinc-500">· {count}/{data.groups.length} nhóm</span>
+              </div>
+              <div className="flex gap-1.5">
+                <button onClick={() => selectAll(user.id)} className="text-xs px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20">Tất cả</button>
+                <button onClick={() => clearAll(user.id)} className="text-xs px-2 py-1 rounded-lg bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-white/15">Xoá</button>
+                <button
+                  onClick={() => saveUser(user.id)}
+                  disabled={isSaving}
+                  className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-all ${
+                    isSaved
+                      ? 'bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400'
+                      : 'bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-50'
+                  }`}
+                >
+                  {isSaving ? '...' : isSaved ? '✓ Đã lưu' : 'Lưu'}
+                </button>
+              </div>
+            </div>
+
+            {/* Group checkboxes */}
+            <div className="grid grid-cols-1 gap-1 max-h-48 overflow-y-auto">
+              {data.groups.map(g => {
+                const checked = userGroups.has(g.id)
+                return (
+                  <label
+                    key={g.id}
+                    className={`flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer transition-colors ${
+                      checked ? 'bg-blue-50 dark:bg-blue-500/10' : 'hover:bg-gray-100 dark:hover:bg-white/5'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggle(user.id, g.id)}
+                      className="w-4 h-4 rounded accent-blue-500 shrink-0"
+                    />
+                    <span className="text-base shrink-0">{CH_ICON_SA[g.channelType] ?? '💬'}</span>
+                    <span className="text-xs text-gray-800 dark:text-zinc-200 truncate flex-1">{g.name}</span>
+                    {checked && <span className="text-blue-500 text-xs shrink-0">✓</span>}
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }
