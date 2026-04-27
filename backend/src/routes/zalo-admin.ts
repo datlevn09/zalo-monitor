@@ -142,6 +142,78 @@ export const zaloAdminRoutes: FastifyPluginAsync = async (app) => {
     }
   })
 
+  // ── Zalo connection status + QR login ────────────────────────────────────
+
+  // GET /api/zalo/connection-status — kiểm tra Zalo có đang kết nối không
+  // Dùng để dashboard hiện badge "Online" / "Offline"
+  app.get('/connection-status', async (req, reply) => {
+    const tenantId = req.headers['x-tenant-id'] as string
+    if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
+
+    // Heuristic: nếu có tin nhắn Zalo trong 10 phút qua → đang kết nối
+    const { db } = await import('../services/db.js')
+    const tenMinsAgo = new Date(Date.now() - 10 * 60 * 1000)
+    const recentMsg = await db.message.findFirst({
+      where: { group: { tenantId, channelType: 'ZALO' }, sentAt: { gte: tenMinsAgo } },
+      select: { sentAt: true },
+      orderBy: { sentAt: 'desc' },
+    })
+
+    // Check openclaw container is running
+    let containerRunning = false
+    try {
+      const out = execSync(`docker inspect --format="{{.State.Running}}" ${OPENCLAW_CONTAINER}`, { encoding: 'utf-8', timeout: 3000 }).trim()
+      containerRunning = out === 'true'
+    } catch { /* docker not available or container not found */ }
+
+    // Check QR file — nếu qr.png mới (<5 phút) → đang chờ scan, chưa kết nối
+    let qrPending = false
+    let qrFileAge: number | null = null
+    try {
+      const qrStat = execInContainer('stat -c %Y /app/qr.png 2>/dev/null || echo 0')
+      const qrMtime = parseInt(qrStat.trim(), 10) * 1000
+      qrFileAge = Date.now() - qrMtime
+      qrPending = qrFileAge < 5 * 60 * 1000 // fresher than 5 minutes = waiting for scan
+    } catch { /* ignore */ }
+
+    return {
+      connected: !qrPending && !!recentMsg,
+      qrPending,
+      containerRunning,
+      lastMessageAt: recentMsg?.sentAt ?? null,
+      qrFileAgeSeconds: qrFileAge !== null ? Math.round(qrFileAge / 1000) : null,
+    }
+  })
+
+  // GET /api/zalo/qr — trả QR code PNG dưới dạng base64 data URL để dashboard hiện
+  // Dashboard poll endpoint này mỗi 5s khi cần đăng nhập lại
+  app.get('/qr', async (req, reply) => {
+    const tenantId = req.headers['x-tenant-id'] as string
+    if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
+
+    try {
+      const b64 = execInContainer('base64 -w0 /app/qr.png 2>/dev/null')
+      if (!b64.trim()) return reply.status(404).send({ error: 'QR not available' })
+      return { dataUrl: `data:image/png;base64,${b64.trim()}` }
+    } catch (err: any) {
+      return reply.status(500).send({ error: 'Cannot read QR: ' + err.message })
+    }
+  })
+
+  // POST /api/zalo/reconnect — khởi động lại openclaw để Zalo re-login
+  // Chỉ admin mới gọi được (tenant guard)
+  app.post('/reconnect', async (req, reply) => {
+    const auth = req.authUser
+    if (auth?.role === 'STAFF') return reply.status(403).send({ error: 'Không đủ quyền' })
+
+    try {
+      execSync(`docker restart ${OPENCLAW_CONTAINER}`, { timeout: 10000 })
+      return { ok: true, message: 'OpenClaw restarting... QR sẽ xuất hiện sau ~10 giây' }
+    } catch (err: any) {
+      return reply.status(500).send({ error: err.message })
+    }
+  })
+
   // POST /api/zalo/auto-allowlist — tự động lấy pending + add hết
   app.post('/auto-allowlist', async (req, reply) => {
     const pendingRes = await fetch(`http://localhost:${process.env.PORT ?? 3001}/api/zalo/pending-groups`)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { api } from '@/lib/api'
 
 type ChannelConfig = {
@@ -11,6 +11,14 @@ type ChannelConfig = {
     groupCount?: number
     comingSoon?: boolean
   }
+}
+
+interface ZaloConnectionStatus {
+  connected: boolean
+  qrPending: boolean
+  containerRunning: boolean
+  lastMessageAt?: string
+  qrFileAgeSeconds?: number
 }
 
 const CHANNEL_GUIDE_URLS: Record<string, string> = {
@@ -108,14 +116,25 @@ export default function ChannelsPage() {
         </div>
         <div className="space-y-3">
           {activeChannels.map(([key, cfg]) => (
-            <ChannelCard
-              key={key}
-              channelKey={key}
-              config={cfg}
-              onToggle={() => toggleChannel(key, !(cfg.enabled ?? false))}
-              disabled={saving}
-              guideUrl={CHANNEL_GUIDE_URLS[key]}
-            />
+            key === 'zaloPersonal' ? (
+              <ZaloChannelCard
+                key={key}
+                channelKey={key}
+                config={cfg}
+                onToggle={() => toggleChannel(key, !(cfg.enabled ?? false))}
+                disabled={saving}
+                guideUrl={CHANNEL_GUIDE_URLS[key]}
+              />
+            ) : (
+              <ChannelCard
+                key={key}
+                channelKey={key}
+                config={cfg}
+                onToggle={() => toggleChannel(key, !(cfg.enabled ?? false))}
+                disabled={saving}
+                guideUrl={CHANNEL_GUIDE_URLS[key]}
+              />
+            )
           ))}
         </div>
       </div>
@@ -198,6 +217,279 @@ function ChannelCard({
             className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform"
             style={{ transform: (config.enabled ?? false) ? 'translateX(20px)' : 'translateX(0)' }}
           />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ZaloChannelCard({
+  channelKey,
+  config,
+  onToggle,
+  disabled,
+  guideUrl,
+}: {
+  channelKey: string
+  config: any
+  onToggle: () => void
+  disabled: boolean
+  guideUrl?: string
+}) {
+  const [status, setStatus] = useState<ZaloConnectionStatus>({
+    connected: false,
+    qrPending: false,
+    containerRunning: false,
+  })
+  const [showQrModal, setShowQrModal] = useState(false)
+  const [reconnecting, setReconnecting] = useState(false)
+  const statusPollInterval = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
+  const qrPollInterval = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
+  const showQrModalRef = useRef(showQrModal)
+  useEffect(() => { showQrModalRef.current = showQrModal }, [showQrModal])
+
+  // Poll connection status every 30s on mount
+  useEffect(() => {
+    const pollStatus = async () => {
+      try {
+        const result = await api<ZaloConnectionStatus>('/api/zalo/connection-status')
+        setStatus(result)
+        // Auto-open QR modal if qrPending becomes true
+        if (result.qrPending && !showQrModalRef.current) {
+          setShowQrModal(true)
+        }
+      } catch (err) {
+        console.error('Failed to poll Zalo status:', err)
+      }
+    }
+
+    // Poll immediately on mount
+    pollStatus()
+
+    // Set up interval for polling every 30s
+    statusPollInterval.current = setInterval(pollStatus, 30000)
+
+    return () => {
+      clearInterval(statusPollInterval.current)
+    }
+  }, [])
+
+  // Poll connection status more frequently while QR modal is open
+  useEffect(() => {
+    if (!showQrModal) {
+      if (qrPollInterval.current) {
+        clearInterval(qrPollInterval.current)
+      }
+      return
+    }
+
+    const pollStatus = async () => {
+      try {
+        const result = await api<ZaloConnectionStatus>('/api/zalo/connection-status')
+        setStatus(result)
+        // Auto-close modal when connected
+        if (result.connected) {
+          setShowQrModal(false)
+        }
+      } catch (err) {
+        console.error('Failed to poll Zalo status:', err)
+      }
+    }
+
+    // Poll every 5s while modal is open
+    qrPollInterval.current = setInterval(pollStatus, 5000)
+
+    return () => {
+      if (qrPollInterval.current) {
+        clearInterval(qrPollInterval.current)
+      }
+    }
+  }, [showQrModal])
+
+  const handleReconnect = async () => {
+    setReconnecting(true)
+    try {
+      await api('/api/zalo/reconnect', { method: 'POST' })
+      setShowQrModal(true)
+      // Trigger immediate status poll
+      const result = await api<ZaloConnectionStatus>('/api/zalo/connection-status')
+      setStatus(result)
+    } catch (err) {
+      console.error('Failed to reconnect Zalo:', err)
+    } finally {
+      setReconnecting(false)
+    }
+  }
+
+  const getStatusColor = () => {
+    if (status.connected) return 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-300'
+    if (status.qrPending) return 'bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-300'
+    return 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300'
+  }
+
+  const getStatusText = () => {
+    if (status.connected) return 'Đang kết nối'
+    if (status.qrPending) return 'Đang chờ...'
+    return 'Mất kết nối'
+  }
+
+  return (
+    <>
+      <div className="bg-white dark:bg-zinc-900 dark:ring-1 dark:ring-white/5 rounded-xl border border-gray-200 dark:border-white/10 p-5 flex items-start gap-4 transition-all hover:shadow-md">
+        <div className="text-3xl shrink-0">{config.icon}</div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-semibold text-gray-900 dark:text-zinc-100">{config.label}</h3>
+            <span className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md ${getStatusColor()}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${status.connected ? 'bg-green-600 dark:bg-green-400' : status.qrPending ? 'bg-yellow-600 dark:bg-yellow-400' : 'bg-red-600 dark:bg-red-400'}`} />
+              {getStatusText()}
+            </span>
+          </div>
+          <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1">
+            Theo dõi tin nhắn từ nhóm Zalo cá nhân
+          </p>
+          {(config.groupCount ?? 0) > 0 && (
+            <div className="text-xs text-gray-400 dark:text-zinc-500 mt-2">
+              {config.groupCount} nhóm đang theo dõi
+            </div>
+          )}
+        </div>
+        <div className="shrink-0 flex items-center gap-3">
+          {guideUrl && (
+            <a
+              href={guideUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors"
+            >
+              Hướng dẫn
+            </a>
+          )}
+          <button
+            onClick={handleReconnect}
+            disabled={disabled || reconnecting}
+            className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {reconnecting ? 'Đang kết nối...' : 'Kết nối lại'}
+          </button>
+          <button
+            onClick={onToggle}
+            disabled={disabled}
+            className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${
+              config.enabled ?? false ? 'bg-green-500' : 'bg-gray-300 dark:bg-white/15'
+            } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+          >
+            <span
+              className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform"
+              style={{ transform: (config.enabled ?? false) ? 'translateX(20px)' : 'translateX(0)' }}
+            />
+          </button>
+        </div>
+      </div>
+
+      {/* QR Modal */}
+      {showQrModal && (
+        <ZaloQRModal
+          onClose={() => setShowQrModal(false)}
+          isConnected={status.connected}
+        />
+      )}
+    </>
+  )
+}
+
+function ZaloQRModal({
+  onClose,
+  isConnected,
+}: {
+  onClose: () => void
+  isConnected: boolean
+}) {
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const qrPollInterval = useRef<NodeJS.Timeout>()
+
+  useEffect(() => {
+    const pollQR = async () => {
+      try {
+        const result = await api<{ dataUrl: string }>('/api/zalo/qr')
+        setQrDataUrl(result.dataUrl)
+        setLoading(false)
+      } catch (err) {
+        console.error('Failed to get Zalo QR:', err)
+      }
+    }
+
+    // Fetch immediately
+    pollQR()
+
+    // Poll every 5s
+    qrPollInterval.current = setInterval(pollQR, 5000)
+
+    return () => {
+      if (qrPollInterval.current) {
+        clearInterval(qrPollInterval.current)
+      }
+    }
+  }, [])
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div
+        className="relative bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl max-w-sm w-full p-6 flex flex-col items-center gap-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 text-gray-400 dark:text-zinc-500 hover:text-gray-600 dark:hover:text-zinc-300 transition-colors"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        {/* Title */}
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-zinc-100 mb-2">
+            Quét mã QR
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-zinc-400">
+            Mở Zalo trên điện thoại → Quét mã QR để đăng nhập lại
+          </p>
+        </div>
+
+        {/* QR Image or Loading */}
+        <div className="w-56 h-56 bg-gray-100 dark:bg-zinc-800 rounded-lg flex items-center justify-center">
+          {loading ? (
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-12 h-12 border-4 border-gray-300 dark:border-zinc-600 border-t-blue-500 rounded-full animate-spin" />
+              <p className="text-sm text-gray-500 dark:text-zinc-400">Đang tải mã QR...</p>
+            </div>
+          ) : qrDataUrl ? (
+            <img
+              src={qrDataUrl}
+              alt="Zalo QR Code"
+              className="w-48 h-48 object-contain"
+            />
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-zinc-400">Không thể tải mã QR</p>
+          )}
+        </div>
+
+        {/* Status message */}
+        {isConnected && (
+          <div className="w-full bg-green-100 dark:bg-green-500/20 border border-green-300 dark:border-green-500/50 rounded-lg p-3 text-sm text-green-700 dark:text-green-300 text-center">
+            ✓ Kết nối thành công! Đang đóng...
+          </div>
+        )}
+
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="w-full px-4 py-2.5 bg-gray-900 dark:bg-zinc-800 text-white rounded-lg font-medium hover:bg-gray-800 dark:hover:bg-zinc-700 transition-colors"
+        >
+          Đóng
         </button>
       </div>
     </div>
