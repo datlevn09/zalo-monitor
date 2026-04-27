@@ -374,20 +374,20 @@ function ZaloChannelCard({
           {/* Show install guide if not installed, reconnect button if disconnected */}
           {notInstalled ? (
             <a
-              href="https://datthongdong.com/openclaw-install"
+              href="/docs/install-zalo"
               target="_blank"
               rel="noopener noreferrer"
               className="px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 rounded-lg transition-colors"
             >
               Xem hướng dẫn cài đặt
             </a>
-          ) : !status.connected && (
+          ) : (
             <button
               onClick={handleReconnect}
               disabled={disabled || reconnecting}
               className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {reconnecting ? 'Đang khởi động...' : 'Kết nối lại'}
+              {reconnecting ? 'Đang khởi động...' : status.connected ? 'Đổi tài khoản' : 'Kết nối lại'}
             </button>
           )}
           <button
