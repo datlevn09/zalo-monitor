@@ -892,12 +892,8 @@ function ZaloQRModal({
         {/* Native mode hint */}
         {nativeMode && !qrDataUrl && (
           <div className="w-full bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-lg p-3 text-xs text-amber-800 dark:text-amber-300">
-            <p className="font-medium mb-1">OpenClaw đang chạy trên máy của bạn (không phải server này)</p>
-            <p>Vui lòng khởi động lại OpenClaw trên máy đó → QR sẽ tự hiện ở đây trong vài giây.</p>
-            <code className="block mt-2 bg-amber-100 dark:bg-black/30 px-2 py-1 rounded text-[11px] font-mono">
-              # Chạy trên máy có OpenClaw:<br/>
-              pkill -f openclaw-gateway &amp;&amp; openclaw gateway
-            </code>
+            <p className="font-medium mb-1">OpenClaw đang chạy trên máy/server khác của bạn (không phải máy này)</p>
+            <p>Vui lòng khởi động lại OpenClaw trên máy/server đó → QR sẽ tự hiện ở đây trong vài giây.</p>
           </div>
         )}
 
