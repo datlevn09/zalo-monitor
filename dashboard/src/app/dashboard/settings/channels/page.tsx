@@ -21,9 +21,9 @@ interface ZaloConnectionStatus {
   qrFileAgeSeconds?: number
 }
 
+// Guide URLs — only set if a real page exists
 const CHANNEL_GUIDE_URLS: Record<string, string> = {
-  zaloPersonal: 'https://docs.zalo-monitor.dev/install-zalo',
-  telegram: 'https://docs.zalo-monitor.dev/install-telegram',
+  // telegram: '/docs/install-telegram',
 }
 
 export default function ChannelsPage() {
@@ -321,17 +321,17 @@ function ZaloChannelCard({
     }
   }
 
-  const getStatusColor = () => {
-    if (status.connected) return 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-300'
-    if (status.qrPending) return 'bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-300'
-    return 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300'
+  // 3 states: not installed, disconnected, connected
+  const notInstalled = !status.containerRunning
+
+  const getStatusBadge = () => {
+    if (notInstalled)      return { color: 'bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-zinc-400',    dot: 'bg-gray-400',                          text: 'Chưa cài đặt' }
+    if (status.connected)  return { color: 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-300', dot: 'bg-green-600 dark:bg-green-400',   text: 'Đang kết nối' }
+    if (status.qrPending)  return { color: 'bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-300', dot: 'bg-yellow-500 animate-pulse', text: 'Chờ quét QR...' }
+    return                        { color: 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300',     dot: 'bg-red-500',                           text: 'Mất kết nối' }
   }
 
-  const getStatusText = () => {
-    if (status.connected) return 'Đang kết nối'
-    if (status.qrPending) return 'Đang chờ...'
-    return 'Mất kết nối'
-  }
+  const badge = getStatusBadge()
 
   return (
     <>
@@ -340,14 +340,20 @@ function ZaloChannelCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="font-semibold text-gray-900 dark:text-zinc-100">{config.label}</h3>
-            <span className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md ${getStatusColor()}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${status.connected ? 'bg-green-600 dark:bg-green-400' : status.qrPending ? 'bg-yellow-600 dark:bg-yellow-400' : 'bg-red-600 dark:bg-red-400'}`} />
-              {getStatusText()}
+            <span className={`inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-md ${badge.color}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
+              {badge.text}
             </span>
           </div>
           <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1">
             Theo dõi tin nhắn từ nhóm Zalo cá nhân
           </p>
+          {/* Not installed — show install hint */}
+          {notInstalled && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+              OpenClaw chưa chạy. Cài đặt theo hướng dẫn để bắt đầu theo dõi Zalo.
+            </p>
+          )}
           {(config.groupCount ?? 0) > 0 && (
             <div className="text-xs text-gray-400 dark:text-zinc-500 mt-2">
               {config.groupCount} nhóm đang theo dõi
@@ -365,13 +371,25 @@ function ZaloChannelCard({
               Hướng dẫn
             </a>
           )}
-          <button
-            onClick={handleReconnect}
-            disabled={disabled || reconnecting}
-            className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {reconnecting ? 'Đang kết nối...' : 'Kết nối lại'}
-          </button>
+          {/* Show install guide if not installed, reconnect button if disconnected */}
+          {notInstalled ? (
+            <a
+              href="https://datthongdong.com/openclaw-install"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20 rounded-lg transition-colors"
+            >
+              Xem hướng dẫn cài đặt
+            </a>
+          ) : !status.connected && (
+            <button
+              onClick={handleReconnect}
+              disabled={disabled || reconnecting}
+              className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {reconnecting ? 'Đang khởi động...' : 'Kết nối lại'}
+            </button>
+          )}
           <button
             onClick={onToggle}
             disabled={disabled}
