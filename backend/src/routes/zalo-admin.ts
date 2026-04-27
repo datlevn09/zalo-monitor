@@ -232,25 +232,28 @@ export const zaloAdminRoutes: FastifyPluginAsync = async (app) => {
     }
   })
 
-  // POST /api/zalo/reconnect — khởi động lại openclaw để Zalo re-login
-  // Chỉ admin mới gọi được (tenant guard)
+  // POST /api/zalo/reconnect — gửi yêu cầu login Zalo qua hook (không cần SSH)
+  // Hook sẽ poll /api/setup/pending-actions, thấy 'login_zalo' → exec `openzca login`
+  // → QR file sinh ra → existing watcher push lên backend → dashboard hiện QR
   app.post('/reconnect', async (req, reply) => {
     const auth = req.authUser
     if (auth?.role === 'STAFF') return reply.status(403).send({ error: 'Không đủ quyền' })
 
-    // Try to restart Docker container (NAS self-contained setup)
+    const { queueAction } = await import('./setup.js')
+    queueAction(auth!.tenantId, 'login_zalo')
+
+    // Optional: nếu OpenClaw chạy local trong cùng container backend (NAS mode)
+    // thì restart để clear session cũ — bỏ qua nếu lỗi
     let restarted = false
     try {
       execSync(`docker restart ${OPENCLAW_CONTAINER}`, { timeout: 10000 })
       restarted = true
-    } catch { /* Docker not available or not containerised — native/VPS mode */ }
+    } catch { /* native mode hoặc không có docker — hook tự xử lý */ }
 
     return {
       ok: true,
       restarted,
-      message: restarted
-        ? 'OpenClaw restarting... QR sẽ xuất hiện sau ~10 giây'
-        : 'OpenClaw chạy ở chế độ native. Khởi động lại OpenClaw trên máy đó → QR sẽ tự xuất hiện trên dashboard.',
+      message: 'Đã gửi yêu cầu đăng nhập tới OpenClaw — QR sẽ xuất hiện trong vài giây',
       nativeMode: !restarted,
     }
   })

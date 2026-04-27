@@ -52,6 +52,16 @@ export function getQrFromStore(tenantId: string) {
   return entry.dataUrl
 }
 
+// Pending actions (dashboard → hook): tenantId → Set<action>
+// Hook poll endpoint /pending-actions, exec lệnh tương ứng (vd login_zalo → openzca login)
+const pendingActions = new Map<string, Set<string>>()
+export function queueAction(tenantId: string, action: string) {
+  if (!pendingActions.has(tenantId)) pendingActions.set(tenantId, new Set())
+  pendingActions.get(tenantId)!.add(action)
+  // Auto cleanup sau 5 phút (phòng hook offline, không xử lý)
+  setTimeout(() => pendingActions.get(tenantId)?.delete(action), 5 * 60 * 1000)
+}
+
 export function getQrEntryFromStore(tenantId: string) {
   const entry = qrStore.get(tenantId)
   if (!entry) return null
@@ -566,6 +576,19 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     if (!tenant) return reply.status(403).send({ error: 'Invalid secret' })
     await db.sendQueue.update({ where: { id, tenantId: tenant.id }, data: { status } })
     return { ok: true }
+  })
+
+  // GET /api/setup/pending-actions — hook polls for dashboard-triggered commands
+  // Returns: { actions: ['login_zalo', ...] } — sau khi trả về thì xóa khỏi store
+  app.get('/pending-actions', async (req, reply) => {
+    const secret = req.headers['x-webhook-secret'] as string
+    if (!secret) return reply.status(401).send({ error: 'Missing secret' })
+    const tenant = await db.tenant.findFirst({ where: { webhookSecret: secret } })
+    if (!tenant) return reply.status(403).send({ error: 'Invalid secret' })
+    const set = pendingActions.get(tenant.id)
+    const actions = set ? Array.from(set) : []
+    if (set) set.clear() // consume — hook đã nhận, không gửi lại
+    return { actions }
   })
 }
 

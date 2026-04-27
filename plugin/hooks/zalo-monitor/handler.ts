@@ -356,6 +356,51 @@ function initSendPoller() {
   interval.unref?.()
 }
 
+// ── Pending Actions Poller — dashboard "Kết nối lại" → exec openzca login ───
+let actionPolling = false
+async function runPendingActions(cfg: Config) {
+  if (actionPolling) return
+  actionPolling = true
+  try {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 5000)
+    const res = await fetch(`${cfg.backendUrl}/api/setup/pending-actions`, {
+      signal: ctrl.signal,
+      headers: { 'x-webhook-secret': cfg.webhookSecret, 'x-tenant-id': cfg.tenantId },
+    }).catch(() => null)
+    clearTimeout(t)
+    if (!res?.ok) return
+    const data = await res.json() as { actions?: string[] }
+    if (!data.actions?.length) return
+
+    const { spawn } = await import('child_process')
+
+    for (const action of data.actions) {
+      if (action === 'login_zalo') {
+        // Spawn openzca login (sinh QR file → QR watcher tự push lên backend)
+        try {
+          const child = spawn('openzca', ['--profile', 'default', 'auth', 'login', '--qr-file', '/tmp/zalo-qr.png'], {
+            detached: true, stdio: 'ignore',
+          })
+          child.unref()
+          // Auto-kill sau 90s nếu chưa scan (tránh process treo)
+          setTimeout(() => { try { child.kill() } catch {} }, 90_000).unref?.()
+        } catch { /* openzca không có hoặc lỗi — fallback về SSH manual */ }
+      }
+    }
+  } catch { /* silent */ } finally {
+    actionPolling = false
+  }
+}
+
+function initActionPoller() {
+  const interval = setInterval(async () => {
+    const cfg = loadConfig()
+    if (cfg) await runPendingActions(cfg)
+  }, 5_000)
+  interval.unref?.()
+}
+
 function loadConfig(): Config | null {
   if (cachedConfig) return cachedConfig
 
@@ -453,5 +498,6 @@ const handler = async (event: any) => {
 initQrWatcher()
 initSyncWatcher()
 initSendPoller()
+initActionPoller()
 
 export default handler
