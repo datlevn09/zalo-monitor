@@ -34,6 +34,7 @@ import { startTelegramPoller } from './services/telegram-poller.js'
 import { validateLicense, getLicenseMode } from './services/license.js'
 import { installRoutes } from './routes/install.js'
 import { licenseValidateRoutes } from './routes/license-validate.js'
+import { startSessionMonitor } from './services/session-monitor.js'
 
 const app = Fastify({ logger: true })
 
@@ -120,3 +121,6 @@ await registerScheduledJobs()
 
 // Start Telegram polling (backend là listener duy nhất, không qua OpenClaw)
 startTelegramPoller()
+
+// Start session monitor to check hook health
+startSessionMonitor()

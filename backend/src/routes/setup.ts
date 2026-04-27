@@ -9,7 +9,10 @@ const step1Schema = z.object({
   industry: z.string().optional(),
   ownerName: z.string().min(1),
   email: z.string().email(),
-  password: z.string().min(6),
+  password: z.string().min(8).regex(
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()\-_=+\[\]{}|;':",.<>?/\\`~])/,
+    'Mật khẩu phải chứa chữ hoa, chữ thường, số và ký tự đặc biệt'
+  ),
 })
 
 const step3Schema = z.object({
@@ -40,6 +43,22 @@ setInterval(() => {
   for (const [k, ts] of hookPings) if (ts < cutoff) hookPings.delete(k)
 }, 60_000).unref?.()
 
+// In-memory QR store: tenantId → { dataUrl, pushedAt }
+const qrStore = new Map<string, { dataUrl: string; pushedAt: number }>()
+export function getQrFromStore(tenantId: string) {
+  const entry = qrStore.get(tenantId)
+  if (!entry) return null
+  if (Date.now() - entry.pushedAt > 5 * 60 * 1000) { qrStore.delete(tenantId); return null }
+  return entry.dataUrl
+}
+
+export function getQrEntryFromStore(tenantId: string) {
+  const entry = qrStore.get(tenantId)
+  if (!entry) return null
+  if (Date.now() - entry.pushedAt > 5 * 60 * 1000) { qrStore.delete(tenantId); return null }
+  return entry
+}
+
 export const setupRoutes: FastifyPluginAsync = async (app) => {
   // Step 1: Tạo tenant + owner account, trả JWT để auto-login
   app.post('/tenant', async (req, reply) => {
@@ -56,6 +75,7 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
         name: businessName,
         industry,
         slug,
+        licenseExpiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
         users: {
           create: {
             name: ownerName,
@@ -105,6 +125,8 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
       oneLineCommand: `curl -fsSL "${backendUrl}/api/setup/inject.sh?${qs}" | bash`,
       // OpenClaw chạy trong Docker — exec vào container openclaw
       dockerCommand: `docker exec openclaw bash -c 'curl -fsSL "${backendUrl}/api/setup/inject.sh?${qs}" | bash'`,
+      // Windows PowerShell
+      windowsCommand: `iwr -useb "${backendUrl}/api/setup/inject.ps1?${qs}" | iex`,
       admin: {
         name: process.env.ADMIN_NAME ?? 'Support',
         zalo: process.env.ADMIN_ZALO ?? '',
@@ -158,8 +180,54 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const backendUrl = resolveBackendUrl(req)
+    const dashboardUrl = (process.env.DASHBOARD_URL ?? process.env.PUBLIC_DASHBOARD_URL ?? '')
+      .replace(/\/$/, '') || backendUrl.replace(/^https?:\/\/api\./, 'https://')
     reply.header('Content-Type', 'text/plain')
-    return generateOpenClawHookInstaller(backendUrl, secret, tenantId, displayName)
+    return generateOpenClawHookInstaller(backendUrl, dashboardUrl, secret, tenantId, displayName)
+  })
+
+  // Windows PowerShell installer
+  app.get('/inject.ps1', async (req, reply) => {
+    const q = req.query as any
+    const tenantId = String(q.tenantId ?? '').trim()
+    const userId   = String(q.userId   ?? '').trim()
+
+    if (!tenantId) {
+      reply.header('Content-Type', 'text/plain')
+      return reply.status(400).send('Write-Error "tenantId query param required"\nexit 1\n')
+    }
+
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { webhookSecret: true, active: true, name: true },
+    })
+    if (!tenant) {
+      reply.header('Content-Type', 'text/plain')
+      return reply.status(404).send('Write-Error "Tenant not found"\nexit 1\n')
+    }
+    if (!tenant.active) {
+      reply.header('Content-Type', 'text/plain')
+      return reply.status(403).send('Write-Error "Tenant suspended"\nexit 1\n')
+    }
+
+    let secret = tenant.webhookSecret
+    let displayName = tenant.name
+    if (userId) {
+      const user = await db.user.findFirst({
+        where: { id: userId, tenantId },
+        select: { webhookSecret: true, name: true },
+      })
+      if (user) {
+        secret = user.webhookSecret
+        displayName = `${user.name} @ ${tenant.name}`
+      }
+    }
+
+    const backendUrl = resolveBackendUrl(req)
+    const dashboardUrl = (process.env.DASHBOARD_URL ?? process.env.PUBLIC_DASHBOARD_URL ?? '')
+      .replace(/\/$/, '') || backendUrl.replace(/^https?:\/\/api\./, 'https://')
+    reply.header('Content-Type', 'text/plain; charset=utf-8')
+    return generateWindowsHookInstaller(backendUrl, dashboardUrl, secret, tenantId, displayName)
   })
 
   // Serve hook files for download (customer OpenClaw fetch khi install)
@@ -167,7 +235,7 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     const { file } = req.params as { file: string }
     const path = await import('path')
     const fs = await import('fs')
-    const allowlist = new Set(['HOOK.md', 'handler.ts'])
+    const allowlist = new Set(['HOOK.md', 'handler.ts', 'zalo-history-push.mjs'])
     if (!allowlist.has(file)) return reply.status(404).send({ error: 'Not found' })
 
     // Thử nhiều vị trí có thể chứa plugin hook (dev / docker / prod)
@@ -185,6 +253,29 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     }
     reply.header('Content-Type', 'text/plain; charset=utf-8')
     return fs.readFileSync(full, 'utf-8')
+  })
+
+  // POST /api/setup/qr-push — hook reports QR image
+  app.post('/qr-push', async (req, reply) => {
+    const secret = req.headers['x-webhook-secret'] as string
+    const tenantId = req.headers['x-tenant-id'] as string
+    const { dataUrl } = req.body as { dataUrl: string }
+
+    if (!dataUrl?.startsWith('data:image/')) return reply.status(400).send({ error: 'Invalid dataUrl' })
+
+    // Verify secret belongs to this tenant (check webhookSecret on tenant or any user)
+    const tenant = await db.tenant.findFirst({ where: { id: tenantId } })
+    if (!tenant) return reply.status(404).send({ error: 'Tenant not found' })
+
+    // Accept if secret matches any user's webhookSecret OR tenant-level secret in this tenant
+    let secretValid = secret === tenant.webhookSecret
+    if (!secretValid) {
+      const user = await db.user.findFirst({ where: { tenantId, webhookSecret: secret } })
+      if (!user) return reply.status(403).send({ error: 'Invalid secret' })
+    }
+
+    qrStore.set(tenantId, { dataUrl, pushedAt: Date.now() })
+    return { ok: true }
   })
 
   // Hook self-test ping — inject.sh POST tới đây sau khi cài xong để xác nhận
@@ -207,6 +298,13 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     }
 
     hookPings.set(tenantId, Date.now())
+
+    // Fire-and-forget: update lastHookPingAt in DB
+    db.tenant.update({
+      where: { id: tenantId },
+      data: { lastHookPingAt: new Date() },
+    }).catch(() => undefined)
+
     wsManager.broadcast('hook:connected', { tenantId, at: Date.now() })
     return reply.status(200).send({ ok: true })
   })
@@ -275,6 +373,200 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     // TODO: gọi notification service
     return { ok: true, message: `Test gửi tới ${channelType}: ${target}` }
   })
+
+  // GET /api/setup/sync-request — hook polls this to check if sync is needed
+  // Query params:
+  //   - hasSqlite=1: SQLite available on same machine → higher limit + more groups
+  //   - forceFullSync=1: standalone script override → skip cooldown, DO NOT update lastAutoSyncAt
+  // Returns groups to sync + limit. Marks lastAutoSyncAt to prevent parallel runs (unless forceFullSync).
+  app.get('/sync-request', async (req, reply) => {
+    const secret = req.headers['x-webhook-secret'] as string
+    const tenantId = req.headers['x-tenant-id'] as string
+    const q = (req.query as Record<string, string>) ?? {}
+    const hasSqlite = q.hasSqlite === '1'
+    const forceFullSync = q.forceFullSync === '1'
+
+    if (!secret || !tenantId) return reply.status(400).send({ error: 'Missing headers' })
+
+    // Validate secret (tenant-level OR per-user)
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { webhookSecret: true, active: true, maxHistorySyncDepth: true, lastAutoSyncAt: true },
+    })
+    if (!tenant) return reply.status(404).send({ error: 'Tenant not found' })
+    if (!tenant.active) return reply.status(403).send({ error: 'Suspended' })
+
+    let secretValid = secret === tenant.webhookSecret
+    if (!secretValid) {
+      const user = await db.user.findFirst({ where: { tenantId, webhookSecret: secret } })
+      secretValid = !!user
+    }
+    if (!secretValid) return reply.status(403).send({ error: 'Invalid secret' })
+
+    // Check if sync is needed: forceFullSync=1 bypasses cooldown, otherwise check 23h rule
+    let needsSync = forceFullSync || !tenant.lastAutoSyncAt ||
+      Date.now() - tenant.lastAutoSyncAt.getTime() > 23 * 60 * 60 * 1000
+
+    if (!needsSync || tenant.maxHistorySyncDepth === 0) {
+      return { needed: false }
+    }
+
+    // Determine group limit and sync depth based on SQLite availability
+    const groupLimit = (hasSqlite || forceFullSync) ? 200 : 50
+    const syncDepth = (hasSqlite || forceFullSync)
+      ? Math.max(tenant.maxHistorySyncDepth, 5000)
+      : tenant.maxHistorySyncDepth
+
+    // Get top N groups to sync (most recently active first)
+    const groups = await db.group.findMany({
+      where: { tenantId, channelType: 'ZALO', monitorEnabled: true },
+      orderBy: { lastMessageAt: { sort: 'desc', nulls: 'last' } },
+      take: groupLimit,
+      select: { id: true, externalId: true, name: true },
+    })
+
+    if (groups.length === 0) return { needed: false }
+
+    // Mark sync started ONLY if not forceFullSync (standalone script shouldn't affect normal sync timer)
+    if (!forceFullSync) {
+      await db.tenant.update({
+        where: { id: tenantId },
+        data: { lastAutoSyncAt: new Date() },
+      }).catch(() => undefined)
+    }
+
+    return {
+      needed: true,
+      limit: syncDepth,
+      groups: groups.map(g => ({ id: g.id, externalId: g.externalId, name: g.name })),
+    }
+  })
+
+  // POST /api/setup/sync-push — hook pushes message batch for a group
+  // Body: { groupId: string, messages: Array<{msgId, senderId, senderName?, content?, timestamp?, isSelf?}> }
+  app.post('/sync-push', async (req, reply) => {
+    const secret = req.headers['x-webhook-secret'] as string
+    const tenantId = req.headers['x-tenant-id'] as string
+    if (!secret || !tenantId) return reply.status(400).send({ error: 'Missing headers' })
+
+    // Validate secret
+    const tenant = await db.tenant.findFirst({ where: { id: tenantId } })
+    if (!tenant) return reply.status(404).send({ error: 'Tenant not found' })
+
+    let secretValid = secret === tenant.webhookSecret
+    if (!secretValid) {
+      const user = await db.user.findFirst({ where: { tenantId, webhookSecret: secret } })
+      secretValid = !!user
+    }
+    if (!secretValid) return reply.status(403).send({ error: 'Invalid secret' })
+
+    const body = req.body as {
+      groupId: string
+      messages: Array<{
+        msgId?: string
+        cliMsgId?: string
+        senderId?: string
+        uidFrom?: string
+        senderName?: string
+        dName?: string
+        content?: string
+        message?: string
+        text?: string
+        timestamp?: number
+        isSelf?: boolean
+        senderType?: string
+        msgType?: string
+        mediaType?: string
+        mediaUrl?: string
+      }>
+    }
+
+    if (!body.groupId || !Array.isArray(body.messages)) {
+      return reply.status(400).send({ error: 'groupId and messages array required' })
+    }
+
+    // Verify group belongs to this tenant
+    const group = await db.group.findFirst({ where: { id: body.groupId, tenantId } })
+    if (!group) return reply.status(404).send({ error: 'Group not found' })
+
+    let imported = 0
+    for (const m of body.messages) {
+      const msgId = m.msgId ?? m.cliMsgId
+      if (!msgId) continue
+
+      const senderId = String(m.senderId ?? m.uidFrom ?? 'unknown')
+      const senderName = m.senderName ?? m.dName ?? null
+      const content = typeof m.content === 'string' ? m.content
+        : typeof m.message === 'string' ? m.message
+        : typeof m.text === 'string' ? m.text
+        : null
+      const senderType: 'SELF' | 'CONTACT' = m.isSelf || m.senderType === 'SELF' ? 'SELF' : 'CONTACT'
+
+      // Detect content type
+      const mt = ((m.msgType ?? m.mediaType) ?? '').toLowerCase()
+      const contentType = mt.includes('image') || mt.includes('photo') ? 'IMAGE'
+        : mt.includes('video') ? 'VIDEO'
+        : mt.includes('file') || mt.includes('document') ? 'FILE'
+        : mt.includes('sticker') ? 'STICKER'
+        : mt.includes('voice') || mt.includes('audio') ? 'VOICE'
+        : 'TEXT'
+
+      try {
+        await db.message.upsert({
+          where: { groupId_externalId: { groupId: body.groupId, externalId: String(msgId) } },
+          update: {},
+          create: {
+            groupId: body.groupId,
+            externalId: String(msgId),
+            senderType,
+            senderId,
+            senderName,
+            contentType,
+            content,
+            attachments: m.mediaUrl ? { mediaUrls: [m.mediaUrl] } : undefined,
+            sentAt: m.timestamp ? new Date(m.timestamp) : new Date(),
+          },
+        })
+        imported++
+      } catch { /* skip duplicates */ }
+    }
+
+    // Update group lastMessageAt if we got messages
+    if (imported > 0) {
+      await db.group.update({
+        where: { id: body.groupId },
+        data: { lastMessageAt: new Date() },
+      }).catch(() => undefined)
+    }
+
+    return { ok: true, imported, total: body.messages.length }
+  })
+
+  // GET /api/setup/pending-sends — hook polls for outgoing messages to send
+  app.get('/pending-sends', async (req, reply) => {
+    const secret = req.headers['x-webhook-secret'] as string
+    if (!secret) return reply.status(401).send({ error: 'Missing secret' })
+    const tenant = await db.tenant.findFirst({ where: { webhookSecret: secret } })
+    if (!tenant) return reply.status(403).send({ error: 'Invalid secret' })
+    const pending = await db.sendQueue.findMany({
+      where: { tenantId: tenant.id, status: 'pending' },
+      orderBy: { createdAt: 'asc' },
+      take: 20,
+      select: { id: true, groupExternalId: true, text: true },
+    })
+    return pending
+  })
+
+  // POST /api/setup/ack-send — hook reports send result
+  app.post('/ack-send', async (req, reply) => {
+    const secret = req.headers['x-webhook-secret'] as string
+    if (!secret) return reply.status(401).send({ error: 'Missing secret' })
+    const { id, status } = req.body as { id: string; status: 'sent' | 'failed' }
+    const tenant = await db.tenant.findFirst({ where: { webhookSecret: secret } })
+    if (!tenant) return reply.status(403).send({ error: 'Invalid secret' })
+    await db.sendQueue.update({ where: { id, tenantId: tenant.id }, data: { status } })
+    return { ok: true }
+  })
 }
 
 // Tự detect backend URL từ request Host header, fallback về PUBLIC_BACKEND_URL, cuối cùng là localhost
@@ -286,7 +578,286 @@ function resolveBackendUrl(req: any): string {
   return `http://localhost:${process.env.PORT ?? 3001}`
 }
 
-function generateOpenClawHookInstaller(backendUrl: string, secret: string, tenantId: string, tenantName: string) {
+function generateWindowsHookInstaller(
+  backendUrl: string,
+  dashboardUrl: string,
+  secret: string,
+  tenantId: string,
+  displayName: string,
+): string {
+  return `# Zalo Monitor Hook Installer for Windows (PowerShell)
+# Run: iwr -useb "${backendUrl}/api/setup/inject.ps1?tenantId=${tenantId}" | iex
+$ErrorActionPreference = "Stop"
+$BACKEND_URL = "${backendUrl}"
+$TENANT_ID   = "${tenantId}"
+$SECRET      = "${secret}"
+$DISPLAY_NAME = "${displayName}"
+$DASHBOARD_URL = "${dashboardUrl}"
+
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "  Zalo Monitor Hook Installer (Windows)" -ForegroundColor Cyan
+Write-Host "  Tenant : $DISPLAY_NAME" -ForegroundColor White
+Write-Host "  Backend: $BACKEND_URL" -ForegroundColor White
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
+
+# [1/5] Check / auto-install Node.js
+Write-Host "[1/5] Kiem tra Node.js..." -ForegroundColor Yellow
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+  Write-Host "  Node.js chua cai. Dang tu dong cai dat..." -ForegroundColor Yellow
+  $node_ok = $false
+  # Try winget (Windows 10 1709+)
+  if (Get-Command winget -ErrorAction SilentlyContinue) {
+    Write-Host "  Dang cai qua winget (vui long doi ~60 giay)..." -ForegroundColor White
+    winget install OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements 2>&1 | Out-Null
+    # Refresh PATH
+    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+    if (Get-Command node -ErrorAction SilentlyContinue) { $node_ok = $true }
+  }
+  if (-not $node_ok) {
+    Write-Host "  Khong the tu dong cai Node.js. Tai tai: https://nodejs.org" -ForegroundColor Red
+    Write-Host "  Sau khi cai xong, khoi dong lai PowerShell roi chay lai lenh nay." -ForegroundColor White
+    exit 1
+  }
+  Write-Host "  OK Node.js da cai xong" -ForegroundColor Green
+}
+Write-Host "  OK Node.js $(node --version)" -ForegroundColor Green
+
+# [2/5] Check / install OpenClaw
+Write-Host "[2/5] Kiem tra OpenClaw..." -ForegroundColor Yellow
+$openclaw_dir = $null
+
+# Scan common install paths first
+$oc_candidates = @(
+  (Join-Path $env:USERPROFILE ".openclaw"),
+  (Join-Path $env:APPDATA "openclaw"),
+  "C:\\openclaw\\.openclaw",
+  "C:\\Program Files\\openclaw\\.openclaw",
+  "C:\\Program Files (x86)\\openclaw\\.openclaw"
+)
+foreach ($c in $oc_candidates) {
+  if ($c -and (Test-Path $c)) { $openclaw_dir = $c; break }
+}
+
+if (-not $openclaw_dir) {
+  Write-Host "  Chua tim thay thu muc OpenClaw." -ForegroundColor Yellow
+  Write-Host "  OpenClaw la nen tang chay hook Zalo Monitor (cau noi doc va forward tin Zalo)." -ForegroundColor White
+  Write-Host ""
+  $install_oc = Read-Host "  Cai OpenClaw ngay tren may nay? [Y/n]"
+  if ($install_oc -ne 'n' -and $install_oc -ne 'N') {
+    Write-Host "  Dang cai openclaw (vui long doi ~60 giay)..." -ForegroundColor White
+    npm install -g "openclaw" 2>&1
+    Write-Host "  Dang khoi tao config..." -ForegroundColor White
+    try { openclaw init --yes 2>&1 | Out-Null } catch {}
+    # Refresh PATH
+    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+    foreach ($c in @((Join-Path $env:USERPROFILE ".openclaw"), (Join-Path $env:APPDATA "openclaw"))) {
+      if ($c -and (Test-Path $c)) { $openclaw_dir = $c; break }
+    }
+    if (-not $openclaw_dir) {
+      Write-Host "  Cai xong nhung khong tim thay config. Thu chay: openclaw init" -ForegroundColor Red; exit 1
+    }
+    Write-Host "  OK Cai xong: $openclaw_dir" -ForegroundColor Green
+  } else {
+    Write-Host "  Tim kiem them tren may..." -ForegroundColor White
+    # Deeper scan: all user profile dirs
+    $user_roots = @($env:USERPROFILE, $env:APPDATA, $env:LOCALAPPDATA) | Where-Object { $_ }
+    foreach ($root in $user_roots) {
+      $p = Join-Path $root ".openclaw"
+      if (Test-Path $p) { $openclaw_dir = $p; break }
+    }
+    if (-not $openclaw_dir) {
+      Write-Host ""
+      $manual = Read-Host "  Nhap duong dan thu muc .openclaw (Enter de bo qua)"
+      if ($manual -and (Test-Path $manual)) {
+        $openclaw_dir = $manual
+        Write-Host "  OK Dung: $openclaw_dir" -ForegroundColor Green
+      } else {
+        Write-Host "  Cai thu cong: npm install -g openclaw && openclaw onboard --install-daemon" -ForegroundColor Yellow
+        Write-Host "  Huong dan: $DASHBOARD_URL/docs/install-zalo" -ForegroundColor Cyan
+        exit 0
+      }
+    } else {
+      Write-Host "  OK Tim thay: $openclaw_dir" -ForegroundColor Green
+    }
+  }
+}
+Write-Host "  OK OpenClaw: $openclaw_dir" -ForegroundColor Green
+
+try {
+  $zalo_info = & openzca --profile default auth status 2>&1
+  Write-Host "  Zalo: $zalo_info" -ForegroundColor Green
+} catch {
+  Write-Host "  Zalo: chua dang nhap (se hien QR sau khi cai)" -ForegroundColor Yellow
+}
+
+# [3/5] Download hook files
+Write-Host "[3/5] Tai hook files..." -ForegroundColor Yellow
+$hook_dir = Join-Path $openclaw_dir "hooks" | Join-Path -ChildPath "zalo-monitor"
+New-Item -ItemType Directory -Force -Path $hook_dir | Out-Null
+foreach ($f in @("HOOK.md","handler.ts")) {
+  Invoke-WebRequest -Uri "$BACKEND_URL/api/setup/hook-files/$f" -OutFile (Join-Path $hook_dir $f) -UseBasicParsing
+  Write-Host "  OK $f" -ForegroundColor Green
+}
+
+# [4/5] Write config
+Write-Host "[4/5] Ghi config..." -ForegroundColor Yellow
+$env_file = Join-Path $hook_dir ".env"
+Set-Content -Path $env_file -Value "BACKEND_URL=$BACKEND_URL\`nWEBHOOK_SECRET=$SECRET\`nTENANT_ID=$TENANT_ID" -Encoding UTF8
+Write-Host "  OK .env da ghi: $env_file" -ForegroundColor Green
+
+try {
+  & openclaw hooks enable zalo-monitor 2>&1 | Out-Null
+  Write-Host "  OK Hook enabled" -ForegroundColor Green
+} catch {
+  Write-Host "  Hook se tu load khi OpenClaw khoi dong lai" -ForegroundColor Yellow
+}
+
+# [4.5] Kiem tra / khoi dong OpenClaw gateway — SAU KHI hook files da co mat
+Write-Host ""
+Write-Host "[4.5] Kiem tra OpenClaw gateway..." -ForegroundColor Yellow
+$gateway_running = $false
+try {
+  $r = Invoke-WebRequest "http://localhost:18789/__openclaw__/canvas/" -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+  $gateway_running = $true
+} catch {}
+if (-not $gateway_running) {
+  $gateway_running = [bool](Get-Process -Name "openclaw","node" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*openclaw*" })
+}
+
+if (Get-Command openclaw -ErrorAction SilentlyContinue) {
+  if ($gateway_running) {
+    Write-Host "  Gateway dang chay — restart de load hook moi..." -ForegroundColor White
+    # Try service restart
+    $svc = Get-Service -Name "openclaw" -ErrorAction SilentlyContinue
+    if ($svc) {
+      Restart-Service -Name "openclaw" -Force 2>&1 | Out-Null
+      Write-Host "  OK Gateway restarted (Windows Service)" -ForegroundColor Green
+    } else {
+      # Fallback: kill and restart via onboard
+      Get-Process -Name "node" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*openclaw*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+      Start-Sleep -Seconds 2
+      $daemon_job = Start-Job { openclaw onboard --install-daemon 2>&1 }
+      Wait-Job $daemon_job -Timeout 30 | Out-Null
+      Remove-Job $daemon_job -Force 2>&1 | Out-Null
+      Write-Host "  OK Gateway restarted" -ForegroundColor Green
+    }
+  } else {
+    Write-Host "  Khoi dong OpenClaw daemon..." -ForegroundColor White
+    Write-Host "  (Lenh: openclaw onboard --install-daemon)" -ForegroundColor Gray
+    $daemon_job = Start-Job { openclaw onboard --install-daemon 2>&1 }
+    if (Wait-Job $daemon_job -Timeout 60) {
+      Write-Host "  OK OpenClaw daemon da chay — hook duoc load tu dong" -ForegroundColor Green
+    } else {
+      Stop-Job $daemon_job
+      Write-Host "  Khong tu khoi dong duoc. Chay thu cong:" -ForegroundColor Yellow
+      Write-Host ""
+      Write-Host "     openclaw onboard --install-daemon" -ForegroundColor Cyan
+      Write-Host ""
+      Write-Host "  Huong dan: https://docs.openclaw.ai/start/getting-started" -ForegroundColor White
+      Write-Host ""
+    }
+    Remove-Job $daemon_job -Force 2>&1 | Out-Null
+  }
+} else {
+  Write-Host "  Lenh openclaw chua co trong PATH. Chay thu cong:" -ForegroundColor Yellow
+  Write-Host ""
+  Write-Host "     openclaw onboard --install-daemon" -ForegroundColor Cyan
+  Write-Host ""
+  Write-Host "  Huong dan: https://docs.openclaw.ai/start/getting-started" -ForegroundColor White
+  Write-Host ""
+}
+
+# [5/5] Test connection
+Write-Host "[5/5] Kiem tra ket noi toi backend... (toi da 10 giay)" -ForegroundColor Yellow
+try {
+  $headers = @{"Content-Type"="application/json";"X-Tenant-Id"=$TENANT_ID;"X-Webhook-Secret"=$SECRET}
+  $resp = Invoke-WebRequest -Uri "$BACKEND_URL/api/setup/hook-test" -Method POST -Headers $headers -Body '{}' -UseBasicParsing -TimeoutSec 10
+  if ($resp.StatusCode -eq 200) {
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Green
+    Write-Host "  OK Hook da cai va ket noi voi dashboard" -ForegroundColor Green
+    Write-Host ""
+
+    # Check Zalo login
+    $logged_in = $false
+    try { & openzca --profile default auth status 2>&1 | Out-Null; if ($LASTEXITCODE -eq 0) { $logged_in = $true } } catch {}
+
+    if ($logged_in) {
+      Write-Host "  OK Zalo da dang nhap - san sang theo doi nhom!" -ForegroundColor Green
+      Write-Host ""
+      Write-Host "  Mo dashboard:" -ForegroundColor Cyan
+      Write-Host "  $DASHBOARD_URL/dashboard" -ForegroundColor White
+    } else {
+      Write-Host "  [!] Buoc cuoi: Dang nhap Zalo (quet QR)" -ForegroundColor Yellow
+      Write-Host ""
+      Write-Host "  +------------------------------------------+" -ForegroundColor Cyan
+      Write-Host "  |  Mo san Zalo tren dien thoai truoc khi   |" -ForegroundColor Cyan
+      Write-Host "  |  nhan Y -- QR chi hieu luc ~60 giay      |" -ForegroundColor Cyan
+      Write-Host "  +------------------------------------------+" -ForegroundColor Cyan
+      Write-Host ""
+      $qr_confirm = Read-Host "  Da mo Zalo tren dien thoai, san sang quet? [Y/n]"
+      if ($qr_confirm -eq 'n' -or $qr_confirm -eq 'N') {
+        Write-Host ""
+        Write-Host "  OK - mo Zalo roi vao day de quet:" -ForegroundColor White
+        Write-Host "  $DASHBOARD_URL/dashboard/settings/channels" -ForegroundColor Cyan
+      } else {
+      Write-Host ""
+      Write-Host "  Dang chuan bi QR..." -ForegroundColor White
+      # Look for QR file
+      $qr_paths = @(
+        "$env:USERPROFILE\\qr.png",
+        (Join-Path $env:USERPROFILE ".openclaw\\qr.png"),
+        "$env:APPDATA\\openclaw\\qr.png"
+      )
+      $qr_found = $false
+      foreach ($qr in $qr_paths) {
+        if (Test-Path $qr) {
+          Write-Host "  Tim thay QR: $qr" -ForegroundColor Green
+          Write-Host "  Dang mo anh QR..." -ForegroundColor White
+          Start-Process $qr
+          $qr_found = $true
+          break
+        }
+      }
+      if (-not $qr_found) {
+        Write-Host "  Cach 1 - Mo OpenClaw Canvas de quet QR:" -ForegroundColor White
+        Write-Host "  http://localhost:18789/__openclaw__/canvas/" -ForegroundColor Cyan
+        $open_browser = Read-Host "  Mo ngay trong trinh duyet? (Y/n)"
+        if ($open_browser -ne 'n' -and $open_browser -ne 'N') {
+          Start-Process "http://localhost:18789/__openclaw__/canvas/"
+        }
+        Write-Host ""
+        Write-Host "  Cach 2 - Quet qua dashboard:" -ForegroundColor White
+        Write-Host "  $DASHBOARD_URL/dashboard/settings/channels" -ForegroundColor Cyan
+      }
+      Write-Host ""
+      Write-Host "  Sau khi quet: dashboard tu cap nhat OK" -ForegroundColor Yellow
+      } # end qr_confirm check
+    }
+    Write-Host "========================================" -ForegroundColor Green
+  }
+} catch {
+  $status = $_.Exception.Response.StatusCode.value__
+  Write-Host ""
+  Write-Host "========================================" -ForegroundColor Red
+  if ($status -eq 401) {
+    Write-Host "  X Buoc 5 that bai: Secret khong hop le (HTTP 401)" -ForegroundColor Red
+    Write-Host "    -> Lay lai lenh cai moi nhat tu dashboard roi chay lai." -ForegroundColor White
+  } else {
+    Write-Host "  X Buoc 5 that bai: Khong ket noi duoc toi backend" -ForegroundColor Red
+    Write-Host "    -> Kiem tra firewall, domain, va backend co dang chay khong." -ForegroundColor White
+  }
+  Write-Host "  $DASHBOARD_URL/dashboard/settings/channels" -ForegroundColor Cyan
+  Write-Host "========================================" -ForegroundColor Red
+  exit 1
+}
+Write-Host ""
+`
+}
+
+function generateOpenClawHookInstaller(backendUrl: string, dashboardUrl: string, secret: string, tenantId: string, tenantName: string) {
   // Escape single quotes cho an toàn khi nhúng vào bash literals
   const safeTenantName = tenantName.replace(/'/g, "'\\''")
   return `#!/bin/bash
@@ -296,95 +867,382 @@ set -euo pipefail
 
 TENANT_ID="${tenantId}"
 BACKEND_URL="\${BACKEND_URL:-${backendUrl}}"
+DASHBOARD_URL="${dashboardUrl}"
 SECRET="${secret}"
 
-echo "📦 Zalo Monitor Hook Installer"
-echo "   Tenant:  ${safeTenantName}"
-echo "   Backend: $BACKEND_URL"
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "  📦 Zalo Monitor Hook Installer"
+echo "  Tenant : ${safeTenantName}"
+echo "  Backend: $BACKEND_URL"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# 1. Kiểm tra phụ thuộc
+# ── Bước 1/5: Kiểm tra phụ thuộc ────────────────
+echo "[1/5] Kiểm tra phụ thuộc..."
 for cmd in curl; do
-  command -v "$cmd" >/dev/null 2>&1 || { echo "❌ Thiếu lệnh: $cmd"; exit 1; }
+  command -v "$cmd" >/dev/null 2>&1 || { echo "  ❌ Thiếu lệnh: $cmd"; exit 1; }
 done
+echo "  ✅ OK"
 
-# 2. Tìm ~/.openclaw — thử nhiều vị trí
-CANDIDATES=("$HOME/.openclaw" "/root/.openclaw" "/home/openclaw/.openclaw")
-OPENCLAW_DIR=""
-for dir in "\${CANDIDATES[@]}"; do
-  if [ -d "$dir" ]; then OPENCLAW_DIR="$dir"; break; fi
-done
+# ── Bước 2/5: Kiểm tra & cài OpenClaw ───────────
+echo "[2/5] Kiểm tra OpenClaw..."
+
+# Nếu có OPENCLAW_DIR từ env thì dùng luôn
+OPENCLAW_DIR="\${OPENCLAW_DIR:-}"
+
+# (không gọi openclaw CLI để detect path — lệnh không chuẩn, dễ hang)
+
 if [ -z "$OPENCLAW_DIR" ]; then
-  echo "❌ Không tìm thấy thư mục OpenClaw (.openclaw). OpenClaw đã cài chưa?"
-  echo "   Override bằng: OPENCLAW_DIR=/path/to/.openclaw bash install.sh"
-  OPENCLAW_DIR="\${OPENCLAW_DIR:-}"
-fi
-OPENCLAW_DIR="\${OPENCLAW_DIR:-$HOME/.openclaw}"
+  # Quét các vị trí phổ biến + tất cả home dirs
+  CANDIDATES=(
+    "$HOME/.openclaw"
+    "/root/.openclaw"
+    "/home/openclaw/.openclaw"
+    "/opt/openclaw/.openclaw"
+    "/var/lib/openclaw/.openclaw"
+  )
+  # Thêm tất cả user home dirs trên hệ thống
+  while IFS=: read -r _ _ _ _ _ homedir _; do
+    [ -d "\${homedir:-}/.openclaw" ] && CANDIDATES+=("$homedir/.openclaw")
+  done < /etc/passwd 2>/dev/null || true
 
-# ⚠️  Docker warning: nếu đang chạy trong container mà không có volume mount,
-#    hook sẽ mất khi update/recreate container.
-if [ -f /proc/1/cgroup ] && grep -q "docker\|containerd\|kubepods" /proc/1/cgroup 2>/dev/null; then
-  if ! mount | grep -q "$OPENCLAW_DIR" 2>/dev/null; then
-    echo ""
-    echo "⚠️  CẢNH BÁO: Đang chạy trong Docker container."
-    echo "   Nếu thư mục OpenClaw chưa được mount ra host, hook sẽ MẤT khi update openclaw."
-    echo "   Thêm vào docker-compose.yml của openclaw:"
-    echo "     volumes:"
-    echo "       - ./openclaw-config:/home/node/.openclaw"
-    echo ""
+  for dir in "\${CANDIDATES[@]}"; do
+    if [ -d "\${dir:-}" ]; then OPENCLAW_DIR="$dir"; break; fi
+  done
+fi
+
+if [ -z "$OPENCLAW_DIR" ]; then
+  echo "  ⚠️  Không tìm thấy OpenClaw trên máy này."
+  echo ""
+
+  if command -v npm >/dev/null 2>&1; then
+    echo "  ℹ️  OpenClaw là nền tảng chạy hook Zalo Monitor (cầu nối đọc & forward tin nhắn từ Zalo)."
+    printf "  ❓ Cài OpenClaw ngay trên máy này không? [Y/n] "
+    read -r CONFIRM_INSTALL </dev/tty
+    if [ "\${CONFIRM_INSTALL,,}" != "n" ] && [ "\${CONFIRM_INSTALL,,}" != "no" ]; then
+      echo "  📥 Đang cài OpenClaw (vui lòng đợi ~60 giây)..."
+      npm install -g openclaw
+      echo "  🔧 Đang khởi tạo config..."
+      openclaw init --yes 2>/dev/null || true
+      for dir in "$HOME/.openclaw" "/root/.openclaw"; do
+        [ -d "$dir" ] && { OPENCLAW_DIR="$dir"; break; }
+      done
+      if [ -n "$OPENCLAW_DIR" ]; then
+        echo "  ✅ Cài xong: $OPENCLAW_DIR"
+      else
+        echo "  ❌ Cài xong nhưng không tìm thấy config. Thử chạy: openclaw init"
+        exit 1
+      fi
+    else
+      echo ""
+      echo "  Nếu OpenClaw đã cài ở chỗ khác, nhập đường dẫn thư mục .openclaw:"
+      echo "     (Ví dụ: /home/myuser/.openclaw — Enter để thoát)"
+      printf "  Đường dẫn: "
+      read -r MANUAL_DIR </dev/tty
+      if [ -n "$MANUAL_DIR" ] && [ -d "$MANUAL_DIR" ]; then
+        OPENCLAW_DIR="$MANUAL_DIR"
+        echo "  ✅ Dùng: $OPENCLAW_DIR"
+      else
+        echo ""
+        echo "  Cài thủ công rồi chạy lại script này:"
+        echo "     npm install -g openclaw && openclaw onboard --install-daemon"
+        echo "  Hướng dẫn: $DASHBOARD_URL/docs/install-zalo"
+        exit 0
+      fi
+    fi
+  else
+    echo "  Cài Node.js + OpenClaw rồi chạy lại:"
+    echo "     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -"
+    echo "     sudo apt install -y nodejs"
+    echo "     npm install -g openclaw && openclaw onboard --install-daemon"
+    echo "  Hướng dẫn: $DASHBOARD_URL/docs/install-zalo"
+    exit 0
   fi
 fi
-HOOK_DIR="$OPENCLAW_DIR/hooks/zalo-monitor"
+echo "  ✅ OpenClaw: $OPENCLAW_DIR"
 
-echo "🏠 OpenClaw:   $OPENCLAW_DIR"
-echo "🔗 Hook path:  $HOOK_DIR"
+# ⚠️  Docker warning
+if [ -f /proc/1/cgroup ] && grep -q "docker\\|containerd\\|kubepods" /proc/1/cgroup 2>/dev/null; then
+  if ! mount | grep -q "$OPENCLAW_DIR" 2>/dev/null; then
+    echo "  ⚠️  Đang chạy trong Docker — hook sẽ MẤT khi recreate nếu chưa mount volume."
+  fi
+fi
+
+# Detect tài khoản đang login trong OpenClaw
+CONFIG_FILE="$OPENCLAW_DIR/openclaw.json"
+ZALO_FOUND=false
+
+if [ -f "$CONFIG_FILE" ] && command -v python3 >/dev/null 2>&1; then
+  python3 - "$CONFIG_FILE" "$OPENCLAW_DIR" <<'PYEOF'
+import json, sys, os, glob
+
+cfg_file  = sys.argv[1]
+oclaw_dir = sys.argv[2]
+
+try:
+  cfg = json.load(open(cfg_file))
+except:
+  sys.exit(0)
+
+channels = cfg.get('channels', {})
+
+# ── Zalo ────────────────────────────────────────
+oz = channels.get('openzalo', {})
+if oz:
+  enabled = oz.get('enabled', True)
+  status_icon = '✅' if enabled else '⏸ '
+  # Lấy danh sách profiles để tìm tài khoản đang login
+  accounts = oz.get('accounts', {})
+  profiles_to_check = []
+  if accounts:
+    for acc_id, acc_cfg in accounts.items():
+      profiles_to_check.append((acc_id, acc_cfg.get('profile', 'default')))
+  else:
+    profiles_to_check = [('default', oz.get('profile', 'default'))]
+
+  print('')
+  print('  📱 Zalo:')
+  for acc_id, profile_name in profiles_to_check:
+    # Tìm trong ~/.openzca/profiles/<profile>/cache/friends.json
+    friends_file = os.path.expanduser(f'~/.openzca/profiles/{profile_name}/cache/friends.json')
+    name, phone = '', ''
+    if os.path.exists(friends_file):
+      try:
+        friends = json.load(open(friends_file))
+        if isinstance(friends, dict):
+          friends = friends.get('friends', friends.get('data', []))
+        for f in friends:
+          p = f.get('phoneNumber', '')
+          if p:
+            name  = f.get('displayName') or f.get('zaloName') or ''
+            phone = p
+            break
+      except:
+        pass
+    label = f'profile:{profile_name}'
+    if name:  label = name
+    if phone: label += f'  [{phone}]'
+    state = 'đang bật' if enabled else 'tắt'
+    note = ' (cache — session thực tế check trên dashboard)' if name or phone else ''
+    print(f'  {status_icon} {label} — {state}{note}')
+
+# ── Telegram ────────────────────────────────────
+tg = channels.get('telegram', {})
+if tg and tg.get('botToken'):
+  token   = tg['botToken']
+  enabled = tg.get('enabled', True)
+  status_icon = '✅' if enabled else '⏸ '
+  # Gọi Telegram API lấy tên bot
+  try:
+    import urllib.request
+    resp = urllib.request.urlopen(
+      f'https://api.telegram.org/bot{token}/getMe', timeout=5)
+    data = json.loads(resp.read())
+    bot  = data.get('result', {})
+    uname = bot.get('username', '')
+    bname = bot.get('first_name', '')
+    label = f'@{uname}' if uname else bname or 'Telegram bot'
+    state = 'đang bật' if enabled else 'tắt'
+    print(f'')
+    print(f'  ✈️  Telegram:')
+    print(f'  {status_icon} {label} — {state}')
+  except:
+    print(f'')
+    print(f'  ✈️  Telegram: đã cấu hình (không lấy được tên bot)')
+PYEOF
+fi
+echo ""
+
+HOOK_DIR="$OPENCLAW_DIR/hooks/zalo-monitor"
 mkdir -p "$HOOK_DIR"
 
-# 3. Download hook files
-echo "⬇️  Downloading hook files..."
-curl -fsSL "$BACKEND_URL/api/setup/hook-files/HOOK.md"    -o "$HOOK_DIR/HOOK.md"
-curl -fsSL "$BACKEND_URL/api/setup/hook-files/handler.ts" -o "$HOOK_DIR/handler.ts"
+# ── Bước 3/5: Tải hook files ────────────────────
+echo "[3/5] Tải hook files về $HOOK_DIR ..."
+curl -fsSL --connect-timeout 10 "$BACKEND_URL/api/setup/hook-files/HOOK.md"    -o "$HOOK_DIR/HOOK.md"    && echo "  ✅ HOOK.md"    || { echo "  ❌ Tải HOOK.md thất bại"; exit 1; }
+curl -fsSL --connect-timeout 10 "$BACKEND_URL/api/setup/hook-files/handler.ts" -o "$HOOK_DIR/handler.ts" && echo "  ✅ handler.ts" || { echo "  ❌ Tải handler.ts thất bại"; exit 1; }
 
-# 4. Viết config .env (mode 600 để chỉ owner đọc được — secret nhạy cảm)
+# ── Bước 4/5: Ghi config ────────────────────────
+echo "[4/5] Ghi config..."
 cat > "$HOOK_DIR/.env" <<EOF
 BACKEND_URL=$BACKEND_URL
 WEBHOOK_SECRET=$SECRET
 TENANT_ID=$TENANT_ID
 EOF
 chmod 600 "$HOOK_DIR/.env"
-echo "✅ Files installed"
+echo "  ✅ .env đã ghi (mode 600)"
 
-# 5. Enable hook (nếu có openclaw CLI)
 if command -v openclaw >/dev/null 2>&1; then
-  openclaw hooks enable zalo-monitor >/dev/null 2>&1 || true
-  echo "✅ Hook enabled (openclaw CLI)"
+  timeout 5 openclaw hooks enable zalo-monitor >/dev/null 2>&1 && echo "  ✅ Hook enabled (openclaw CLI)" || echo "  ℹ️  Hook sẽ tự load khi OpenClaw khởi động lại"
+else
+  echo "  ℹ️  openclaw CLI không tìm thấy — hook sẽ tự load khi OpenClaw khởi động"
 fi
 
-# 6. Self-test — ping backend xác nhận secret + kết nối hoạt động
-echo "🧪 Testing connection..."
-TEST_STATUS=$(curl -fsS -o /tmp/zm-test.out -w "%{http_code}" \\
+# ── Khởi động / restart OpenClaw gateway (SAU KHI hook files đã có) ────
+echo ""
+echo "[4.5] Kiểm tra OpenClaw gateway..."
+GATEWAY_RUNNING=false
+if curl -sf "http://localhost:18789/__openclaw__/canvas/" >/dev/null 2>&1 || \
+   pgrep -f "openclaw" >/dev/null 2>&1; then
+  GATEWAY_RUNNING=true
+fi
+
+if command -v openclaw >/dev/null 2>&1; then
+  if [ "$GATEWAY_RUNNING" = "true" ]; then
+    echo "  ℹ️  Gateway đang chạy — restart để load hook mới..."
+    # Thử platform-specific restart
+    if command -v systemctl >/dev/null 2>&1 && systemctl --user is-active openclaw >/dev/null 2>&1; then
+      systemctl --user restart openclaw && echo "  ✅ Gateway restarted (systemd)" || true
+    elif command -v launchctl >/dev/null 2>&1; then
+      launchctl kickstart -k "gui/$(id -u)/com.openclaw.gateway" 2>/dev/null \
+        && echo "  ✅ Gateway restarted (launchd)" \
+        || { pkill -HUP openclaw 2>/dev/null && echo "  ✅ Gateway reload (SIGHUP)"; } \
+        || true
+    else
+      pkill -HUP openclaw 2>/dev/null && echo "  ✅ Gateway reload (SIGHUP)" || true
+    fi
+  else
+    echo "  🚀 Khởi động OpenClaw daemon..."
+    echo "     (Lệnh: openclaw onboard --install-daemon)"
+    if timeout 60 openclaw onboard --install-daemon 2>/dev/null; then
+      echo "  ✅ OpenClaw daemon đã chạy — hook được load tự động"
+    else
+      echo "  ⚠️  Không tự khởi động được. Chạy thủ công:"
+      echo ""
+      echo "     openclaw onboard --install-daemon"
+      echo ""
+      echo "  📖 Hướng dẫn: https://docs.openclaw.ai/start/getting-started"
+      echo ""
+    fi
+  fi
+else
+  echo "  ⚠️  Lệnh openclaw không tìm thấy trong PATH. Chạy thủ công:"
+  echo ""
+  echo "     openclaw onboard --install-daemon"
+  echo ""
+  echo "  📖 Hướng dẫn: https://docs.openclaw.ai/start/getting-started"
+  echo ""
+fi
+
+# ── Bước 5/5: Test kết nối ──────────────────────
+echo "[5/5] Kiểm tra kết nối tới backend... (tối đa 10 giây)"
+TEST_STATUS=$(curl -fsS --connect-timeout 10 --max-time 10 \\
+  -o /tmp/zm-test.out -w "%{http_code}" \\
   -X POST "$BACKEND_URL/api/setup/hook-test" \\
   -H "Content-Type: application/json" \\
   -H "X-Tenant-Id: $TENANT_ID" \\
   -H "X-Webhook-Secret: $SECRET" \\
   -d '{}' 2>/dev/null || echo "000")
 
+echo ""
 if [ "$TEST_STATUS" = "200" ]; then
-  echo "✅ Connection OK — dashboard đã nhận được ping từ máy này"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "  ✅ Hook đã cài và kết nối với dashboard"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
-  echo "🎉 Hoàn tất! Gửi 1 tin nhắn thử trong nhóm có bot để xác nhận luồng end-to-end."
+  # ── Kiểm tra Zalo đã login chưa ──────────────────
+  ZALO_LOGGED_IN=false
+  if command -v openzca >/dev/null 2>&1; then
+    if openzca --profile default auth status >/dev/null 2>&1; then
+      ZALO_LOGGED_IN=true
+    fi
+  fi
+
+  if [ "$ZALO_LOGGED_IN" = "true" ]; then
+    echo "  ✅ Zalo đã đăng nhập — sẵn sàng theo dõi nhóm!"
+    echo ""
+    echo "  🔗 Mở dashboard:"
+    echo "     $DASHBOARD_URL/dashboard"
+  else
+    echo "  📱 Bước cuối: Đăng nhập Zalo (quét QR)"
+    echo ""
+    echo "  ┌─────────────────────────────────────────┐"
+    echo "  │  Mở sẵn Zalo trên điện thoại trước khi  │"
+    echo "  │  bấm Y — QR chỉ hiệu lực ~60 giây       │"
+    echo "  └─────────────────────────────────────────┘"
+    echo ""
+    printf "  Đã mở Zalo trên điện thoại, sẵn sàng quét? [Y/n] "
+    read -r QR_CONFIRM </dev/tty
+    if [ "\${QR_CONFIRM,,}" = "n" ]; then
+      echo ""
+      echo "  OK — mở Zalo rồi vào đây để quét:"
+      echo "  🔗 $DASHBOARD_URL/dashboard/settings/channels"
+      echo ""
+      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    else
+
+    # Tìm canvas port openclaw (mặc định 18789)
+    CANVAS_PORT=18789
+    SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
+
+    # Thử lấy QR qua openzca auth login (sinh file qr.png)
+    QR_FILE=""
+    if command -v openzca >/dev/null 2>&1; then
+      echo ""
+      echo "  Đang tạo QR..."
+      openzca --profile default auth login --qr-file /tmp/zalo-qr.png >/dev/null 2>&1 &
+      OPENZCA_PID=$!
+      # Chờ file QR xuất hiện tối đa 10s
+      for _i in $(seq 1 10); do
+        for _f in /tmp/zalo-qr.png ~/qr.png ~/.openclaw/qr.png /root/qr.png; do
+          if [ -f "$_f" ] && [ -s "$_f" ]; then
+            QR_FILE="$_f"
+            break 2
+          fi
+        done
+        sleep 1
+      done
+      kill $OPENZCA_PID 2>/dev/null || true
+    fi
+
+    if [ -n "$QR_FILE" ]; then
+      # Thử mở QR file bằng GUI viewer
+      if command -v open >/dev/null 2>&1; then
+        open "$QR_FILE" 2>/dev/null && echo "  📂 Đã mở QR trong Preview — quét bằng Zalo trên điện thoại." || true
+      elif command -v xdg-open >/dev/null 2>&1; then
+        xdg-open "$QR_FILE" 2>/dev/null && echo "  📂 Đã mở QR — quét bằng Zalo trên điện thoại." || true
+      else
+        echo "  📂 File QR: $QR_FILE"
+        echo "     Mở file này và quét bằng Zalo trên điện thoại."
+      fi
+      echo ""
+      echo "  Hoặc quét trên dashboard (QR đang được đẩy tự động):"
+      echo "  🔗 $DASHBOARD_URL/dashboard/settings/channels"
+    else
+      # Fallback: openclaw canvas UI
+      echo "  Cách 1 — Quét qua OpenClaw Canvas (mở trên máy này):"
+      echo "  🔗 http://$SERVER_IP:$CANVAS_PORT/__openclaw__/canvas/"
+      echo ""
+      echo "  Cách 2 — Quét qua dashboard (sau khi QR xuất hiện ~30s):"
+      echo "  🔗 $DASHBOARD_URL/dashboard/settings/channels"
+      echo "     → Bấm [Kết nối lại] nếu chưa tự hiện"
+    fi
+    echo ""
+    echo "  ⚠️  Sau khi quét: dashboard tự cập nhật ✅"
+    fi # end QR_CONFIRM check
+  fi
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 elif [ "$TEST_STATUS" = "401" ]; then
-  echo "❌ Secret sai — chạy lại install command từ dashboard mới nhất."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "  ❌ Bước 5 thất bại: Secret không hợp lệ (HTTP 401)"
+  echo "     → Lấy lại lệnh cài mới nhất từ dashboard rồi chạy lại."
+  echo "  🔗 $DASHBOARD_URL/dashboard/settings/channels"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   exit 1
 elif [ "$TEST_STATUS" = "000" ]; then
-  echo "⚠️  Không kết nối được tới $BACKEND_URL"
-  echo "   Check: firewall, domain đúng chưa, backend có chạy không."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "  ❌ Bước 5 thất bại: Không kết nối được tới backend"
+  echo "     → Kiểm tra firewall, domain, và backend có đang chạy không."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   exit 1
 else
-  echo "⚠️  Backend trả HTTP $TEST_STATUS"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "  ⚠️  Bước 5: Backend trả HTTP $TEST_STATUS"
   cat /tmp/zm-test.out 2>/dev/null || true
-  echo ""
-  echo "   Hook files đã cài nhưng chưa xác nhận được kết nối."
+  echo "     Hook files đã cài nhưng chưa xác nhận kết nối."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 fi
+echo ""
 `
 }

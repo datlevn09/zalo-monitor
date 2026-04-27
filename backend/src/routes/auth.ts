@@ -11,6 +11,14 @@ const loginSchema = z.object({
   tenantSlug: z.string().optional(),
 })
 
+const registerSchema = z.object({
+  companyName: z.string().min(2),
+  ownerName: z.string().min(2),
+  email: z.string().email(),
+  password: z.string().min(8),
+  phone: z.string().optional(),
+})
+
 const forgotSchema = z.object({
   email: z.string().email(),
 })
@@ -29,6 +37,61 @@ function publicUser(u: any) {
 }
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
+  // ── Register ────────────────────────────────────────────────────────────
+  app.post('/register', async (req, reply) => {
+    const body = registerSchema.safeParse(req.body)
+    if (!body.success) return reply.status(400).send({ error: 'Invalid input' })
+
+    const { companyName, ownerName, email, password, phone } = body.data
+
+    // Check email not already used
+    const existing = await db.user.findFirst({ where: { email } })
+    if (existing) {
+      return reply.status(400).send({ error: 'Email đã được đăng ký' })
+    }
+
+    // Generate slug from companyName (lowercase, spaces → hyphens, add random suffix)
+    const baseSlug = companyName
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '')
+      .slice(0, 30)
+    const randomSuffix = randomBytes(3).toString('hex')
+    const slug = `${baseSlug}-${randomSuffix}`
+
+    // Create tenant: active=false, plan='trial', setupDone=false
+    const tenant = await db.tenant.create({
+      data: {
+        name: companyName,
+        slug,
+        active: false,
+        plan: 'trial',
+        setupDone: false,
+        contactName: ownerName,
+        contactPhone: phone,
+        contactEmail: email,
+      },
+    })
+
+    // Create owner user: role='OWNER', hash password
+    const passwordHash = hashPassword(password)
+    await db.user.create({
+      data: {
+        tenantId: tenant.id,
+        name: ownerName,
+        email,
+        passwordHash,
+        role: 'OWNER',
+      },
+    })
+
+    return {
+      ok: true,
+      tenantId: tenant.id,
+      message: 'Đăng ký thành công. Chờ admin kích hoạt.',
+    }
+  })
+
   // ── Login ───────────────────────────────────────────────────────────────
   app.post('/login', async (req, reply) => {
     const body = loginSchema.safeParse(req.body)

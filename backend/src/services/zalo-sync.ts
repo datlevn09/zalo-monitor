@@ -191,3 +191,8 @@ function detectContent(m: any): 'TEXT' | 'IMAGE' | 'VIDEO' | 'FILE' | 'STICKER' 
   if (m.mediaPath || m.mediaUrl) return 'FILE'
   return 'TEXT'
 }
+
+export function sendZaloMessage(externalGroupId: string, text: string): void {
+  const safe = text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, ' ')
+  exec(`openzca msg send ${externalGroupId} "${safe}"`, 10_000)
+}

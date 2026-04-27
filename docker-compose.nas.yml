@@ -53,6 +53,7 @@ services:
       DASHBOARD_URL: https://${DOMAIN:?must be set}
       NODE_ENV: production
       OPENCLAW_CONTAINER: ${OPENCLAW_CONTAINER:-openclaw}
+      DOCKER_API_VERSION: "1.43"
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_started }

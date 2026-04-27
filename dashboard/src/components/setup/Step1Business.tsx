@@ -15,10 +15,23 @@ const INDUSTRIES = [
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 
+const PASSWORD_RULES = [
+  { label: 'Ít nhất 8 ký tự',       test: (p: string) => p.length >= 8 },
+  { label: 'Chứa chữ hoa (A-Z)',    test: (p: string) => /[A-Z]/.test(p) },
+  { label: 'Chứa chữ thường (a-z)', test: (p: string) => /[a-z]/.test(p) },
+  { label: 'Chứa số (0-9)',         test: (p: string) => /[0-9]/.test(p) },
+  { label: 'Chứa ký tự đặc biệt',  test: (p: string) => /[!@#$%^&*()\-_=+\[\]{}|;':",.<>?/\\`~]/.test(p) },
+]
+
+function validatePassword(p: string): string[] {
+  return PASSWORD_RULES.filter(r => !r.test(p)).map(r => r.label)
+}
+
 export function Step1Business({ onDone }: { onDone: (s: SetupState) => void }) {
   const [form, setForm] = useState({
     businessName: '', industry: '', ownerName: '', email: '', password: '',
   })
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [agreed, setAgreed] = useState(false)
@@ -26,9 +39,16 @@ export function Step1Business({ onDone }: { onDone: (s: SetupState) => void }) {
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }))
 
+  const pwdErrors = validatePassword(form.password)
+  const pwdValid = pwdErrors.length === 0
+  const confirmMatch = confirmPassword.length > 0 && form.password === confirmPassword
+  const confirmMismatch = confirmPassword.length > 0 && form.password !== confirmPassword
+
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
+    if (!pwdValid) { setError('Mật khẩu chưa đủ yêu cầu.'); return }
+    if (form.password !== confirmPassword) { setError('Mật khẩu nhập lại không khớp.'); return }
     setLoading(true)
     try {
       const res = await fetch(`${API}/api/setup/tenant`, {
@@ -38,7 +58,6 @@ export function Step1Business({ onDone }: { onDone: (s: SetupState) => void }) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Lỗi server')
-      // Auto-login với JWT backend vừa cấp
       if (data.token) setToken(data.token)
       setTenantId(data.tenantId)
       onDone({ tenantId: data.tenantId, slug: data.slug, webhookUrl: data.webhookUrl })
@@ -83,9 +102,48 @@ export function Step1Business({ onDone }: { onDone: (s: SetupState) => void }) {
         </div>
       </div>
 
+      {/* Password */}
       <div className="space-y-1">
         <Label>Mật khẩu đăng nhập *</Label>
-        <Input type="password" placeholder="Tối thiểu 6 ký tự" value={form.password} onChange={set('password')} required minLength={6} />
+        <Input
+          type="password"
+          placeholder="Tối thiểu 8 ký tự"
+          value={form.password}
+          onChange={set('password')}
+          required
+        />
+        {/* Strength indicator */}
+        {form.password.length > 0 && (
+          <div className="mt-1.5 space-y-0.5">
+            {PASSWORD_RULES.map(rule => {
+              const ok = rule.test(form.password)
+              return (
+                <p key={rule.label} className={`text-xs flex items-center gap-1 ${ok ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                  <span>{ok ? '✓' : '✗'}</span>
+                  <span>{rule.label}</span>
+                </p>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Confirm password */}
+      <div className="space-y-1">
+        <Label>Nhập lại mật khẩu *</Label>
+        <Input
+          type="password"
+          placeholder="Nhập lại mật khẩu"
+          value={confirmPassword}
+          onChange={e => setConfirmPassword(e.target.value)}
+          required
+        />
+        {confirmMismatch && (
+          <p className="text-xs text-red-500 dark:text-red-400 mt-1">✗ Mật khẩu không khớp</p>
+        )}
+        {confirmMatch && (
+          <p className="text-xs text-green-600 dark:text-green-400 mt-1">✓ Mật khẩu khớp</p>
+        )}
       </div>
 
       <div className="flex items-start gap-3 py-2">
@@ -110,7 +168,11 @@ export function Step1Business({ onDone }: { onDone: (s: SetupState) => void }) {
 
       {error && <p className="text-sm text-red-500 bg-red-50 dark:bg-red-500/10 p-3 rounded-lg">{error}</p>}
 
-      <Button type="submit" className="w-full" disabled={!agreed || loading}>
+      <Button
+        type="submit"
+        className="w-full"
+        disabled={!agreed || loading || !pwdValid || confirmMismatch || confirmPassword.length === 0}
+      >
         {loading ? 'Đang tạo...' : 'Tiếp theo →'}
       </Button>
     </form>

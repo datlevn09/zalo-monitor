@@ -58,6 +58,8 @@ model Tenant {
   // Trigger 1 lần sau khi webhook lần đầu đến hoặc sau khi QR scan xong
   maxHistorySyncDepth Int @default(50)
   lastAutoSyncAt      DateTime?            // ghi lại lần cuối auto-sync chạy
+  lastHookPingAt      DateTime?            // lần cuối hook gửi data lên (bất kỳ message/ping)
+  sessionAlertSentAt  DateTime?            // lần cuối gửi alert "session die" (tránh spam)
 
   users                User[]
   groups               Group[]
@@ -68,6 +70,7 @@ model Tenant {
   alertRules           AlertRule[]
   classificationConfig ClassificationConfig?
   appointments         Appointment[]
+  sendQueue            SendQueue[]
 
   @@map("tenants")
 }
@@ -513,4 +516,16 @@ model TeamInvite {
 
   @@index([tenantId])
   @@map("team_invites")
+}
+
+model SendQueue {
+  id              String   @id @default(cuid())
+  tenantId        String
+  groupExternalId String
+  text            String
+  status          String   @default("pending")
+  createdAt       DateTime @default(now())
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@map("send_queue")
 }

@@ -28,6 +28,12 @@ const NAV = [
   { href: '/dashboard/settings',          label: 'Cài đặt',     icon: IconSettings, tint: 'bg-gray-500' },
 ]
 
+type SessionHealth = {
+  status: 'healthy' | 'warning' | 'dead' | 'never'
+  hoursSincePing: number | null
+  syncStatus: 'never' | 'pending' | 'syncing' | 'done'
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
@@ -35,6 +41,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [live, setLive] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentUserName, setCurrentUserName] = useState<string | null>(null)
+  const [sessionHealth, setSessionHealth] = useState<SessionHealth | null>(null)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
 
   useEffect(() => {
     // Ưu tiên JWT — không có token → login. Không có tenant → setup wizard.
@@ -54,6 +62,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         })
     }
   }, [router])
+
+  useEffect(() => {
+    if (!ready) return
+    const checkHealth = () =>
+      api<SessionHealth>('/api/zalo/session-health').then(setSessionHealth).catch(() => undefined)
+    checkHealth()
+    const t = setInterval(checkHealth, 5 * 60_000)
+    return () => clearInterval(t)
+  }, [ready])
 
   useEffect(() => {
     if (!ready) return
@@ -81,6 +98,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Remote Banner — full width, below header */}
         <RemoteBanner />
+
+        {/* Session dead banner */}
+        {!bannerDismissed && sessionHealth?.status === 'dead' && !pathname.includes('/settings/channels') && (
+          <div className="bg-red-500 text-white px-4 py-2 flex items-center gap-3 shrink-0">
+            <span className="text-sm font-medium flex-1">
+              🔴 Kết nối Zalo bị ngắt {sessionHealth.hoursSincePing ? `${sessionHealth.hoursSincePing} tiếng` : ''} rồi — tin nhắn không được thu thập
+            </span>
+            <Link
+              href="/dashboard/settings/channels"
+              className="shrink-0 text-xs font-semibold bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full transition-colors"
+            >
+              Kết nối lại →
+            </Link>
+            <button
+              onClick={() => setBannerDismissed(true)}
+              className="shrink-0 text-white/70 hover:text-white text-lg leading-none ml-1"
+            >×</button>
+          </div>
+        )}
 
         {/* Sidebar (icon-only mobile, expanded desktop) + Main */}
         <div className="flex-1 min-h-0 flex flex-row">

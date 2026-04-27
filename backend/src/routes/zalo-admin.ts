@@ -8,7 +8,7 @@ import fs from 'node:fs'
 import { execSync } from 'node:child_process'
 import { syncZaloGroups, syncZaloGroupHistory, rerankTopGroups } from '../services/zalo-sync.js'
 import { syncAllAvatars } from '../services/zalo-avatar.js'
-import { hookPings } from './setup.js'
+import { hookPings, getQrFromStore, getQrEntryFromStore } from './setup.js'
 
 const OPENCLAW_CONFIG = process.env.OPENCLAW_CONFIG ?? '/root/.openclaw/openclaw.json'
 const OPENCLAW_LOG    = process.env.OPENCLAW_LOG ?? '/tmp/gw.log'
@@ -160,6 +160,13 @@ export const zaloAdminRoutes: FastifyPluginAsync = async (app) => {
       orderBy: { sentAt: 'desc' },
     })
 
+    // Lấy thông tin Zalo account đang dùng (từ SELF message gần nhất)
+    const selfMsg = await db.message.findFirst({
+      where: { group: { tenantId, channelType: 'ZALO' }, senderType: 'SELF' },
+      select: { senderName: true, senderId: true },
+      orderBy: { sentAt: 'desc' },
+    })
+
     // Check openclaw is running: Docker container OR native process (via recent hook ping)
     let containerRunning = false
     try {
@@ -172,15 +179,21 @@ export const zaloAdminRoutes: FastifyPluginAsync = async (app) => {
       if (lastPing && Date.now() - lastPing < 10 * 60 * 1000) containerRunning = true
     }
 
-    // Check QR file — nếu qr.png mới (<5 phút) → đang chờ scan, chưa kết nối
+    // Check QR pending: Docker container file OR hook-pushed QR (native/VPS mode)
     let qrPending = false
     let qrFileAge: number | null = null
-    try {
-      const qrStat = execInContainer('stat -c %Y /app/qr.png 2>/dev/null || echo 0')
-      const qrMtime = parseInt(qrStat.trim(), 10) * 1000
-      qrFileAge = Date.now() - qrMtime
-      qrPending = qrFileAge < 5 * 60 * 1000 // fresher than 5 minutes = waiting for scan
-    } catch { /* ignore */ }
+    // Check hook-pushed QR store first (works for all setups)
+    if (getQrFromStore(tenantId)) {
+      qrPending = true
+    } else {
+      // Fallback: check Docker container QR file (NAS self-contained setup)
+      try {
+        const qrStat = execInContainer('stat -c %Y /app/qr.png 2>/dev/null || echo 0')
+        const qrMtime = parseInt(qrStat.trim(), 10) * 1000
+        qrFileAge = Date.now() - qrMtime
+        qrPending = qrFileAge < 5 * 60 * 1000
+      } catch { /* ignore */ }
+    }
 
     return {
       connected: !qrPending && !!recentMsg,
@@ -188,6 +201,9 @@ export const zaloAdminRoutes: FastifyPluginAsync = async (app) => {
       containerRunning,
       lastMessageAt: recentMsg?.sentAt ?? null,
       qrFileAgeSeconds: qrFileAge !== null ? Math.round(qrFileAge / 1000) : null,
+      // Zalo account info (từ SELF message gần nhất)
+      zaloName: selfMsg?.senderName ?? null,
+      zaloPhone: selfMsg?.senderId?.startsWith('84') ? selfMsg.senderId : null,
     }
   })
 
@@ -197,12 +213,22 @@ export const zaloAdminRoutes: FastifyPluginAsync = async (app) => {
     const tenantId = req.headers['x-tenant-id'] as string
     if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
 
+    // Check in-memory store first (pushed by hook — works for all setups)
+    const entry = getQrEntryFromStore(tenantId)
+    if (entry) return { dataUrl: entry.dataUrl, pushedAt: entry.pushedAt, source: 'hook' }
+
+    // Fallback: Docker container method (NAS self-contained setup only)
     try {
+      const statOut = execInContainer('stat -c %Y /app/qr.png 2>/dev/null || echo 0')
+      const mtime = parseInt(statOut.trim(), 10) * 1000
+      const age = Date.now() - mtime
+      if (age > 5 * 60 * 1000) return reply.status(404).send({ error: 'QR not available' })
+
       const b64 = execInContainer('base64 -w0 /app/qr.png 2>/dev/null')
       if (!b64.trim()) return reply.status(404).send({ error: 'QR not available' })
-      return { dataUrl: `data:image/png;base64,${b64.trim()}` }
+      return { dataUrl: `data:image/png;base64,${b64.trim()}`, pushedAt: mtime, source: 'docker' }
     } catch (err: any) {
-      return reply.status(500).send({ error: 'Cannot read QR: ' + err.message })
+      return reply.status(404).send({ error: 'QR not available' })
     }
   })
 
@@ -212,11 +238,20 @@ export const zaloAdminRoutes: FastifyPluginAsync = async (app) => {
     const auth = req.authUser
     if (auth?.role === 'STAFF') return reply.status(403).send({ error: 'Không đủ quyền' })
 
+    // Try to restart Docker container (NAS self-contained setup)
+    let restarted = false
     try {
       execSync(`docker restart ${OPENCLAW_CONTAINER}`, { timeout: 10000 })
-      return { ok: true, message: 'OpenClaw restarting... QR sẽ xuất hiện sau ~10 giây' }
-    } catch (err: any) {
-      return reply.status(500).send({ error: err.message })
+      restarted = true
+    } catch { /* Docker not available or not containerised — native/VPS mode */ }
+
+    return {
+      ok: true,
+      restarted,
+      message: restarted
+        ? 'OpenClaw restarting... QR sẽ xuất hiện sau ~10 giây'
+        : 'OpenClaw chạy ở chế độ native. Khởi động lại OpenClaw trên máy đó → QR sẽ tự xuất hiện trên dashboard.',
+      nativeMode: !restarted,
     }
   })
 
@@ -233,5 +268,92 @@ export const zaloAdminRoutes: FastifyPluginAsync = async (app) => {
       body: JSON.stringify({ groupIds: pendingGroupIds }),
     })
     return addRes.json()
+  })
+
+  // POST /api/zalo/reset-sync — xóa lastAutoSyncAt để trigger re-backfill lần tiếp
+  app.post('/reset-sync', async (req, reply) => {
+    const tenantId = req.headers['x-tenant-id'] as string
+    const auth = req.authUser
+    if (auth?.role === 'STAFF') return reply.status(403).send({ error: 'Không đủ quyền' })
+    if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
+
+    const { db } = await import('../services/db.js')
+    await db.tenant.update({
+      where: { id: tenantId },
+      data: { lastAutoSyncAt: null },
+    })
+    return { ok: true, message: 'Sync đã được reset. Hook sẽ tự sync lại trong lần kết nối tiếp theo.' }
+  })
+
+  // GET /api/zalo/session-health — trả thông tin sức khỏe session để dashboard hiện
+  app.get('/session-health', async (req, reply) => {
+    const tenantId = req.headers['x-tenant-id'] as string
+    if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
+
+    const { db } = await import('../services/db.js')
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { lastHookPingAt: true, lastAutoSyncAt: true, setupDone: true },
+    })
+    if (!tenant) return reply.status(404).send({ error: 'Tenant not found' })
+
+    const now = Date.now()
+    const lastPing = tenant.lastHookPingAt?.getTime() ?? null
+    const msSincePing = lastPing ? now - lastPing : null
+    const hoursSincePing = msSincePing ? Math.floor(msSincePing / 3_600_000) : null
+
+    const status: 'healthy' | 'warning' | 'dead' | 'never' =
+      !lastPing ? 'never' :
+      msSincePing! < 30 * 60_000 ? 'healthy' :
+      msSincePing! < 2 * 60 * 60_000 ? 'warning' :
+      'dead'
+
+    // Sync status: never → pending (reset/first) → syncing (running now) → done
+    const lastSync = tenant.lastAutoSyncAt?.getTime() ?? null
+    const msSinceSync = lastSync ? now - lastSync : null
+    const syncStatus: 'never' | 'pending' | 'syncing' | 'done' =
+      !lastSync ? 'pending' :                           // null = reset or never ran
+      msSinceSync! < 10 * 60_000 ? 'syncing' :         // < 10min = likely still running
+      'done'
+
+    return {
+      status,
+      lastHookPingAt: tenant.lastHookPingAt,
+      hoursSincePing,
+      lastAutoSyncAt: tenant.lastAutoSyncAt,
+      syncStatus,
+      setupDone: tenant.setupDone,
+    }
+  })
+
+  // GET /api/zalo/history-push-config — trả thông tin để chạy script import lịch sử
+  // Chỉ OWNER mới xem được (có webhookSecret)
+  app.get('/history-push-config', async (req, reply) => {
+    const tenantId = req.headers['x-tenant-id'] as string
+    const auth = req.authUser
+    if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
+
+    const { db } = await import('../services/db.js')
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { webhookSecret: true },
+    })
+    if (!tenant) return reply.status(404).send({ error: 'Tenant not found' })
+
+    // Chỉ OWNER mới thấy webhookSecret
+    const secret = auth?.role === 'OWNER' ? tenant.webhookSecret : '***hidden***'
+
+    // Derive backend URL from request
+    const proto = (req.headers['x-forwarded-proto'] as string) || 'https'
+    const host = (req.headers['x-forwarded-host'] as string) || req.headers.host || 'localhost:3001'
+    const backendUrl = `${proto}://${host}`
+
+    return {
+      backendUrl,
+      tenantId,
+      webhookSecret: secret,
+      isOwner: auth?.role === 'OWNER',
+      scriptDownloadUrl: `${backendUrl}/api/setup/hook-files/zalo-history-push.mjs`,
+    }
   })
 }

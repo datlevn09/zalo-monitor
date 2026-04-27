@@ -14,6 +14,8 @@ RUN npm run build
 
 FROM base AS runner
 ENV NODE_ENV=production
+# Docker CLI — needed for zalo reconnect / container management from backend
+RUN apk add --no-cache docker-cli
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma

@@ -30,6 +30,12 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(200).send({ ok: true, skipped: 'zalo_disabled' })
     }
 
+    // Fire-and-forget: update lastHookPingAt (don't await, don't block message processing)
+    db.tenant.update({
+      where: { id: tenantId },
+      data: { lastHookPingAt: new Date() },
+    }).catch(() => undefined)
+
     const raw = req.body as Record<string, any>
 
     // openzca payload:
@@ -129,8 +135,9 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
       }).catch(() => undefined)
     }
 
-    // Auto-sync history on first connect
-    // Runs once: checks lastAutoSyncAt — if null or > 24h ago, trigger background sync
+    // Auto-sync: Docker-only fallback. For native/VPS mode, the hook itself
+    // runs openzca locally and pushes via POST /api/setup/sync-push.
+    // Both check lastAutoSyncAt — first one to run wins.
     if (userId) {
       const tenantFull = await db.tenant.findUnique({
         where: { id: tenantId },

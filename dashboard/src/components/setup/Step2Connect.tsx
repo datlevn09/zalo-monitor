@@ -8,13 +8,13 @@ import type { SetupState } from '@/app/setup/page'
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 
 type Admin = { name: string; zalo: string; telegram: string; email: string }
-type Mode = 'docker' | 'host'
+type Mode = 'docker' | 'host' | 'windows'
 
 export function Step2Connect({ setup, onDone }: { setup: SetupState; onDone: () => void }) {
   const [connected, setConnected] = useState(false)
   const [source, setSource] = useState<'hook-ping' | 'first-message' | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
-  const [commands, setCommands] = useState({ oneLineCommand: '', dockerCommand: '' })
+  const [commands, setCommands] = useState({ oneLineCommand: '', dockerCommand: '', windowsCommand: '' })
   const [mode, setMode] = useState<Mode>(() => {
     if (typeof window === 'undefined') return 'host'
     return (localStorage.getItem('zm:mode') as Mode) ?? 'host'
@@ -30,7 +30,7 @@ export function Step2Connect({ setup, onDone }: { setup: SetupState; onDone: () 
     fetch(`${API}/api/setup/inject-command?tenantId=${setup.tenantId}`)
       .then(r => r.json())
       .then(d => {
-        setCommands({ oneLineCommand: d.oneLineCommand, dockerCommand: d.dockerCommand })
+        setCommands({ oneLineCommand: d.oneLineCommand, dockerCommand: d.dockerCommand, windowsCommand: d.windowsCommand ?? '' })
         setAdmin(d.admin)
       })
   }, [setup.tenantId])
@@ -54,7 +54,7 @@ export function Step2Connect({ setup, onDone }: { setup: SetupState; onDone: () 
     setTimeout(() => setCopied(null), 2000)
   }
 
-  const command = mode === 'docker' ? commands.dockerCommand : commands.oneLineCommand
+  const command = mode === 'docker' ? commands.dockerCommand : mode === 'windows' ? commands.windowsCommand : commands.oneLineCommand
 
   // Text gửi admin khi cần hỗ trợ
   const supportMessage = `Xin chào ${admin?.name ?? 'support'}, tôi cần hỗ trợ cài đặt Zalo Monitor.
@@ -70,14 +70,18 @@ ${commands.dockerCommand || commands.oneLineCommand}`
       </div>
 
       {/* Mode selector - iOS segmented */}
-      <div className="bg-gray-100 dark:bg-white/10 p-1 rounded-xl grid grid-cols-2 gap-0.5">
+      <div className="bg-gray-100 dark:bg-white/10 p-1 rounded-xl grid grid-cols-3 gap-0.5">
         <button type="button" onClick={() => setMode('docker')}
           className={`py-2 rounded-lg text-sm font-medium transition-all ${mode === 'docker' ? 'bg-white dark:bg-white/15 text-gray-900 dark:text-white shadow-sm' : 'text-gray-600 dark:text-zinc-400'}`}>
           🐳 Docker
         </button>
         <button type="button" onClick={() => setMode('host')}
           className={`py-2 rounded-lg text-sm font-medium transition-all ${mode === 'host' ? 'bg-white dark:bg-white/15 text-gray-900 dark:text-white shadow-sm' : 'text-gray-600 dark:text-zinc-400'}`}>
-          💻 Cài trực tiếp
+          🐧 Linux/Mac
+        </button>
+        <button type="button" onClick={() => setMode('windows')}
+          className={`py-2 rounded-lg text-sm font-medium transition-all ${mode === 'windows' ? 'bg-white dark:bg-white/15 text-gray-900 dark:text-white shadow-sm' : 'text-gray-600 dark:text-zinc-400'}`}>
+          🪟 Windows
         </button>
       </div>
 
@@ -86,6 +90,8 @@ ${commands.dockerCommand || commands.oneLineCommand}`
         <p className="text-xs text-gray-500 dark:text-zinc-400 mb-2">
           {mode === 'docker'
             ? 'Mở terminal trên máy đang chạy Docker, paste lệnh này:'
+            : mode === 'windows'
+            ? 'Mở PowerShell (Run as Administrator), paste lệnh này:'
             : 'Mở terminal trên máy cài OpenClaw, paste lệnh này:'}
         </p>
         <div className="bg-gray-900 dark:bg-black/60 dark:ring-1 dark:ring-white/5 rounded-xl p-4 font-mono text-xs text-green-400 break-all whitespace-pre-wrap">
@@ -116,12 +122,19 @@ ${commands.dockerCommand || commands.oneLineCommand}`
           {mode === 'host' && (
             <GuideStep num={1} title="SSH vào máy chủ" desc='Mở Terminal trên máy của bạn, chạy: ssh user@your-server-ip (thay user và IP thực tế). Nếu dùng key: ssh -i ~/.ssh/key.pem user@your-server-ip' />
           )}
-          <GuideStep num={mode === 'host' ? 2 : 1} title="Mở Terminal" desc={mode === 'docker'
+          {mode === 'windows' && (
+            <GuideStep num={1} title="Mở PowerShell" desc='Tìm kiếm "PowerShell" → Click phải → "Run as Administrator"' />
+          )}
+          <GuideStep num={mode === 'host' ? 2 : (mode === 'windows' ? 2 : 1)} title="Mở Terminal" desc={mode === 'docker'
             ? 'Mở ứng dụng Terminal trên máy Mac/Windows đang chạy Docker (biểu tượng màn hình đen)'
+            : mode === 'windows'
+            ? 'Đã có PowerShell Administrator rồi'
             : 'Sau khi SSH thành công, bạn đang ở trong terminal của máy chủ VPS rồi'} />
-          <GuideStep num={mode === 'host' ? 3 : 2} title="Paste lệnh" desc="Nhấn nút 📋 Copy lệnh ở trên, sau đó dán vào terminal (⌘V trên Mac, Ctrl+V trên Windows)" />
-          <GuideStep num={mode === 'host' ? 4 : 3} title="Nhấn Enter" desc="Đợi 2-3 giây, hook sẽ tự tải và enable. Nếu thấy '🎉 Hoàn tất!' là OK." />
-          <GuideStep num={mode === 'host' ? 5 : 4} title="Gửi thử 1 tin" desc="Nhắn bất kỳ tin trong nhóm Telegram/Zalo có bot → dashboard sẽ tự detect ở dưới" />
+          <GuideStep num={mode === 'host' ? 3 : (mode === 'windows' ? 3 : 2)} title="Paste lệnh" desc={mode === 'windows'
+            ? 'Nhấn nút 📋 Copy lệnh ở trên, sau đó dán vào PowerShell (Ctrl+V - tự động paste được)'
+            : 'Nhấn nút 📋 Copy lệnh ở trên, sau đó dán vào terminal (⌘V trên Mac, Ctrl+V trên Linux)'} />
+          <GuideStep num={mode === 'host' ? 4 : (mode === 'windows' ? 4 : 3)} title="Nhấn Enter" desc="Đợi 2-3 giây, hook sẽ tự tải và enable. Nếu thấy '🎉 Hoàn tất!' là OK." />
+          <GuideStep num={mode === 'host' ? 5 : (mode === 'windows' ? 5 : 4)} title="Gửi thử 1 tin" desc="Nhắn bất kỳ tin trong nhóm Telegram/Zalo có bot → dashboard sẽ tự detect ở dưới" />
         </div>
       </details>
 

@@ -44,6 +44,12 @@ export default function OverviewPage() {
   const [copied, setCopied] = useState(false)
   const [zaloConnected, setZaloConnected] = useState<boolean | null>(null)
   const [tenantInfo, setTenantInfo] = useState<TenantInfo | null>(null)
+  const [sessionHealth, setSessionHealth] = useState<{
+    status: 'healthy' | 'warning' | 'dead' | 'never'
+    hoursSincePing: number | null
+    syncStatus: 'never' | 'pending' | 'syncing' | 'done'
+    lastAutoSyncAt: string | null
+  } | null>(null)
 
   const load = () => api<Overview>('/api/stats/overview').then(setData).catch(() => undefined)
 
@@ -58,6 +64,8 @@ export default function OverviewPage() {
       .catch(() => setZaloConnected(false))
     // Fetch tenant info for plan card
     api<TenantInfo>('/api/tenants/current').then(setTenantInfo).catch(() => undefined)
+    // Fetch session health for status widget
+    api<any>('/api/zalo/session-health').then(setSessionHealth).catch(() => undefined)
 
     const close = connectWebSocket((event) => {
       if (event === 'message:new' || event === 'alert:new' || event === 'analysis:result') {
@@ -135,6 +143,9 @@ export default function OverviewPage() {
       {showDigest && <DigestModal onClose={() => setShowDigest(false)} />}
 
       {tenantInfo && <PlanCard tenant={tenantInfo} groupCount={data?.stats.totalGroups ?? 0} />}
+
+      {/* Zalo session + sync status widget */}
+      {sessionHealth && <ZaloStatusWidget health={sessionHealth} />}
 
       {/* Stats Grid - iOS widget style */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6">
@@ -354,5 +365,50 @@ function StatCard({
       <p className="text-2xl font-bold text-gray-900 dark:text-zinc-100 mt-0.5 tabular-nums">{value}</p>
       {sub && <p className="text-[11px] text-gray-400 dark:text-zinc-500 mt-0.5">{sub}</p>}
     </div>
+  )
+}
+
+function ZaloStatusWidget({ health }: {
+  health: {
+    status: 'healthy' | 'warning' | 'dead' | 'never'
+    hoursSincePing: number | null
+    syncStatus: 'never' | 'pending' | 'syncing' | 'done'
+    lastAutoSyncAt: string | null
+  }
+}) {
+  const sessionCfg = {
+    healthy: { dot: 'bg-green-500', text: 'Đang kết nối',     color: 'text-green-600 dark:text-green-400' },
+    warning: { dot: 'bg-amber-400 animate-pulse', text: 'Tín hiệu yếu', color: 'text-amber-600 dark:text-amber-400' },
+    dead:    { dot: 'bg-red-500',   text: 'Mất kết nối',      color: 'text-red-600 dark:text-red-400' },
+    never:   { dot: 'bg-gray-400',  text: 'Chưa kết nối',     color: 'text-gray-500 dark:text-zinc-400' },
+  }[health.status]
+
+  const syncLabel =
+    health.syncStatus === 'syncing' ? '⟳ Đang sync...' :
+    health.syncStatus === 'done' && health.lastAutoSyncAt
+      ? `✓ Đã sync ${new Date(health.lastAutoSyncAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+      : health.syncStatus === 'pending' ? '⏳ Chờ sync lần đầu'
+      : '—'
+
+  if (health.status === 'healthy' && health.syncStatus === 'done') return null
+
+  return (
+    <Link href="/dashboard/settings/channels"
+      className="mb-4 flex items-center gap-3 bg-white dark:bg-zinc-900 dark:ring-1 dark:ring-white/5 rounded-2xl px-4 py-3 border border-gray-200 dark:border-white/10 hover:shadow-md transition-all group">
+      <div className="w-9 h-9 rounded-xl bg-blue-500 flex items-center justify-center text-white font-bold shrink-0 text-base">Z</div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full shrink-0 ${sessionCfg.dot}`} />
+          <span className={`text-sm font-medium ${sessionCfg.color}`}>{sessionCfg.text}</span>
+          {health.status === 'dead' && health.hoursSincePing && (
+            <span className="text-xs text-red-400 dark:text-red-500">· {health.hoursSincePing}h rồi</span>
+          )}
+        </div>
+        <p className="text-xs text-gray-400 dark:text-zinc-500 mt-0.5 truncate">{syncLabel}</p>
+      </div>
+      <span className="text-gray-400 dark:text-zinc-500 group-hover:text-gray-600 dark:group-hover:text-zinc-300 text-xs shrink-0">
+        {health.status === 'dead' ? 'Kết nối lại →' : 'Quản lý →'}
+      </span>
+    </Link>
   )
 }

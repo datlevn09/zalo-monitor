@@ -1,3 +1,4 @@
+// @ts-ignore
 import type { WebSocket } from 'ws'
 
 class WebSocketManager {

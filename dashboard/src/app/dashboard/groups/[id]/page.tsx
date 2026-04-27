@@ -1,8 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { api, connectWebSocket } from '@/lib/api'
 import { LABEL_CFG, PRIORITY_CFG, formatTime, formatDateTime } from '@/lib/format'
 import { channelDeepLink } from '@/lib/deeplink'
@@ -41,6 +40,23 @@ type AiAnalysis = {
   model: string
 }
 
+function parseMediaUrl(content: string | null): string | null {
+  if (!content) return null
+  if (content.startsWith('http')) return content
+  try {
+    const obj = JSON.parse(content)
+    return obj.href ?? obj.url ?? obj.thumb ?? obj.thumbUrl ?? obj.mediaUrl ?? null
+  } catch { return null }
+}
+
+function parseFileName(content: string | null): string {
+  if (!content) return 'file'
+  try {
+    const obj = JSON.parse(content)
+    return obj.name ?? obj.fileName ?? obj.title ?? 'file'
+  } catch { return 'file' }
+}
+
 export default function GroupDetailPage() {
   const { id } = useParams<{ id: string }>()
   const router = useRouter()
@@ -50,10 +66,17 @@ export default function GroupDetailPage() {
   const [aiPanel, setAiPanel] = useState(false)
   const [aiLoading, setAiLoading] = useState(false)
   const [aiResult, setAiResult] = useState<AiAnalysis | null>(null)
-  const [copied, setCopied] = useState<number | null>(null)
+  const [sendText, setSendText] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState<string | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const loadGroup = () => api<Group[]>('/api/groups').then(gs => setGroup(gs.find(g => g.id === id) ?? null))
-  const loadMessages = () => api<Message[]>(`/api/messages?groupId=${id}&limit=100`).then(m => { setMessages(m); setLoading(false) })
+  const loadMessages = () => api<Message[]>(`/api/messages?groupId=${id}&limit=100`).then(m => {
+    setMessages(m)
+    setLoading(false)
+  })
 
   async function runAiAnalyze() {
     setAiLoading(true)
@@ -69,16 +92,57 @@ export default function GroupDetailPage() {
     }
   }
 
-  function copyReply(text: string, idx: number) {
-    navigator.clipboard.writeText(text)
-    setCopied(idx)
-    setTimeout(() => setCopied(null), 1500)
+  function useReply(text: string) {
+    setSendText(text)
+    setAiPanel(false)
+    setTimeout(() => textareaRef.current?.focus(), 100)
+  }
+
+  async function handleSend() {
+    if (!sendText.trim() || sending) return
+    setSending(true)
+    setSendError(null)
+    const text = sendText.trim()
+    setSendText('')
+    try {
+      const res = await api<{ ok: boolean; queued?: boolean; message?: Message }>(`/api/groups/${id}/send`, {
+        method: 'POST',
+        body: JSON.stringify({ text }),
+      })
+      if (res.message) {
+        setMessages(prev => [...prev, res.message!])
+      } else if (res.queued) {
+        // Queued — will appear when hook processes it
+        const optimistic: Message = {
+          id: `optimistic-${Date.now()}`,
+          senderType: 'SELF',
+          senderName: 'Bot',
+          senderId: 'bot',
+          content: text,
+          contentType: 'TEXT',
+          sentAt: new Date().toISOString(),
+          analysis: null,
+        }
+        setMessages(prev => [...prev, optimistic])
+      }
+    } catch (err: any) {
+      setSendError(err?.message ?? 'Gửi thất bại')
+      setSendText(text) // restore
+    } finally {
+      setSending(false)
+    }
+  }
+
+  // Auto-resize textarea
+  function handleTextareaChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    setSendText(e.target.value)
+    e.target.style.height = 'auto'
+    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'
   }
 
   useEffect(() => {
     loadGroup()
     loadMessages()
-
     const close = connectWebSocket((event, data) => {
       if (event === 'message:new' && data.groupId === id) loadMessages()
       if (event === 'analysis:result' && data.groupId === id) loadMessages()
@@ -86,13 +150,19 @@ export default function GroupDetailPage() {
     return () => close()
   }, [id])
 
+  useEffect(() => {
+    if (!loading) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages, loading])
+
   if (!group) return (
     <div className="p-8 text-center text-gray-400 dark:text-zinc-500">Đang tải...</div>
   )
 
   return (
     <div className="flex flex-col h-screen md:h-[calc(100vh)]">
-      {/* iOS navigation bar */}
+      {/* Header */}
       <header className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border-b border-gray-200 dark:border-white/10 px-4 py-3 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto flex items-center gap-3">
           <button
@@ -126,10 +196,8 @@ export default function GroupDetailPage() {
           <button
             onClick={runAiAnalyze}
             className="inline-flex items-center gap-1 px-3 py-1.5 bg-violet-500 hover:bg-violet-600 text-white text-xs font-medium rounded-full transition-colors"
-            title="Phân tích AI hội thoại"
           >
-            <span>✨</span>
-            <span>AI</span>
+            <span>✨</span><span>AI</span>
           </button>
 
           {(() => {
@@ -147,9 +215,9 @@ export default function GroupDetailPage() {
         </div>
       </header>
 
-      {/* AI Analysis Panel */}
+      {/* AI Panel */}
       {aiPanel && (
-        <div className="border-t border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 px-4 py-4 max-w-3xl mx-auto w-full">
+        <div className="border-b border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 px-4 py-4 max-w-3xl mx-auto w-full">
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-semibold text-violet-600 dark:text-violet-400 flex items-center gap-1.5">
               <span>✨</span> Phân tích AI
@@ -166,7 +234,6 @@ export default function GroupDetailPage() {
 
           {!aiLoading && aiResult && (
             <div className="space-y-3">
-              {/* Summary + Sentiment */}
               <div className="bg-violet-50 dark:bg-violet-500/10 rounded-xl px-4 py-3 flex gap-3 items-start">
                 <div className="flex-1">
                   <p className="text-xs font-semibold text-violet-700 dark:text-violet-300 mb-1">Tóm tắt hội thoại</p>
@@ -181,28 +248,27 @@ export default function GroupDetailPage() {
                 </span>
               </div>
 
-              {/* Reply suggestions */}
-              <div>
-                <p className="text-xs font-semibold text-gray-500 dark:text-zinc-400 mb-2">💬 Gợi ý câu trả lời</p>
-                <div className="space-y-1.5">
-                  {aiResult.replies.map((reply, i) => (
-                    <button
-                      key={i}
-                      onClick={() => copyReply(reply, i)}
-                      className="w-full text-left px-3 py-2 rounded-lg bg-gray-50 dark:bg-zinc-800 hover:bg-violet-50 dark:hover:bg-violet-500/10 border border-gray-200 dark:border-white/10 hover:border-violet-300 dark:hover:border-violet-500/30 transition-colors group"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm text-gray-800 dark:text-zinc-200 flex-1">{reply}</p>
-                        <span className={`shrink-0 text-[10px] font-medium transition-colors ${
-                          copied === i ? 'text-green-500' : 'text-gray-400 group-hover:text-violet-500'
-                        }`}>
-                          {copied === i ? '✓ Đã copy' : 'Copy'}
-                        </span>
-                      </div>
-                    </button>
-                  ))}
+              {group.channelType === 'ZALO' && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 dark:text-zinc-400 mb-2">💬 Gợi ý câu trả lời</p>
+                  <div className="space-y-1.5">
+                    {aiResult.replies.map((reply, i) => (
+                      <button
+                        key={i}
+                        onClick={() => useReply(reply)}
+                        className="w-full text-left px-3 py-2 rounded-lg bg-gray-50 dark:bg-zinc-800 hover:bg-violet-50 dark:hover:bg-violet-500/10 border border-gray-200 dark:border-white/10 hover:border-violet-300 dark:hover:border-violet-500/30 transition-colors group"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm text-gray-800 dark:text-zinc-200 flex-1">{reply}</p>
+                          <span className="shrink-0 text-[10px] font-medium text-gray-400 group-hover:text-violet-500 transition-colors whitespace-nowrap">
+                            ↩ Dùng để trả lời
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <p className="text-[10px] text-gray-400 dark:text-zinc-500">Model: {aiResult.model}</p>
             </div>
@@ -215,7 +281,6 @@ export default function GroupDetailPage() {
         <div className="max-w-3xl mx-auto p-4 space-y-3">
           {loading && <p className="text-center text-gray-400 dark:text-zinc-500 text-sm">Đang tải tin nhắn...</p>}
 
-          {/* History info banner */}
           {!loading && messages.length > 0 && (
             <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 rounded-xl p-3 text-center">
               <p className="text-xs text-blue-900 dark:text-blue-200">
@@ -226,11 +291,6 @@ export default function GroupDetailPage() {
                   ? 'Telegram Bot không thể đọc tin nhắn trước khi bot được thêm vào nhóm'
                   : 'Tin nhắn trước thời điểm cài hook chưa được đồng bộ'}
               </p>
-              {group.channelType !== 'TELEGRAM' && (
-                <button className="mt-2 text-[11px] text-blue-600 dark:text-blue-400 hover:underline font-medium">
-                  ↻ Đồng bộ lịch sử (coming soon)
-                </button>
-              )}
             </div>
           )}
 
@@ -249,6 +309,8 @@ export default function GroupDetailPage() {
             const cfg = msg.analysis ? LABEL_CFG[msg.analysis.label] : null
             const isFlagged = msg.analysis && ['COMPLAINT', 'RISK', 'OPPORTUNITY'].includes(msg.analysis.label)
             const isSelf = msg.senderType === 'SELF'
+
+            const mediaUrl = parseMediaUrl(msg.content)
 
             return (
               <div key={msg.id}>
@@ -288,10 +350,76 @@ export default function GroupDetailPage() {
                           ? 'bg-white dark:bg-zinc-800 ring-2 ring-offset-2 ring-offset-[#f2f2f7] dark:ring-offset-zinc-950 ' + (cfg?.color.replace('text-', 'ring-').split(' ').find(c => c.startsWith('ring-')) ?? 'ring-blue-200 dark:ring-blue-500/30')
                           : 'bg-white dark:bg-zinc-800'
                     } shadow-[0_1px_2px_rgba(0,0,0,0.04)]`}>
-                      {msg.contentType !== 'TEXT' ? (
-                        <p className={`text-sm italic ${isSelf ? 'text-blue-100' : 'text-gray-500 dark:text-zinc-400'}`}>
-                          [{msg.contentType.toLowerCase()}]
-                        </p>
+
+                      {msg.contentType === 'IMAGE' ? (
+                        mediaUrl ? (
+                          <a href={mediaUrl} target="_blank" rel="noopener noreferrer">
+                            <img
+                              src={mediaUrl}
+                              alt="ảnh"
+                              className="max-w-[220px] max-h-[220px] rounded-xl object-cover"
+                              onError={e => { (e.target as HTMLImageElement).parentElement!.innerHTML = '<p class="text-sm italic text-gray-400 p-1">[hình ảnh không tải được]</p>' }}
+                            />
+                          </a>
+                        ) : (
+                          <p className={`text-sm italic ${isSelf ? 'text-blue-100' : 'text-gray-400 dark:text-zinc-500'}`}>🖼️ [hình ảnh]</p>
+                        )
+                      ) : msg.contentType === 'STICKER' ? (
+                        mediaUrl ? (
+                          <img src={mediaUrl} alt="sticker" className="w-20 h-20 object-contain" />
+                        ) : (
+                          <p className="text-sm">😊 [sticker]</p>
+                        )
+                      ) : msg.contentType === 'FILE' ? (
+                        mediaUrl ? (
+                          <a href={mediaUrl} target="_blank" rel="noopener noreferrer"
+                            className={`flex items-center gap-2 text-sm hover:underline ${isSelf ? 'text-blue-100' : 'text-blue-600 dark:text-blue-400'}`}>
+                            <span>📎</span>
+                            <span>{parseFileName(msg.content)}</span>
+                          </a>
+                        ) : (
+                          <p className={`text-sm italic ${isSelf ? 'text-blue-100' : 'text-gray-400 dark:text-zinc-500'}`}>📎 [file]</p>
+                        )
+                      ) : msg.contentType === 'VIDEO' ? (
+                        mediaUrl ? (
+                          <div className="space-y-1.5">
+                            <video
+                              src={mediaUrl}
+                              controls
+                              playsInline
+                              className="max-w-[260px] max-h-[200px] rounded-xl bg-black"
+                              onError={e => {
+                                const el = e.target as HTMLVideoElement
+                                el.style.display = 'none'
+                                const fallback = el.nextElementSibling as HTMLElement | null
+                                if (fallback) fallback.style.display = 'flex'
+                              }}
+                            />
+                            <a href={mediaUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'none' }}
+                              className={`items-center gap-2 text-sm hover:underline ${isSelf ? 'text-blue-100' : 'text-blue-600 dark:text-blue-400'}`}>
+                              <span>🎬</span><span>Tải video về xem</span>
+                            </a>
+                          </div>
+                        ) : (
+                          <a href={`zalo://conversation?groupid=${group.externalId}`}
+                            className={`flex items-center gap-2 text-sm ${isSelf ? 'text-blue-100' : 'text-gray-600 dark:text-zinc-300'}`}>
+                            <span>🎬</span>
+                            <span>Video · <span className={`font-medium ${isSelf ? 'text-blue-200' : 'text-blue-500 dark:text-blue-400 hover:underline'}`}>Mở trong Zalo ↗</span></span>
+                          </a>
+                        )
+                      ) : msg.contentType === 'VOICE' ? (
+                        <a href={`zalo://conversation?groupid=${group.externalId}`}
+                          className={`flex items-center gap-3 text-sm group/voice ${isSelf ? 'text-blue-100' : 'text-gray-700 dark:text-zinc-300'}`}>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isSelf ? 'bg-blue-400/40' : 'bg-gray-100 dark:bg-zinc-700'}`}>
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zm-1 3a1 1 0 0 1 2 0v8a1 1 0 0 1-2 0V4zM7 10H5a7 7 0 0 0 14 0h-2a5 5 0 0 1-10 0zm5 9v2H9v2h6v-2h-3v-2a7 7 0 0 0 7-7h-2a5 5 0 0 1-10 0H5a7 7 0 0 0 7 7z"/>
+                            </svg>
+                          </div>
+                          <div>
+                            <p className="text-xs font-medium">Tin nhắn thoại</p>
+                            <p className={`text-[10px] group-hover/voice:underline ${isSelf ? 'text-blue-200' : 'text-blue-500 dark:text-blue-400'}`}>Mở trong Zalo để nghe ↗</p>
+                          </div>
+                        </a>
                       ) : (
                         <p className={`text-sm whitespace-pre-wrap break-words ${isSelf ? 'text-white' : 'text-gray-900 dark:text-zinc-100'}`}>{msg.content}</p>
                       )}
@@ -323,8 +451,46 @@ export default function GroupDetailPage() {
               </div>
             )
           })}
+          <div ref={messagesEndRef} />
         </div>
       </div>
+
+      {/* Send input — only for ZALO */}
+      {group.channelType === 'ZALO' && (
+        <div className="border-t border-gray-200 dark:border-white/10 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl px-4 py-3 sticky bottom-0">
+          <div className="max-w-3xl mx-auto flex items-end gap-2">
+            <textarea
+              ref={textareaRef}
+              value={sendText}
+              onChange={handleTextareaChange}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
+              }}
+              placeholder="Nhập tin nhắn... (Enter gửi, Shift+Enter xuống dòng)"
+              rows={1}
+              style={{ minHeight: '42px', maxHeight: '120px', height: '42px' }}
+              className="flex-1 resize-none px-3.5 py-2.5 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-zinc-800 text-sm text-gray-900 dark:text-zinc-100 placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all overflow-hidden"
+              disabled={sending}
+            />
+            <button
+              onClick={handleSend}
+              disabled={sending || !sendText.trim()}
+              className="w-10 h-10 rounded-full bg-blue-500 hover:bg-blue-600 disabled:bg-blue-200 dark:disabled:bg-blue-800/50 text-white flex items-center justify-center shrink-0 transition-colors"
+            >
+              {sending ? (
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg className="w-5 h-5 translate-x-0.5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+              )}
+            </button>
+          </div>
+          {sendError && (
+            <p className="text-xs text-red-500 dark:text-red-400 mt-1.5 max-w-3xl mx-auto">{sendError}</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

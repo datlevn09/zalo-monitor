@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../services/db.js'
+import { sendZaloMessage } from '../services/zalo-sync.js'
 
 export const groupRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/groups — list groups visible to current user.
@@ -129,5 +130,46 @@ export const groupRoutes: FastifyPluginAsync = async (app) => {
       select: { pinnedGroupIds: true },
     })
     return { ok: true, pinnedGroupIds: user.pinnedGroupIds }
+  })
+
+  // POST /api/groups/:id/send — gửi tin nhắn vào nhóm Zalo
+  app.post('/:id/send', async (req, reply) => {
+    const tenantId = req.headers['x-tenant-id'] as string
+    const auth = req.authUser
+    const { id } = req.params as { id: string }
+    const { text } = req.body as { text?: string }
+
+    if (!text?.trim()) return reply.status(400).send({ error: 'text is required' })
+
+    const group = await db.group.findFirst({ where: { id, tenantId } })
+    if (!group) return reply.status(404).send({ error: 'Group not found' })
+    if (group.channelType !== 'ZALO') return reply.status(400).send({ error: 'Chỉ hỗ trợ gửi tin cho nhóm Zalo' })
+
+    const trimmed = text.trim()
+
+    // Try docker exec directly first
+    try {
+      sendZaloMessage(group.externalId, trimmed)
+      const msg = await db.message.create({
+        data: {
+          groupId: group.id,
+          externalId: `sent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          senderType: 'SELF',
+          senderId: auth?.userId ?? 'bot',
+          senderName: 'Bot',
+          contentType: 'TEXT',
+          content: trimmed,
+          sentAt: new Date(),
+        },
+      })
+      await db.group.update({ where: { id }, data: { lastMessageAt: new Date() } })
+      return { ok: true, queued: false, message: msg }
+    } catch {
+      // Docker exec failed → queue for hook to pick up
+      await db.sendQueue.create({
+        data: { tenantId, groupExternalId: group.externalId, text: trimmed },
+      })
+      return { ok: true, queued: true }
+    }
   })
 }

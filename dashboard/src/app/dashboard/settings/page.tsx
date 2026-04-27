@@ -214,7 +214,8 @@ export default function SettingsPage() {
           onClick={() => {
             if (confirm('Đăng xuất khỏi dashboard?')) {
               localStorage.removeItem('tenantId')
-              window.location.href = '/setup'
+              localStorage.removeItem('token')
+              window.location.href = '/login'
             }
           }}
           className="w-full text-left px-4 py-3.5 text-sm text-red-500 dark:text-red-400 font-medium hover:bg-red-50 dark:hover:bg-red-500/10"
