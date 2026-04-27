@@ -2,24 +2,15 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { getToken, getTenantId } from '@/lib/api'
+import { getToken } from '@/lib/api'
 import { ThemeToggle } from '@/components/ThemeToggle'
 
 export default function LandingPage() {
-  const [show, setShow] = useState(false)
+  const [loggedIn, setLoggedIn] = useState(false)
 
   useEffect(() => {
-    // If any token exists → user has logged in before → go to dashboard
-    // Dashboard layout will handle tenant check and redirect to /setup if needed
-    if (getToken()) {
-      window.location.replace('/dashboard')
-    } else {
-      setShow(true)
-    }
+    setLoggedIn(!!getToken())
   }, [])
-
-  // Show nothing while checking — logged-in users never see landing page
-  if (!show) return null
 
   return (
     <div className="min-h-[100dvh] bg-[#f2f2f7] dark:bg-zinc-950 text-gray-900 dark:text-zinc-100 flex flex-col">
@@ -41,10 +32,10 @@ export default function LandingPage() {
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <Link
-              href="/login"
+              href={loggedIn ? '/dashboard' : '/login'}
               className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 rounded-xl transition-colors"
             >
-              Đăng nhập
+              {loggedIn ? 'Dashboard →' : 'Đăng nhập'}
             </Link>
           </div>
         </div>
@@ -73,15 +64,27 @@ export default function LandingPage() {
 
         {/* CTA Buttons */}
         <div className="flex flex-col sm:flex-row items-center gap-3">
-          <Link
-            href="/login"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold text-base rounded-2xl shadow-lg shadow-blue-500/25 transition-all hover:shadow-blue-500/40 hover:-translate-y-0.5"
-          >
-            Bắt đầu
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-            </svg>
-          </Link>
+          {loggedIn ? (
+            <Link
+              href="/dashboard"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold text-base rounded-2xl shadow-lg shadow-blue-500/25 transition-all hover:shadow-blue-500/40 hover:-translate-y-0.5"
+            >
+              Vào Dashboard
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+              </svg>
+            </Link>
+          ) : (
+            <Link
+              href="/login"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold text-base rounded-2xl shadow-lg shadow-blue-500/25 transition-all hover:shadow-blue-500/40 hover:-translate-y-0.5"
+            >
+              Bắt đầu
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+              </svg>
+            </Link>
+          )}
         </div>
       </section>
 
