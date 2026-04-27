@@ -10,13 +10,14 @@ import {
 
 // ─── Plan presets ─────────────────────────────────────────────────────────────
 // maxBoardViewers: 0 = unlimited
-const PLAN_PRESETS: Record<string, { label: string; maxGroups: number; maxMessagesPerMonth: number; maxBoardViewers: number }> = {
-  free:       { label: '🆓 Free',       maxGroups: 10,  maxMessagesPerMonth: 5_000,   maxBoardViewers: 1  },
-  starter:    { label: '🌱 Starter',    maxGroups: 20,  maxMessagesPerMonth: 15_000,  maxBoardViewers: 3  },
-  basic:      { label: '📦 Basic',      maxGroups: 50,  maxMessagesPerMonth: 50_000,  maxBoardViewers: 10 },
-  pro:        { label: '🚀 Pro',        maxGroups: 150, maxMessagesPerMonth: 200_000, maxBoardViewers: 30 },
-  business:   { label: '🏢 Business',   maxGroups: 500, maxMessagesPerMonth: 500_000, maxBoardViewers: 50 },
-  enterprise: { label: '♾️ Enterprise', maxGroups: 0,   maxMessagesPerMonth: 0,       maxBoardViewers: 0  },
+// syncDepth: số tin/nhóm backfill khi lần đầu kết nối (0 = không giới hạn)
+const PLAN_PRESETS: Record<string, { label: string; color: string; maxGroups: number; maxMessagesPerMonth: number; maxBoardViewers: number; maxHistorySyncDepth: number }> = {
+  free:       { label: '🆓 Free',       color: 'border-gray-300 dark:border-white/10',            maxGroups: 10,  maxMessagesPerMonth: 5_000,   maxBoardViewers: 1,  maxHistorySyncDepth: 50   },
+  starter:    { label: '🌱 Starter',    color: 'border-green-400 dark:border-green-500/50',        maxGroups: 20,  maxMessagesPerMonth: 15_000,  maxBoardViewers: 3,  maxHistorySyncDepth: 100  },
+  basic:      { label: '📦 Basic',      color: 'border-blue-400 dark:border-blue-500/50',          maxGroups: 50,  maxMessagesPerMonth: 50_000,  maxBoardViewers: 10, maxHistorySyncDepth: 500  },
+  pro:        { label: '🚀 Pro',        color: 'border-purple-400 dark:border-purple-500/50',      maxGroups: 150, maxMessagesPerMonth: 200_000, maxBoardViewers: 30, maxHistorySyncDepth: 1000 },
+  business:   { label: '🏢 Business',   color: 'border-orange-400 dark:border-orange-500/50',      maxGroups: 500, maxMessagesPerMonth: 500_000, maxBoardViewers: 50, maxHistorySyncDepth: 5000 },
+  enterprise: { label: '♾️ Enterprise', color: 'border-yellow-400 dark:border-yellow-500/50',      maxGroups: 0,   maxMessagesPerMonth: 0,       maxBoardViewers: 0,  maxHistorySyncDepth: 0    },
 }
 
 type TenantStatus = 'active' | 'trial' | 'expired' | 'suspended' | 'pending'
@@ -41,6 +42,7 @@ type Tenant = {
   maxGroups: number
   maxMessagesPerMonth: number
   maxBoardViewers: number
+  maxHistorySyncDepth: number
   messagesThisMonth: number
   usageResetAt: string
   setupDone: boolean
@@ -349,6 +351,7 @@ function TenantDrawer({
     maxGroups: initialTenant.maxGroups,
     maxMessagesPerMonth: initialTenant.maxMessagesPerMonth,
     maxBoardViewers: initialTenant.maxBoardViewers ?? 0,
+    maxHistorySyncDepth: initialTenant.maxHistorySyncDepth ?? 50,
     contactName: initialTenant.contactName ?? '',
     contactPhone: initialTenant.contactPhone ?? '',
     contactEmail: initialTenant.contactEmail ?? '',
@@ -358,7 +361,7 @@ function TenantDrawer({
   function applyPreset(plan: string) {
     const preset = PLAN_PRESETS[plan]
     if (!preset) return
-    setForm(f => ({ ...f, plan, maxGroups: preset.maxGroups, maxMessagesPerMonth: preset.maxMessagesPerMonth, maxBoardViewers: preset.maxBoardViewers }))
+    setForm(f => ({ ...f, plan, maxGroups: preset.maxGroups, maxMessagesPerMonth: preset.maxMessagesPerMonth, maxBoardViewers: preset.maxBoardViewers, maxHistorySyncDepth: preset.maxHistorySyncDepth }))
   }
   const [expiryDate, setExpiryDate] = useState(
     initialTenant.licenseExpiresAt ? new Date(initialTenant.licenseExpiresAt).toISOString().split('T')[0] : ''
@@ -686,74 +689,69 @@ function TenantDrawer({
 
           {/* Plan / limits */}
           <Section title="📊 Plan & Giới hạn">
-            {/* Preset buttons */}
-            <div className="mb-3">
-              <p className="text-xs text-gray-500 dark:text-zinc-400 mb-2">Chọn gói để tự điền giới hạn:</p>
-              <div className="flex flex-wrap gap-1.5">
-                {Object.entries(PLAN_PRESETS).map(([key, p]) => (
+            {/* Plan cards — 3 col on wide, 2 on narrow */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-4">
+              {Object.entries(PLAN_PRESETS).map(([key, p]) => {
+                const active = form.plan === key
+                return (
                   <button
                     key={key}
                     onClick={() => applyPreset(key)}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                      form.plan === key
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-white/15'
+                    className={`relative flex flex-col gap-1 rounded-xl border-2 p-3 text-left transition-all ${
+                      active
+                        ? `${p.color} bg-blue-50 dark:bg-blue-500/10 shadow-sm`
+                        : 'border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20 bg-white dark:bg-white/5'
                     }`}
                   >
-                    {p.label}
+                    {active && (
+                      <span className="absolute top-2 right-2 w-4 h-4 bg-blue-500 rounded-full flex items-center justify-center text-white text-[9px]">✓</span>
+                    )}
+                    <span className="text-sm font-semibold text-gray-900 dark:text-zinc-100">{p.label}</span>
+                    <span className="text-[10px] text-gray-500 dark:text-zinc-400 leading-relaxed">
+                      👥 {p.maxGroups || '∞'} nhóm<br />
+                      💬 {p.maxMessagesPerMonth ? (p.maxMessagesPerMonth >= 1000 ? `${p.maxMessagesPerMonth/1000}k` : p.maxMessagesPerMonth) : '∞'} msg/tháng<br />
+                      📋 {p.maxBoardViewers || '∞'} viewers<br />
+                      🕐 {p.maxHistorySyncDepth || '∞'} tin/nhóm sync
+                    </span>
                   </button>
-                ))}
-              </div>
+                )
+              })}
             </div>
 
-            {/* Preset summary for selected plan */}
-            {PLAN_PRESETS[form.plan] && (
-              <div className="mb-3 p-2.5 bg-blue-50 dark:bg-blue-500/10 rounded-xl text-xs text-blue-700 dark:text-blue-300 flex gap-3 flex-wrap">
-                <span>👥 Nhóm: <b>{PLAN_PRESETS[form.plan].maxGroups || '∞'}</b></span>
-                <span>💬 Msg/tháng: <b>{PLAN_PRESETS[form.plan].maxMessagesPerMonth ? PLAN_PRESETS[form.plan].maxMessagesPerMonth.toLocaleString('vi-VN') : '∞'}</b></span>
-                <span>📋 Board viewers: <b>{PLAN_PRESETS[form.plan].maxBoardViewers || '∞'}</b></span>
+            {/* Manual override fields */}
+            <details className="group">
+              <summary className="text-xs text-gray-500 dark:text-zinc-400 cursor-pointer hover:text-gray-700 dark:hover:text-zinc-200 select-none mb-2 list-none flex items-center gap-1">
+                <svg className="w-3 h-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+                </svg>
+                Tuỳ chỉnh giới hạn thủ công (0 = không giới hạn)
+              </summary>
+              <div className="grid grid-cols-2 gap-2.5 mt-2">
+                <Field label="Plan (tên)">
+                  <input value={form.plan} onChange={e => setForm({...form, plan: e.target.value})}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 rounded-lg text-sm text-gray-900 dark:text-zinc-100" />
+                </Field>
+                <Field label="Nhóm tối đa">
+                  <input type="number" min="0" value={form.maxGroups} onChange={e => setForm({...form, maxGroups: Number(e.target.value)})}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 rounded-lg text-sm text-gray-900 dark:text-zinc-100" />
+                </Field>
+                <Field label="Msg/tháng">
+                  <input type="number" min="0" value={form.maxMessagesPerMonth} onChange={e => setForm({...form, maxMessagesPerMonth: Number(e.target.value)})}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 rounded-lg text-sm text-gray-900 dark:text-zinc-100" />
+                </Field>
+                <Field label="Board viewers">
+                  <input type="number" min="0" value={form.maxBoardViewers} onChange={e => setForm({...form, maxBoardViewers: Number(e.target.value)})}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 rounded-lg text-sm text-gray-900 dark:text-zinc-100" />
+                </Field>
+                <Field label="Sync depth/nhóm">
+                  <input type="number" min="0" value={form.maxHistorySyncDepth} onChange={e => setForm({...form, maxHistorySyncDepth: Number(e.target.value)})}
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 rounded-lg text-sm text-gray-900 dark:text-zinc-100" />
+                </Field>
+                <Field label="Đã dùng tháng này">
+                  <p className="px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 tabular-nums">{tenant.messagesThisMonth.toLocaleString('vi-VN')}</p>
+                </Field>
               </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Plan (tên)">
-                <input
-                  value={form.plan}
-                  onChange={(e) => setForm({ ...form, plan: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 rounded-lg text-sm text-gray-900 dark:text-zinc-100"
-                  placeholder="free / basic / pro..."
-                />
-              </Field>
-              <Field label="Nhóm tối đa (0=∞)">
-                <input
-                  type="number" min="0"
-                  value={form.maxGroups}
-                  onChange={(e) => setForm({ ...form, maxGroups: Number(e.target.value) })}
-                  className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 rounded-lg text-sm text-gray-900 dark:text-zinc-100"
-                />
-              </Field>
-              <Field label="Msg/tháng (0=∞)">
-                <input
-                  type="number" min="0"
-                  value={form.maxMessagesPerMonth}
-                  onChange={(e) => setForm({ ...form, maxMessagesPerMonth: Number(e.target.value) })}
-                  className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 rounded-lg text-sm text-gray-900 dark:text-zinc-100"
-                />
-              </Field>
-              <Field label="Board viewers (0=∞)">
-                <input
-                  type="number" min="0"
-                  value={form.maxBoardViewers}
-                  onChange={(e) => setForm({ ...form, maxBoardViewers: Number(e.target.value) })}
-                  className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 rounded-lg text-sm text-gray-900 dark:text-zinc-100"
-                />
-              </Field>
-              <Field label="Đã dùng tháng này">
-                <p className="px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 tabular-nums">
-                  {tenant.messagesThisMonth.toLocaleString('vi-VN')}
-                </p>
-              </Field>
-            </div>
+            </details>
           </Section>
 
           {/* Contact */}

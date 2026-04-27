@@ -129,6 +129,47 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
       }).catch(() => undefined)
     }
 
+    // Auto-sync history on first connect
+    // Runs once: checks lastAutoSyncAt — if null or > 24h ago, trigger background sync
+    if (userId) {
+      const tenantFull = await db.tenant.findUnique({
+        where: { id: tenantId },
+        select: { maxHistorySyncDepth: true, lastAutoSyncAt: true } as const,
+      })
+      const now = Date.now()
+      const lastSync = tenantFull?.lastAutoSyncAt?.getTime() ?? 0
+      const needsSync = tenantFull && (
+        !tenantFull.lastAutoSyncAt ||
+        now - lastSync > 24 * 60 * 60 * 1000 // re-sync if > 24h (e.g. after reconnect)
+      )
+      if (needsSync && tenantFull && tenantFull.maxHistorySyncDepth > 0) {
+        // Mark sync started immediately to prevent parallel runs
+        await db.tenant.update({
+          where: { id: tenantId },
+          data: { lastAutoSyncAt: new Date() } as any,
+        }).catch(() => undefined)
+
+        // Fire-and-forget background sync
+        setImmediate(async () => {
+          try {
+            const { syncZaloGroupHistory } = await import('../services/zalo-sync.js')
+            const groups = await db.group.findMany({
+              where: { tenantId, channelType: 'ZALO', monitorEnabled: true },
+              orderBy: { lastMessageAt: 'desc' },
+              take: 50,
+              select: { id: true, name: true },
+            })
+            for (const g of groups) {
+              try {
+                await syncZaloGroupHistory(tenantId, g.id, tenantFull.maxHistorySyncDepth)
+              } catch { /* ignore individual group errors */ }
+              await new Promise(r => setTimeout(r, 500)) // rate limit
+            }
+          } catch { /* silently fail */ }
+        })
+      }
+    }
+
     return reply.status(200).send({ ok: true, messageId: message.id })
   })
 }

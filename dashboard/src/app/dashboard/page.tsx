@@ -7,6 +7,14 @@ import { LABEL_CFG, formatRelative } from '@/lib/format'
 import { DigestModal } from '@/components/dashboard/DigestModal'
 import { TrendChart } from '@/components/dashboard/TrendChart'
 
+type TenantInfo = {
+  plan: string
+  maxGroups: number
+  maxMessagesPerMonth: number
+  maxBoardViewers: number
+  messagesThisMonth: number
+}
+
 type Overview = {
   stats: {
     totalGroups: number
@@ -35,6 +43,7 @@ export default function OverviewPage() {
   const [installCmd, setInstallCmd] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [zaloConnected, setZaloConnected] = useState<boolean | null>(null)
+  const [tenantInfo, setTenantInfo] = useState<TenantInfo | null>(null)
 
   const load = () => api<Overview>('/api/stats/overview').then(setData).catch(() => undefined)
 
@@ -47,6 +56,8 @@ export default function OverviewPage() {
     api<{ connected: boolean; containerRunning: boolean }>('/api/zalo/connection-status')
       .then(s => setZaloConnected(s.connected || s.containerRunning))
       .catch(() => setZaloConnected(false))
+    // Fetch tenant info for plan card
+    api<TenantInfo>('/api/tenants/current').then(setTenantInfo).catch(() => undefined)
 
     const close = connectWebSocket((event) => {
       if (event === 'message:new' || event === 'alert:new' || event === 'analysis:result') {
@@ -122,6 +133,8 @@ export default function OverviewPage() {
       </div>
 
       {showDigest && <DigestModal onClose={() => setShowDigest(false)} />}
+
+      {tenantInfo && <PlanCard tenant={tenantInfo} groupCount={data?.stats.totalGroups ?? 0} />}
 
       {/* Stats Grid - iOS widget style */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6">
@@ -228,6 +241,94 @@ export default function OverviewPage() {
           })}
         </div>
       </div>
+    </div>
+  )
+}
+
+function PlanCard({ tenant, groupCount }: { tenant: TenantInfo; groupCount: number }) {
+  const [syncing, setSyncing] = useState(false)
+  const [syncDone, setSyncDone] = useState(false)
+
+  async function triggerSync() {
+    setSyncing(true)
+    try {
+      await api('/api/zalo/sync-all-history', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ groups: 30, limit: 100 }) })
+      setSyncDone(true)
+      setTimeout(() => setSyncDone(false), 3000)
+    } finally { setSyncing(false) }
+  }
+
+  const msgPct = tenant.maxMessagesPerMonth > 0 ? Math.min(100, (tenant.messagesThisMonth / tenant.maxMessagesPerMonth) * 100) : 0
+  const grpPct = tenant.maxGroups > 0 ? Math.min(100, (groupCount / tenant.maxGroups) * 100) : 0
+
+  const PLAN_COLORS: Record<string, string> = {
+    free: 'bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-400',
+    starter: 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400',
+    basic: 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400',
+    pro: 'bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400',
+    business: 'bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-400',
+    enterprise: 'bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400',
+  }
+
+  return (
+    <div className="bg-white dark:bg-zinc-900 dark:ring-1 dark:ring-white/5 rounded-2xl p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] mb-5">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Gói dịch vụ</h3>
+          <span className={`text-xs px-2 py-0.5 rounded-full font-semibold uppercase ${PLAN_COLORS[tenant.plan] ?? PLAN_COLORS.free}`}>
+            {tenant.plan}
+          </span>
+        </div>
+        <button
+          onClick={triggerSync}
+          disabled={syncing}
+          className="text-xs px-3 py-1.5 bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg font-medium transition-colors disabled:opacity-50"
+        >
+          {syncDone ? '✓ Đã sync' : syncing ? 'Đang sync...' : '🔄 Sync lịch sử'}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {/* Messages usage */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-gray-500 dark:text-zinc-400">Tin nhắn tháng này</span>
+            <span className="text-xs font-medium text-gray-700 dark:text-zinc-300 tabular-nums">
+              {tenant.messagesThisMonth.toLocaleString('vi-VN')}
+              {tenant.maxMessagesPerMonth > 0 && <span className="text-gray-400">/{tenant.maxMessagesPerMonth.toLocaleString('vi-VN')}</span>}
+            </span>
+          </div>
+          <div className="h-1.5 bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${msgPct > 90 ? 'bg-red-500' : msgPct > 70 ? 'bg-amber-500' : 'bg-blue-500'}`}
+              style={{ width: tenant.maxMessagesPerMonth > 0 ? `${msgPct}%` : '0%' }}
+            />
+          </div>
+        </div>
+
+        {/* Groups usage */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-gray-500 dark:text-zinc-400">Nhóm đang theo dõi</span>
+            <span className="text-xs font-medium text-gray-700 dark:text-zinc-300 tabular-nums">
+              {groupCount}
+              {tenant.maxGroups > 0 && <span className="text-gray-400">/{tenant.maxGroups}</span>}
+            </span>
+          </div>
+          <div className="h-1.5 bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${grpPct > 90 ? 'bg-red-500' : grpPct > 70 ? 'bg-amber-500' : 'bg-green-500'}`}
+              style={{ width: tenant.maxGroups > 0 ? `${grpPct}%` : '0%' }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {tenant.maxMessagesPerMonth > 0 && msgPct > 80 && (
+        <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+          ⚠️ Đã dùng {Math.round(msgPct)}% quota tin nhắn tháng này.
+        </p>
+      )}
     </div>
   )
 }

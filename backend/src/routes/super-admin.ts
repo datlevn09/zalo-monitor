@@ -57,6 +57,7 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
       maxGroups: t.maxGroups,
       maxMessagesPerMonth: t.maxMessagesPerMonth,
       maxBoardViewers: t.maxBoardViewers,
+      maxHistorySyncDepth: t.maxHistorySyncDepth,
       messagesThisMonth: t.messagesThisMonth,
       usageResetAt: t.usageResetAt,
       stats: {
@@ -126,6 +127,7 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
       maxGroups?: number
       maxMessagesPerMonth?: number
       maxBoardViewers?: number
+      maxHistorySyncDepth?: number
       contactName?: string
       contactPhone?: string
       contactEmail?: string
@@ -143,6 +145,7 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
         ...(body.maxGroups !== undefined ? { maxGroups: body.maxGroups } : {}),
         ...(body.maxMessagesPerMonth !== undefined ? { maxMessagesPerMonth: body.maxMessagesPerMonth } : {}),
         ...(body.maxBoardViewers !== undefined ? { maxBoardViewers: body.maxBoardViewers } : {}),
+        ...(body.maxHistorySyncDepth !== undefined ? { maxHistorySyncDepth: body.maxHistorySyncDepth } : {}),
         ...(body.contactName !== undefined ? { contactName: body.contactName } : {}),
         ...(body.contactPhone !== undefined ? { contactPhone: body.contactPhone } : {}),
         ...(body.contactEmail !== undefined ? { contactEmail: body.contactEmail } : {}),
@@ -244,7 +247,7 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
         users: { select: { id: true, name: true, email: true, role: true, createdAt: true } },
         _count: { select: { groups: true, users: true, customers: true, alerts: true } },
       },
-    })
+    }) as any
     if (!tenant) return reply.status(404).send({ error: 'Tenant not found' })
 
     // Groups by channel type
@@ -256,7 +259,7 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
 
     // Hosting mode: có licenseKey → self-hosted, không có → SaaS (chạy trên NAS/VPS của anh)
     const hostingMode = tenant.licenseKey ? 'self-hosted' : 'saas'
-    const owner = tenant.users.find(u => u.role === 'OWNER')
+    const owner = tenant.users.find((u: any) => u.role === 'OWNER')
 
     return {
       id: tenant.id,
@@ -277,6 +280,7 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
       maxGroups: tenant.maxGroups,
       maxMessagesPerMonth: tenant.maxMessagesPerMonth,
       maxBoardViewers: tenant.maxBoardViewers,
+      maxHistorySyncDepth: tenant.maxHistorySyncDepth,
       messagesThisMonth: tenant.messagesThisMonth,
       usageResetAt: tenant.usageResetAt,
       enabledChannels: tenant.enabledChannels,

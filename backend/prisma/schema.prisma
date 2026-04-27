@@ -54,6 +54,11 @@ model Tenant {
   // License: max viewers per board (0 = unlimited)
   maxBoardViewers Int @default(0)
 
+  // Auto-sync depth: số tin/nhóm khi lần đầu hook kết nối (0 = không sync)
+  // Trigger 1 lần sau khi webhook lần đầu đến hoặc sau khi QR scan xong
+  maxHistorySyncDepth Int @default(50)
+  lastAutoSyncAt      DateTime?            // ghi lại lần cuối auto-sync chạy
+
   users                User[]
   groups               Group[]
   notificationChannels NotificationChannel[]

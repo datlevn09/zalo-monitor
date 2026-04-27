@@ -61,6 +61,16 @@ export default function LandingPage() {
             </span>
           </div>
 
+          {/* Nav Links */}
+          <div className="flex items-center gap-1">
+            <Link
+              href="/pricing"
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-white/10 rounded-xl transition-colors"
+            >
+              Bảng giá
+            </Link>
+          </div>
+
           {/* Actions */}
           <div className="flex items-center gap-2">
             <ThemeToggle />
@@ -111,15 +121,23 @@ export default function LandingPage() {
               </svg>
             </Link>
           ) : (
-            <Link
-              href="/login"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold text-base rounded-2xl shadow-lg shadow-blue-500/25 transition-all hover:shadow-blue-500/40 hover:-translate-y-0.5"
-            >
-              Bắt đầu
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-              </svg>
-            </Link>
+            <>
+              <Link
+                href="/register"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold text-base rounded-2xl shadow-lg shadow-blue-500/25 transition-all hover:shadow-blue-500/40 hover:-translate-y-0.5"
+              >
+                Đăng ký dùng thử
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                </svg>
+              </Link>
+              <Link
+                href="/login"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 text-blue-600 dark:text-blue-400 font-semibold text-base border border-gray-200 dark:border-white/10 rounded-2xl transition-all"
+              >
+                Đăng nhập
+              </Link>
+            </>
           )}
         </div>
       </section>
