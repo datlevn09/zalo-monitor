@@ -10,11 +10,11 @@ import { db } from './db.js'
 
 const OPENCLAW_CONTAINER = process.env.OPENCLAW_CONTAINER ?? 'openclaw'
 
-function exec(cmd: string, timeoutMs = 60_000): string {
+function exec(cmd: string, timeoutMs = 60_000, maxBufferMB = 50): string {
   return execSync(`docker exec ${OPENCLAW_CONTAINER} ${cmd}`, {
     encoding: 'utf-8',
     timeout: timeoutMs,
-    maxBuffer: 1024 * 1024 * 20,
+    maxBuffer: 1024 * 1024 * maxBufferMB,
   })
 }
 
@@ -130,11 +130,15 @@ export async function syncZaloGroupHistory(tenantId: string, groupId: string, li
   })
   if (!group) throw new Error('Group not found')
 
-  // openzca msg recent -g -n 50 --json <threadId>
+  // openzca msg recent -g -n N --json <threadId>
+  // Timeout scale theo depth: 30s base + 10s mỗi 100 tin, tối đa 5 phút
+  const timeoutMs = Math.min(5 * 60_000, 30_000 + Math.floor(limit / 100) * 10_000)
+  // Buffer: ~1KB/tin, thêm 20% dự phòng, tối thiểu 50MB
+  const bufferMB = Math.max(50, Math.ceil(limit * 1.2 / 1000))
   const cmd = `openzca msg recent -g -n ${limit} --json ${group.externalId}`
   let raw: string
   try {
-    raw = exec(cmd, 30_000)
+    raw = exec(cmd, timeoutMs, bufferMB)
   } catch (err: any) {
     throw new Error(`openzca failed: ${err.message}`)
   }
