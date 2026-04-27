@@ -1,14 +1,28 @@
 {$DOMAIN} {
-    # Tự động HTTPS qua Let's Encrypt
     encode gzip zstd
 
-    # Dashboard (Next.js)
-    reverse_proxy /api/* backend:3001
-    reverse_proxy /webhook/* backend:3001
-    reverse_proxy /ws backend:3001
+    # WebSocket (socket.io)
+    @ws {
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
+    handle @ws {
+        reverse_proxy backend:3001
+    }
 
-    # Các route còn lại → dashboard
-    reverse_proxy dashboard:3000
+    # Backend: API + webhook + health
+    handle /api/* {
+        reverse_proxy backend:3001
+    }
+    handle /webhook/* {
+        reverse_proxy backend:3001
+    }
+    handle /health {
+        reverse_proxy backend:3001
+    }
+
+    # Dashboard: tất cả còn lại
+    handle {
+        reverse_proxy dashboard:3000
+    }
 }
-
-# HTTP → HTTPS redirect (tự động bởi Caddy)

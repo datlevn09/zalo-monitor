@@ -26,10 +26,13 @@ export async function saApi<T = any>(path: string, init?: RequestInit): Promise<
       ...(init?.headers ?? {}),
     },
   })
-  if (res.status === 401) {
+  if (res.status === 401 || res.status === 403) {
     clearSuperAdminToken()
     throw new Error('UNAUTHORIZED')
   }
-  if (!res.ok) throw new Error(`API ${path} failed: ${res.status}`)
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body?.message ?? body?.error ?? `API ${path} failed: ${res.status}`)
+  }
   return res.json()
 }

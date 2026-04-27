@@ -10,6 +10,8 @@ import {
 
 type TenantStatus = 'active' | 'trial' | 'expired' | 'suspended'
 
+type TenantUser = { id: string; name: string; email: string | null; role: string; createdAt: string }
+
 type Tenant = {
   id: string
   name: string
@@ -30,8 +32,14 @@ type Tenant = {
   messagesThisMonth: number
   usageResetAt: string
   setupDone: boolean
-  stats: { groups: number; users: number; customers: number }
+  stats: { groups: number; users: number; customers: number; alerts?: number }
   status: TenantStatus
+  // Loaded from detail endpoint
+  hostingMode?: 'self-hosted' | 'saas'
+  owner?: TenantUser | null
+  users?: TenantUser[]
+  groupsByChannel?: { channel: string; count: number }[]
+  enabledChannels?: string[]
 }
 
 type Metrics = {
@@ -100,9 +108,9 @@ export default function SuperAdminPage() {
       await saApi('/api/super-admin/metrics')
       setAuthed(true)
       load()
-    } catch {
+    } catch (e: any) {
       clearSuperAdminToken()
-      setTokenError('Token không hợp lệ')
+      setTokenError(e.message === 'UNAUTHORIZED' ? 'Token không hợp lệ' : `Lỗi server: ${e.message}`)
     }
   }
 
@@ -247,15 +255,20 @@ export default function SuperAdminPage() {
                 <div className="flex items-center gap-3">
                   <div className={`w-2 h-2 rounded-full ${cfg.dot}`} />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100 truncate">{t.name}</p>
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${cfg.color}`}>{cfg.label}</span>
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-400 font-medium uppercase">{t.plan}</span>
+                      {t.licenseKey
+                        ? <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-medium">Self-hosted</span>
+                        : <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-teal-100 dark:bg-teal-500/20 text-teal-700 dark:text-teal-300 font-medium">SaaS</span>
+                      }
                     </div>
                     <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5 truncate">
                       {t.contactName ? `${t.contactName} · ` : ''}
-                      {t.contactPhone ?? ''}
-                      {t.licenseExpiresAt ? ` · hạn ${new Date(t.licenseExpiresAt).toLocaleDateString('vi-VN')}` : ' · chưa có license'}
+                      {t.contactPhone ? `${t.contactPhone} · ` : ''}
+                      {t.stats.users} người dùng
+                      {t.licenseExpiresAt ? ` · hạn ${new Date(t.licenseExpiresAt).toLocaleDateString('vi-VN')}` : t.licenseKey ? ' · vĩnh viễn' : ' · dùng thử'}
                     </p>
                   </div>
                   <div className="text-right text-xs text-gray-500 dark:text-zinc-400 tabular-nums hidden sm:block">
@@ -302,7 +315,7 @@ function Stat({ emoji, label, value, tint }: { emoji: string; label: string; val
 }
 
 function TenantDrawer({
-  tenant,
+  tenant: initialTenant,
   onClose,
   onChanged,
 }: {
@@ -310,56 +323,77 @@ function TenantDrawer({
   onClose: () => void
   onChanged: (t: Tenant) => void
 }) {
+  const [tenant, setTenant] = useState<Tenant>(initialTenant)
+  const [detailLoading, setDetailLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [showNewKeyModal, setShowNewKeyModal] = useState(false)
+  const [newKey, setNewKey] = useState('')
   const [form, setForm] = useState({
-    plan: tenant.plan,
-    maxGroups: tenant.maxGroups,
-    maxMessagesPerMonth: tenant.maxMessagesPerMonth,
-    contactName: tenant.contactName ?? '',
-    contactPhone: tenant.contactPhone ?? '',
-    contactEmail: tenant.contactEmail ?? '',
-    notes: tenant.notes ?? '',
+    plan: initialTenant.plan,
+    maxGroups: initialTenant.maxGroups,
+    maxMessagesPerMonth: initialTenant.maxMessagesPerMonth,
+    contactName: initialTenant.contactName ?? '',
+    contactPhone: initialTenant.contactPhone ?? '',
+    contactEmail: initialTenant.contactEmail ?? '',
+    notes: initialTenant.notes ?? '',
   })
-  const [renewMonths, setRenewMonths] = useState(1)
+  const [expiryDate, setExpiryDate] = useState(
+    initialTenant.licenseExpiresAt ? new Date(initialTenant.licenseExpiresAt).toISOString().split('T')[0] : ''
+  )
+
+  useEffect(() => {
+    // Load detail info (owner, users, groupsByChannel, hosting mode)
+    saApi<Tenant>(`/api/super-admin/tenants/${initialTenant.id}`).then(detail => {
+      setTenant(detail)
+      setDetailLoading(false)
+    }).catch(() => setDetailLoading(false))
+  }, [initialTenant.id])
 
   async function saveInfo() {
     setBusy(true)
     try {
-      const updated = await saApi<Tenant>(`/api/super-admin/tenants/${tenant.id}`, {
+      await saApi(`/api/super-admin/tenants/${tenant.id}`, {
         method: 'PATCH',
         body: JSON.stringify(form),
       })
-      onChanged({ ...tenant, ...updated } as Tenant)
+      const updated = await saApi<Tenant>(`/api/super-admin/tenants/${tenant.id}`)
+      setTenant(updated)
+      onChanged(updated)
     } finally {
       setBusy(false)
     }
   }
 
-  async function renew() {
+  async function createNewKey() {
     setBusy(true)
     try {
-      const updated = await saApi<Tenant>(`/api/super-admin/tenants/${tenant.id}/license`, {
-        method: 'POST',
-        body: JSON.stringify({ months: renewMonths }),
-      })
-      onChanged({ ...tenant, ...updated } as Tenant)
+      const body: any = { plan: form.plan }
+      if (expiryDate) {
+        body.expiresAt = new Date(expiryDate).toISOString()
+      }
+      const response = await saApi<{ licenseKey: string; plan: string; licenseExpiresAt: string }>(
+        `/api/super-admin/tenants/${tenant.id}/license`,
+        { method: 'POST', body: JSON.stringify(body) }
+      )
+      setNewKey(response.licenseKey)
+      setShowNewKeyModal(true)
+      // Refresh tenant detail
+      const updated = await saApi<Tenant>(`/api/super-admin/tenants/${tenant.id}`)
+      setTenant(updated)
+      onChanged(updated)
     } finally {
       setBusy(false)
     }
   }
 
-  async function regenerateKey() {
-    if (!confirm('Tạo license key mới? Key cũ sẽ mất hiệu lực.')) return
+  async function revokeKey() {
+    if (!confirm('Thu hồi license? Tenant sẽ bị tạm ngưng.')) return
     setBusy(true)
     try {
-      const updated = await saApi<Tenant>(`/api/super-admin/tenants/${tenant.id}/license`, {
-        method: 'POST',
-        body: JSON.stringify({ regenerate: true }),
-      })
-      onChanged({ ...tenant, ...updated } as Tenant)
-    } finally {
-      setBusy(false)
-    }
+      await saApi(`/api/super-admin/tenants/${tenant.id}/license/revoke`, { method: 'POST' })
+      const updated = await saApi<Tenant>(`/api/super-admin/tenants/${tenant.id}`)
+      setTenant(updated); onChanged(updated)
+    } finally { setBusy(false) }
   }
 
   async function suspend() {
@@ -367,39 +401,32 @@ function TenantDrawer({
     if (reason === null) return
     setBusy(true)
     try {
-      const updated = await saApi<Tenant>(`/api/super-admin/tenants/${tenant.id}/suspend`, {
+      await saApi(`/api/super-admin/tenants/${tenant.id}/suspend`, {
         method: 'POST',
         body: JSON.stringify({ reason }),
       })
-      onChanged({ ...tenant, ...updated } as Tenant)
-    } finally {
-      setBusy(false)
-    }
+      const updated = await saApi<Tenant>(`/api/super-admin/tenants/${tenant.id}`)
+      setTenant(updated); onChanged(updated)
+    } finally { setBusy(false) }
   }
 
   async function activate() {
     setBusy(true)
     try {
-      const updated = await saApi<Tenant>(`/api/super-admin/tenants/${tenant.id}/activate`, {
-        method: 'POST',
-      })
-      onChanged({ ...tenant, ...updated } as Tenant)
-    } finally {
-      setBusy(false)
-    }
+      await saApi(`/api/super-admin/tenants/${tenant.id}/activate`, { method: 'POST' })
+      const updated = await saApi<Tenant>(`/api/super-admin/tenants/${tenant.id}`)
+      setTenant(updated); onChanged(updated)
+    } finally { setBusy(false) }
   }
 
   async function resetUsage() {
     if (!confirm('Reset counter tin nhắn tháng về 0?')) return
     setBusy(true)
     try {
-      const updated = await saApi<Tenant>(`/api/super-admin/tenants/${tenant.id}/reset-usage`, {
-        method: 'POST',
-      })
-      onChanged({ ...tenant, ...updated } as Tenant)
-    } finally {
-      setBusy(false)
-    }
+      await saApi(`/api/super-admin/tenants/${tenant.id}/reset-usage`, { method: 'POST' })
+      const updated = await saApi<Tenant>(`/api/super-admin/tenants/${tenant.id}`)
+      setTenant(updated); onChanged(updated)
+    } finally { setBusy(false) }
   }
 
   async function del() {
@@ -412,9 +439,7 @@ function TenantDrawer({
         body: JSON.stringify({ confirm: 'DELETE' }),
       })
       onClose()
-    } finally {
-      setBusy(false)
-    }
+    } finally { setBusy(false) }
   }
 
   return (
@@ -436,13 +461,96 @@ function TenantDrawer({
             <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-zinc-400 hover:bg-gray-200 dark:hover:bg-white/15">×</button>
           </div>
 
+          {/* Overview — hosting mode, owner, team, channels */}
+          <Section title="📋 Tổng quan">
+            {detailLoading ? (
+              <p className="text-xs text-gray-400 dark:text-zinc-500">Đang tải...</p>
+            ) : (
+              <div className="space-y-2.5">
+                {/* Hosting mode */}
+                <Row label="Môi trường chạy">
+                  {tenant.hostingMode === 'self-hosted'
+                    ? <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-medium">🖥 Self-hosted (VPS khách)</span>
+                    : <span className="text-xs px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-500/20 text-teal-700 dark:text-teal-300 font-medium">☁️ SaaS (VPS/NAS của anh)</span>
+                  }
+                </Row>
+                {/* Owner */}
+                <Row label="Owner">
+                  {tenant.owner
+                    ? <span className="text-sm text-gray-900 dark:text-zinc-100">{tenant.owner.name} {tenant.owner.email ? `· ${tenant.owner.email}` : ''}</span>
+                    : <span className="text-xs text-gray-400 dark:text-zinc-500">Chưa có</span>
+                  }
+                </Row>
+                {/* Team breakdown */}
+                <Row label="Nhân viên">
+                  <div className="flex gap-1.5">
+                    {['OWNER','MANAGER','STAFF'].map(role => {
+                      const count = (tenant.users ?? []).filter(u => u.role === role).length
+                      if (!count) return null
+                      const roleLabel: Record<string,string> = { OWNER:'👑', MANAGER:'👔', STAFF:'👤' }
+                      return (
+                        <span key={role} className="text-xs bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded text-gray-600 dark:text-zinc-400">
+                          {roleLabel[role]} {count}
+                        </span>
+                      )
+                    })}
+                    <span className="text-xs text-gray-500 dark:text-zinc-400">({(tenant.users ?? []).length} tổng)</span>
+                  </div>
+                </Row>
+                {/* Groups by channel */}
+                <Row label="Nhóm theo kênh">
+                  {(tenant.groupsByChannel ?? []).length === 0
+                    ? <span className="text-xs text-gray-400 dark:text-zinc-500">Chưa có nhóm</span>
+                    : (
+                      <div className="flex gap-1.5">
+                        {(tenant.groupsByChannel ?? []).map(g => {
+                          const chIcon: Record<string,string> = { ZALO:'💬', TELEGRAM:'✈️', LARK:'🪶' }
+                          return (
+                            <span key={g.channel} className="text-xs bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded text-gray-600 dark:text-zinc-400">
+                              {chIcon[g.channel] ?? g.channel} {g.count}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )
+                  }
+                </Row>
+                {/* Enabled channels */}
+                <Row label="Kênh bật">
+                  <span className="text-xs text-gray-700 dark:text-zinc-300">
+                    {(tenant.enabledChannels ?? []).join(', ') || '—'}
+                  </span>
+                </Row>
+                {/* Setup status */}
+                <Row label="Setup">
+                  {tenant.setupDone
+                    ? <span className="text-xs text-green-600 dark:text-green-400">✓ Hoàn tất</span>
+                    : <span className="text-xs text-amber-600 dark:text-amber-400">⏳ Chưa xong</span>
+                  }
+                </Row>
+              </div>
+            )}
+          </Section>
+
           {/* License */}
           <Section title="🔑 Giấy phép">
-            <div className="space-y-2.5">
+            <div className="space-y-3">
               <Row label="License key">
-                <code className="text-xs bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-zinc-100 px-2 py-0.5 rounded font-mono">
-                  {tenant.licenseKey ?? '— chưa cấp —'}
-                </code>
+                {tenant.licenseKey ? (
+                  <div className="flex gap-2">
+                    <code className="text-xs bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-zinc-100 px-2 py-0.5 rounded font-mono flex-1">
+                      {tenant.licenseKey.substring(0, 8)}...{tenant.licenseKey.substring(tenant.licenseKey.length - 8)}
+                    </code>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(tenant.licenseKey!)}
+                      className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 rounded text-gray-700 dark:text-zinc-300"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                ) : (
+                  <span className="text-xs text-gray-500 dark:text-zinc-400">— chưa cấp —</span>
+                )}
               </Row>
               <Row label="Hạn sử dụng">
                 <span className="text-sm text-gray-900 dark:text-zinc-100">
@@ -451,23 +559,31 @@ function TenantDrawer({
                     : 'Vĩnh viễn / chưa cấp'}
                 </span>
               </Row>
-              <div className="flex gap-2 pt-1">
-                <select
-                  value={renewMonths}
-                  onChange={(e) => setRenewMonths(Number(e.target.value))}
-                  className="text-xs bg-gray-50 dark:bg-white/10 rounded-lg px-2 py-1.5 text-gray-700 dark:text-zinc-300"
-                >
-                  <option value={1}>+1 tháng</option>
-                  <option value={3}>+3 tháng</option>
-                  <option value={6}>+6 tháng</option>
-                  <option value={12}>+12 tháng</option>
-                </select>
-                <button onClick={renew} disabled={busy} className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg disabled:opacity-50">
-                  Gia hạn
-                </button>
-                <button onClick={regenerateKey} disabled={busy} className="px-3 py-1.5 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 text-gray-700 dark:text-zinc-300 text-xs font-medium rounded-lg">
-                  Cấp key mới
-                </button>
+              <div className="pt-2 space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    value={expiryDate}
+                    onChange={(e) => setExpiryDate(e.target.value)}
+                    className="text-xs bg-gray-50 dark:bg-white/10 rounded-lg px-2 py-1.5 text-gray-700 dark:text-zinc-300 flex-1"
+                  />
+                  <button
+                    onClick={createNewKey}
+                    disabled={busy}
+                    className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg disabled:opacity-50"
+                  >
+                    Tạo key mới
+                  </button>
+                </div>
+                {tenant.licenseKey && (
+                  <button
+                    onClick={revokeKey}
+                    disabled={busy}
+                    className="w-full px-3 py-1.5 bg-red-100 dark:bg-red-500/15 hover:bg-red-200 dark:hover:bg-red-500/25 text-red-700 dark:text-red-400 text-xs font-medium rounded-lg"
+                  >
+                    Thu hồi license
+                  </button>
+                )}
               </div>
             </div>
           </Section>
@@ -577,6 +693,41 @@ function TenantDrawer({
           </div>
         </div>
       </div>
+
+      {/* New key modal */}
+      {showNewKeyModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-60 flex items-center justify-center p-4" onClick={() => setShowNewKeyModal(false)}>
+          <div
+            className="bg-white dark:bg-zinc-900 dark:ring-1 dark:ring-white/10 rounded-3xl w-full max-w-md shadow-2xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-gray-900 dark:text-zinc-100 mb-2">🔑 License key được tạo</h3>
+            <p className="text-sm text-gray-600 dark:text-zinc-400 mb-4">
+              Sao chép key dưới đây và gửi cho khách hàng:
+            </p>
+            <div className="bg-gray-50 dark:bg-white/10 rounded-xl p-4 mb-4 font-mono text-sm break-all text-gray-900 dark:text-zinc-100">
+              {newKey}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(newKey)
+                  alert('Copied!')
+                }}
+                className="flex-1 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg"
+              >
+                Copy
+              </button>
+              <button
+                onClick={() => setShowNewKeyModal(false)}
+                className="flex-1 py-2 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 text-gray-700 dark:text-zinc-300 text-sm font-medium rounded-lg"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

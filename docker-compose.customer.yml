@@ -1,12 +1,9 @@
 version: '3.9'
 
-# NAS deploy — dùng Synology Reverse Proxy hoặc DSM Certificates
-# Bước 1: set DOMAIN trong .env
-# Bước 2: docker compose -f docker-compose.nas.yml up -d
-# Bước 3: Trong DSM → Application Portal → Reverse Proxy → thêm 2 rule:
-#   datthongdong.com → http://localhost:3000  (dashboard)
-#   datthongdong.com/api → http://localhost:3001
-#   datthongdong.com/webhook → http://localhost:3001
+# Self-hosted customer deployment — use Caddy for HTTPS termination
+# Bước 1: set DOMAIN và LICENSE_KEY trong .env
+# Bước 2: docker compose -f docker-compose.customer.yml up -d
+# Caddyfile tự động lấy TLS từ Let's Encrypt
 
 services:
   postgres:
@@ -36,8 +33,6 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     restart: unless-stopped
-    ports:
-      - "3001:3001"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-zalomonitor}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-zalomonitor}
       REDIS_URL: redis://redis:6379
@@ -49,30 +44,49 @@ services:
       ADMIN_NAME: ${ADMIN_NAME:-Support}
       ADMIN_ZALO: ${ADMIN_ZALO:-}
       ADMIN_TELEGRAM: ${ADMIN_TELEGRAM:-}
-      PUBLIC_BACKEND_URL: https://api.${API_DOMAIN:-datthongdong.com}
+      PUBLIC_BACKEND_URL: https://api.${DOMAIN:?must be set}
       DASHBOARD_URL: https://${DOMAIN:?must be set}
       NODE_ENV: production
       OPENCLAW_CONTAINER: ${OPENCLAW_CONTAINER:-openclaw}
+      LICENSE_KEY: ${LICENSE_KEY:?must be set}
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_started }
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./docker-compose.customer.yml:/app/docker-compose.customer.yml:ro
+      - ./.env.customer.example:/app/.env.customer.example:ro
 
   dashboard:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: https://api.${API_DOMAIN:-datthongdong.com}
-        NEXT_PUBLIC_WS_URL:  wss://api.${API_DOMAIN:-datthongdong.com}
+        NEXT_PUBLIC_API_URL: https://api.${DOMAIN:?must be set}
+        NEXT_PUBLIC_WS_URL:  wss://api.${DOMAIN:?must be set}
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: https://api.${DOMAIN:?must be set}
+      NEXT_PUBLIC_WS_URL:  wss://api.${DOMAIN:?must be set}
+
+  caddy:
+    image: caddy:2-alpine
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     environment:
-      NEXT_PUBLIC_API_URL: https://api.${API_DOMAIN:-datthongdong.com}
-      NEXT_PUBLIC_WS_URL:  wss://api.${API_DOMAIN:-datthongdong.com}
+      DOMAIN: ${DOMAIN:?must be set}
+    depends_on:
+      - backend
+      - dashboard
 
 volumes:
   postgres_data:
   redis_data:
+  caddy_data:
+  caddy_config:

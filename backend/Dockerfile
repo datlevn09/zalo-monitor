@@ -21,3 +21,6 @@ COPY plugin/ /app/plugin/
 
 EXPOSE 3001
 CMD ["sh", "-c", "npx prisma db push --skip-generate --accept-data-loss 2>&1 | tail -5 && node dist/server.js"]
+
+# Note: Installation files (docker-compose.customer.yml, .env.customer.example, install/install.sh)
+# are mounted as volumes in docker-compose.customer.yml, not copied here

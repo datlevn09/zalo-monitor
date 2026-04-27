@@ -30,6 +30,8 @@ import { wsManager } from './services/websocket.js'
 import { registerScheduledJobs } from './services/scheduler.js'
 import { generateDigestForTenant } from './services/digest.js'
 import { startTelegramPoller } from './services/telegram-poller.js'
+import { validateLicense, getLicenseMode } from './services/license.js'
+import { installRoutes } from './routes/install.js'
 
 const app = Fastify({ logger: true })
 
@@ -50,6 +52,7 @@ app.get('/ws', { websocket: true }, (socket) => {
 })
 
 // Routes
+await app.register(installRoutes, { prefix: '/install' })
 await app.register(authRoutes,    { prefix: '/api/auth' })
 await app.register(setupRoutes,   { prefix: '/api/setup' })
 await app.register(webhookRoutes,     { prefix: '/webhook' })
@@ -85,6 +88,26 @@ app.post('/api/digest/trigger', async (req, reply) => {
 })
 
 const port = Number(process.env.PORT ?? 3001)
+
+// License check (self-hosted mode only)
+const licMode = getLicenseMode()
+if (licMode === 'self-hosted') {
+  const lic = await validateLicense()
+  if (!lic.valid) {
+    console.error(`❌ License không hợp lệ: ${lic.message}`)
+    console.error('   Kiểm tra LICENSE_KEY trong .env')
+    process.exit(1)
+  }
+  console.log(`✅ License OK (${lic.plan}) — self-hosted mode`)
+  // Re-validate every 24h
+  setInterval(async () => {
+    const r = await validateLicense()
+    if (!r.valid) console.warn(`⚠️  License validation failed: ${r.message}`)
+  }, 24 * 60 * 60 * 1000)
+} else {
+  console.log('ℹ️  Running in SaaS mode (no LICENSE_KEY)')
+}
+
 await app.listen({ port, host: '0.0.0.0' })
 console.log(`Backend running on port ${port}`)
 

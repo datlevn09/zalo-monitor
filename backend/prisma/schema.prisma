@@ -90,8 +90,12 @@ model User {
   monitorDMs   Boolean  @default(false)
   allowedDMIds String[] @default([])
 
+  // Board filter: nhóm muốn hiện trên dashboard. Trống = hiện tất cả.
+  pinnedGroupIds String[] @default([])
+
   tenant Tenant @relation(fields: [tenantId], references: [id])
   ownedGroups Group[] @relation("GroupOwner")
+  groupPermissions GroupPermission[]
 
   @@unique([tenantId, email])
   @@map("users")
@@ -157,6 +161,7 @@ model Group {
   ownerUser User?   @relation("GroupOwner", fields: [ownerUserId], references: [id])
   messages  Message[]
   alerts    Alert[]
+  permissions GroupPermission[]
 
   @@unique([tenantId, externalId, channelType])
   @@index([tenantId, ownerUserId])
@@ -424,4 +429,19 @@ model AlertRule {
   tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@map("alert_rules")
+}
+
+// ─── GroupPermission (many:many) — phân quyền nhóm cho nhân viên ──────────────
+model GroupPermission {
+  id       String @id @default(cuid())
+  tenantId String
+  groupId  String
+  userId   String
+
+  group  Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([tenantId, userId])
+  @@map("group_permissions")
 }

@@ -139,11 +139,16 @@ Link hết hạn sau 7 ngày.
     const { id } = req.params as { id: string }
     const user = await db.user.findFirst({ where: { id, tenantId } })
     if (!user) return reply.status(404).send({ error: 'Not found' })
-    return db.group.findMany({
-      where: { tenantId, ownerUserId: id },
-      orderBy: { lastMessageAt: 'desc' },
-      select: { id: true, name: true, channelType: true, lastMessageAt: true, _count: { select: { messages: true } } },
+
+    const perms = await db.groupPermission.findMany({
+      where: { tenantId, userId: id },
+      include: {
+        group: {
+          select: { id: true, name: true, channelType: true, lastMessageAt: true, _count: { select: { messages: true } } }
+        }
+      }
     })
+    return perms.map(p => p.group)
   })
 
   // PUT /api/team/:id/groups — gán danh sách nhóm cho thành viên (thay thế toàn bộ)
@@ -157,12 +162,48 @@ Link hết hạn sau 7 ngày.
     const user = await db.user.findFirst({ where: { id, tenantId } })
     if (!user) return reply.status(404).send({ error: 'Not found' })
 
-    // Bỏ tất cả nhóm cũ của user này
-    await db.group.updateMany({ where: { tenantId, ownerUserId: id }, data: { ownerUserId: null } })
-    // Gán nhóm mới
+    // Delete all existing permissions for this user
+    await db.groupPermission.deleteMany({ where: { tenantId, userId: id } })
+
+    // Create new permissions
     if (groupIds.length > 0) {
-      await db.group.updateMany({ where: { tenantId, id: { in: groupIds } }, data: { ownerUserId: id } })
+      await db.groupPermission.createMany({
+        data: groupIds.map(groupId => ({ tenantId, groupId, userId: id })),
+        skipDuplicates: true,
+      })
     }
     return { ok: true, assigned: groupIds.length }
+  })
+
+  // GET /api/team/permissions-matrix — all groups + all staff with permission status
+  app.get('/permissions-matrix', async (req, reply) => {
+    const tenantId = req.headers['x-tenant-id'] as string
+    const auth = req.authUser
+    if (auth?.role === 'STAFF') return reply.status(403).send({ error: 'Không đủ quyền' })
+
+    const [groups, users, perms] = await Promise.all([
+      db.group.findMany({
+        where: { tenantId },
+        select: { id: true, name: true, channelType: true },
+        orderBy: { name: 'asc' }
+      }),
+      db.user.findMany({
+        where: { tenantId },
+        select: { id: true, name: true, role: true },
+        orderBy: { createdAt: 'asc' }
+      }),
+      db.groupPermission.findMany({
+        where: { tenantId },
+        select: { userId: true, groupId: true }
+      }),
+    ])
+
+    const matrix: Record<string, string[]> = {}
+    for (const p of perms) {
+      if (!matrix[p.userId]) matrix[p.userId] = []
+      matrix[p.userId].push(p.groupId)
+    }
+
+    return { groups, users, matrix }
   })
 }

@@ -183,48 +183,6 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
     return updated
   })
 
-  // POST /api/super-admin/tenants/:id/license — cấp / gia hạn license
-  app.post('/tenants/:id/license', async (req, reply) => {
-    const { id } = req.params as { id: string }
-    const body = req.body as {
-      months?: number        // gia hạn thêm n tháng (tính từ hạn cũ hoặc now)
-      expiresAt?: string     // set cụ thể
-      regenerate?: boolean   // tạo key mới
-    }
-
-    const tenant = await db.tenant.findUnique({ where: { id } })
-    if (!tenant) return reply.status(404).send({ error: 'Tenant not found' })
-
-    let licenseExpiresAt = tenant.licenseExpiresAt
-    if (body.expiresAt !== undefined) {
-      licenseExpiresAt = body.expiresAt ? new Date(body.expiresAt) : null
-    } else if (body.months && body.months > 0) {
-      const base =
-        tenant.licenseExpiresAt && tenant.licenseExpiresAt > new Date()
-          ? tenant.licenseExpiresAt
-          : new Date()
-      const next = new Date(base)
-      next.setMonth(next.getMonth() + body.months)
-      licenseExpiresAt = next
-    }
-
-    const licenseKey =
-      body.regenerate || !tenant.licenseKey ? generateLicenseKey() : tenant.licenseKey
-
-    const updated = await db.tenant.update({
-      where: { id },
-      data: {
-        licenseKey,
-        licenseExpiresAt,
-        // Gia hạn → tự động bật lại nếu đang bị suspend do hết hạn
-        ...(licenseExpiresAt && licenseExpiresAt > new Date()
-          ? { active: true, suspendedReason: null }
-          : {}),
-      },
-    })
-    invalidateTenantCache(id)
-    return updated
-  })
 
   // POST /api/super-admin/tenants/:id/reset-usage — reset counter message/tháng
   app.post('/tenants/:id/reset-usage', async (req, reply) => {
@@ -259,6 +217,7 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
       }),
       db.alert.deleteMany({ where: { tenantId: id } }),
       db.message.deleteMany({ where: { group: { tenantId: id } } }),
+      db.groupPermission.deleteMany({ where: { tenantId: id } }),
       db.group.deleteMany({ where: { tenantId: id } }),
       db.deal.deleteMany({ where: { tenantId: id } }),
       db.customer.deleteMany({ where: { tenantId: id } }),
@@ -269,6 +228,131 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
       db.tenant.delete({ where: { id } }),
     ])
     return { ok: true }
+  })
+
+  // GET /api/super-admin/tenants/:id — chi tiết 1 tenant: owner, users, groups by channel
+  app.get('/tenants/:id', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const tenant = await db.tenant.findUnique({
+      where: { id },
+      include: {
+        users: { select: { id: true, name: true, email: true, role: true, createdAt: true } },
+        _count: { select: { groups: true, users: true, customers: true, alerts: true } },
+      },
+    })
+    if (!tenant) return reply.status(404).send({ error: 'Tenant not found' })
+
+    // Groups by channel type
+    const groupsByChannel = await db.group.groupBy({
+      by: ['channelType'],
+      where: { tenantId: id },
+      _count: { id: true },
+    })
+
+    // Hosting mode: có licenseKey → self-hosted, không có → SaaS (chạy trên NAS/VPS của anh)
+    const hostingMode = tenant.licenseKey ? 'self-hosted' : 'saas'
+    const owner = tenant.users.find(u => u.role === 'OWNER')
+
+    return {
+      id: tenant.id,
+      name: tenant.name,
+      slug: tenant.slug,
+      industry: tenant.industry,
+      plan: tenant.plan,
+      active: tenant.active,
+      suspendedReason: tenant.suspendedReason,
+      licenseKey: tenant.licenseKey,
+      licenseExpiresAt: tenant.licenseExpiresAt,
+      contactName: tenant.contactName,
+      contactPhone: tenant.contactPhone,
+      contactEmail: tenant.contactEmail,
+      notes: tenant.notes,
+      setupDone: tenant.setupDone,
+      createdAt: tenant.createdAt,
+      maxGroups: tenant.maxGroups,
+      maxMessagesPerMonth: tenant.maxMessagesPerMonth,
+      messagesThisMonth: tenant.messagesThisMonth,
+      usageResetAt: tenant.usageResetAt,
+      enabledChannels: tenant.enabledChannels,
+      hostingMode,
+      owner: owner ?? null,
+      users: tenant.users,
+      stats: {
+        groups: tenant._count.groups,
+        users: tenant._count.users,
+        customers: tenant._count.customers,
+        alerts: tenant._count.alerts,
+      },
+      groupsByChannel: groupsByChannel.map(g => ({ channel: g.channelType, count: g._count.id })),
+      status: computeStatus(tenant.active, tenant.licenseExpiresAt),
+    }
+  })
+
+  // GET /api/super-admin/tenants/:id/license — get license info for a tenant
+  app.get('/tenants/:id/license', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const tenant = await db.tenant.findUnique({
+      where: { id },
+      select: { licenseKey: true, licenseExpiresAt: true, plan: true },
+    })
+    if (!tenant) return reply.status(404).send({ error: 'Tenant not found' })
+    return {
+      licenseKey: tenant.licenseKey,
+      plan: tenant.plan,
+      licenseExpiresAt: tenant.licenseExpiresAt,
+    }
+  })
+
+  // POST /api/super-admin/tenants/:id/license — generate/update license key
+  app.post('/tenants/:id/license', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const body = req.body as { plan?: string; expiresAt?: string | null }
+
+    const tenant = await db.tenant.findUnique({ where: { id } })
+    if (!tenant) return reply.status(404).send({ error: 'Tenant not found' })
+
+    // Generate new license key: zm_${plan}_${randomBytes(24).toString('hex')}
+    const plan = body.plan ?? tenant.plan
+    const licenseKey = `zm_${plan}_${randomBytes(24).toString('hex')}`
+
+    const updated = await db.tenant.update({
+      where: { id },
+      data: {
+        licenseKey,
+        plan,
+        ...(body.expiresAt !== undefined
+          ? {
+              licenseExpiresAt: body.expiresAt
+                ? new Date(body.expiresAt)
+                : null,
+            }
+          : {}),
+      },
+    })
+    invalidateTenantCache(id)
+    return {
+      licenseKey: updated.licenseKey,
+      plan: updated.plan,
+      licenseExpiresAt: updated.licenseExpiresAt,
+    }
+  })
+
+  // POST /api/super-admin/tenants/:id/license/revoke — set licenseKey=null, active=false
+  app.post('/tenants/:id/license/revoke', async (req, reply) => {
+    const { id } = req.params as { id: string }
+    const tenant = await db.tenant.findUnique({ where: { id } })
+    if (!tenant) return reply.status(404).send({ error: 'Tenant not found' })
+
+    const updated = await db.tenant.update({
+      where: { id },
+      data: {
+        licenseKey: null,
+        active: false,
+        suspendedReason: 'License revoked',
+      },
+    })
+    invalidateTenantCache(id)
+    return updated
   })
 }
 

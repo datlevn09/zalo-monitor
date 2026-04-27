@@ -97,4 +97,84 @@ export const configRoutes: FastifyPluginAsync = async (app) => {
       sample: v,
     }))
   })
+
+  // GET /api/config/channels — channel statuses and config
+  app.get('/channels', async (req, reply) => {
+    const tenantId = req.headers['x-tenant-id'] as string
+    if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
+
+    const tenant = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { enabledChannels: true }
+    })
+
+    const channelConfig: Record<string, any> = {
+      zaloPersonal: {
+        enabled: tenant?.enabledChannels.includes('ZALO') ?? true,
+        icon: '💬',
+        label: 'Zalo Cá nhân',
+        groupCount: 0,
+      },
+      telegram: {
+        enabled: tenant?.enabledChannels.includes('TELEGRAM') ?? true,
+        icon: '✈️',
+        label: 'Telegram',
+        groupCount: 0,
+      },
+      zaloOA: {
+        enabled: tenant?.enabledChannels.includes('ZALO_OA') ?? false,
+        icon: '🏢',
+        label: 'Zalo OA',
+        comingSoon: false,
+      },
+      lark: {
+        enabled: tenant?.enabledChannels.includes('LARK') ?? true,
+        icon: '🪶',
+        label: 'Lark/Feishu',
+        comingSoon: false,
+      },
+      facebook: {
+        enabled: false,
+        icon: '👍',
+        label: 'Facebook Messenger',
+        comingSoon: true,
+      },
+      line: {
+        enabled: false,
+        icon: '🟢',
+        label: 'LINE',
+        comingSoon: true,
+      },
+    }
+
+    // Count groups per channel for enabled channels
+    const groupCounts = await db.group.groupBy({
+      by: ['channelType'],
+      where: { tenantId },
+      _count: { id: true }
+    })
+
+    const countMap = new Map(groupCounts.map(g => [g.channelType, g._count.id]))
+    channelConfig.zaloPersonal.groupCount = countMap.get('ZALO') ?? 0
+    channelConfig.telegram.groupCount = countMap.get('TELEGRAM') ?? 0
+
+    return channelConfig
+  })
+
+  // PATCH /api/config/channels — update enabled channels
+  app.patch('/channels', async (req, reply) => {
+    const tenantId = req.headers['x-tenant-id'] as string
+    if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
+
+    const { enabledChannels } = req.body as { enabledChannels: string[] }
+    if (!Array.isArray(enabledChannels)) {
+      return reply.status(400).send({ error: 'enabledChannels must be an array' })
+    }
+
+    const tenant = await db.tenant.update({
+      where: { id: tenantId },
+      data: { enabledChannels }
+    })
+    return { ok: true, enabledChannels: tenant.enabledChannels }
+  })
 }

@@ -24,12 +24,41 @@ const CATEGORIES = ['Tất cả', 'Khách hàng', 'Đại lý', 'Nội bộ', 'N
 
 export default function GroupsPage() {
   const [groups, setGroups] = useState<Group[]>([])
+  const [allGroups, setAllGroups] = useState<Group[]>([])
   const [category, setCategory] = useState('Tất cả')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [showCustomize, setShowCustomize] = useState(false)
+  const [pinnedGroupIds, setPinnedGroupIds] = useState<string[]>([])
+  const [selectedPins, setSelectedPins] = useState<string[]>([])
+  const [savingPins, setSavingPins] = useState(false)
 
   useEffect(() => {
-    api<Group[]>('/api/groups').then(g => { setGroups(g); setLoading(false) })
+    const loadData = async () => {
+      try {
+        // Load all groups
+        const allGroupsData = await api<Group[]>('/api/groups')
+        setAllGroups(allGroupsData)
+
+        // Load user's pinned group IDs
+        const pinsData = await api<{ pinnedGroupIds: string[] }>('/api/groups/pins')
+        const pinned = pinsData.pinnedGroupIds
+        setPinnedGroupIds(pinned)
+        setSelectedPins(pinned)
+
+        // Filter groups: if pinnedGroupIds is empty, show all; otherwise show only pinned
+        const filtered = pinned.length === 0
+          ? allGroupsData
+          : allGroupsData.filter(g => pinned.includes(g.id))
+        setGroups(filtered)
+      } catch (err) {
+        console.error('Failed to load groups:', err)
+        setLoading(false)
+        return
+      }
+      setLoading(false)
+    }
+    loadData()
   }, [])
 
   async function updateCategory(id: string, newCategory: string) {
@@ -42,6 +71,35 @@ export default function GroupsPage() {
     await api(`/api/groups/${id}`, { method: 'PATCH', body: JSON.stringify({ monitorEnabled: enabled }) })
   }
 
+  async function savePinnedGroups() {
+    setSavingPins(true)
+    try {
+      await api('/api/groups/pins', {
+        method: 'PUT',
+        body: JSON.stringify({ groupIds: selectedPins }),
+      })
+      setPinnedGroupIds(selectedPins)
+      // Re-filter groups
+      const filtered = selectedPins.length === 0
+        ? allGroups
+        : allGroups.filter(g => selectedPins.includes(g.id))
+      setGroups(filtered)
+      setShowCustomize(false)
+    } catch (err) {
+      console.error('Failed to save pinned groups:', err)
+    } finally {
+      setSavingPins(false)
+    }
+  }
+
+  function togglePin(groupId: string) {
+    setSelectedPins(ids =>
+      ids.includes(groupId)
+        ? ids.filter(id => id !== groupId)
+        : [...ids, groupId]
+    )
+  }
+
   const filtered = groups.filter(g => {
     if (search && !g.name.toLowerCase().includes(search.toLowerCase())) return false
     if (category === 'Tất cả') return true
@@ -51,9 +109,32 @@ export default function GroupsPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-zinc-100 tracking-tight">Nhóm chat</h1>
-        <p className="text-gray-500 dark:text-zinc-400 mt-1">{groups.length} nhóm đang theo dõi</p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-zinc-100 tracking-tight">Nhóm chat</h1>
+          <p className="text-gray-500 dark:text-zinc-400 mt-1">
+            {pinnedGroupIds.length > 0
+              ? `Hiển thị ${groups.length}/${allGroups.length} nhóm • `
+              : `${groups.length} nhóm đang theo dõi`
+            }
+            {pinnedGroupIds.length > 0 && (
+              <button
+                onClick={() => setShowCustomize(true)}
+                className="text-blue-500 hover:underline font-medium"
+              >
+                Tùy chỉnh
+              </button>
+            )}
+          </p>
+        </div>
+        {pinnedGroupIds.length === 0 && (
+          <button
+            onClick={() => setShowCustomize(true)}
+            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 rounded-lg border border-gray-200 dark:border-white/10 transition-colors"
+          >
+            ⚙️ Tùy chỉnh board
+          </button>
+        )}
       </div>
 
       {/* Search */}
@@ -194,6 +275,68 @@ export default function GroupsPage() {
           })}
         </div>
       </div>
+
+      {/* Customize Board Modal */}
+      {showCustomize && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-gray-100 dark:border-white/10 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-zinc-100">Tùy chỉnh board</h2>
+              <button
+                onClick={() => setShowCustomize(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-zinc-400 w-6 h-6 flex items-center justify-center"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Groups List */}
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <p className="text-xs text-gray-500 dark:text-zinc-400 mb-3 font-medium">
+                Chọn các nhóm muốn hiển thị trên board của bạn
+              </p>
+              <div className="space-y-2">
+                {allGroups.map(g => (
+                  <label key={g.id} className="flex items-center gap-3 p-2.5 hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedPins.includes(g.id)}
+                      onChange={() => togglePin(g.id)}
+                      className="w-4 h-4 rounded border-gray-300 dark:border-white/20 text-blue-500 focus:ring-blue-500 dark:focus:ring-blue-400"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-zinc-100 truncate">{g.name}</p>
+                      <p className="text-xs text-gray-500 dark:text-zinc-400">
+                        {g._count.messages} tin • {g.category || 'Chưa phân loại'}
+                      </p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-100 dark:border-white/10 flex gap-3 bg-gray-50 dark:bg-zinc-800/50">
+              <button
+                onClick={() => setShowCustomize(false)}
+                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 bg-white dark:bg-white/10 hover:bg-gray-100 dark:hover:bg-white/20 rounded-lg border border-gray-200 dark:border-white/10 transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={savePinnedGroups}
+                disabled={savingPins}
+                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 disabled:bg-blue-400 rounded-lg transition-colors"
+              >
+                {savingPins ? 'Đang lưu...' : 'Lưu'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

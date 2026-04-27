@@ -16,8 +16,8 @@ export function Step2Connect({ setup, onDone }: { setup: SetupState; onDone: () 
   const [copied, setCopied] = useState<string | null>(null)
   const [commands, setCommands] = useState({ oneLineCommand: '', dockerCommand: '' })
   const [mode, setMode] = useState<Mode>(() => {
-    if (typeof window === 'undefined') return 'docker'
-    return (localStorage.getItem('zm:mode') as Mode) ?? 'docker'
+    if (typeof window === 'undefined') return 'host'
+    return (localStorage.getItem('zm:mode') as Mode) ?? 'host'
   })
   const [admin, setAdmin] = useState<Admin | null>(null)
   const [showHelp, setShowHelp] = useState(false)
@@ -105,7 +105,7 @@ ${commands.dockerCommand || commands.oneLineCommand}`
       </div>
 
       {/* Visual step-by-step guide */}
-      <details className="group">
+      <details className="group" open>
         <summary className="cursor-pointer text-sm text-gray-700 dark:text-zinc-300 font-medium flex items-center gap-2 hover:text-gray-900 list-none">
           <svg className="w-4 h-4 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
@@ -113,12 +113,15 @@ ${commands.dockerCommand || commands.oneLineCommand}`
           <span>Xem hướng dẫn từng bước</span>
         </summary>
         <div className="mt-3 space-y-2">
-          <GuideStep num={1} title="Mở Terminal" desc={mode === 'docker'
+          {mode === 'host' && (
+            <GuideStep num={1} title="SSH vào máy chủ" desc='Mở Terminal trên máy của bạn, chạy: ssh user@your-server-ip (thay user và IP thực tế). Nếu dùng key: ssh -i ~/.ssh/key.pem user@your-server-ip' />
+          )}
+          <GuideStep num={mode === 'host' ? 2 : 1} title="Mở Terminal" desc={mode === 'docker'
             ? 'Mở ứng dụng Terminal trên máy Mac/Windows đang chạy Docker (biểu tượng màn hình đen)'
-            : 'SSH hoặc mở terminal trên máy cài OpenClaw'} />
-          <GuideStep num={2} title="Paste lệnh" desc="Nhấn nút 📋 Copy lệnh ở trên, sau đó dán vào terminal (⌘V trên Mac, Ctrl+V trên Windows)" />
-          <GuideStep num={3} title="Nhấn Enter" desc="Đợi 2-3 giây, hook sẽ tự tải và enable. Nếu thấy '🎉 Hoàn tất!' là OK." />
-          <GuideStep num={4} title="Gửi thử 1 tin" desc="Nhắn bất kỳ tin trong nhóm Telegram/Zalo có bot → dashboard sẽ tự detect ở dưới" />
+            : 'Sau khi SSH thành công, bạn đang ở trong terminal của máy chủ VPS rồi'} />
+          <GuideStep num={mode === 'host' ? 3 : 2} title="Paste lệnh" desc="Nhấn nút 📋 Copy lệnh ở trên, sau đó dán vào terminal (⌘V trên Mac, Ctrl+V trên Windows)" />
+          <GuideStep num={mode === 'host' ? 4 : 3} title="Nhấn Enter" desc="Đợi 2-3 giây, hook sẽ tự tải và enable. Nếu thấy '🎉 Hoàn tất!' là OK." />
+          <GuideStep num={mode === 'host' ? 5 : 4} title="Gửi thử 1 tin" desc="Nhắn bất kỳ tin trong nhóm Telegram/Zalo có bot → dashboard sẽ tự detect ở dưới" />
         </div>
       </details>
 

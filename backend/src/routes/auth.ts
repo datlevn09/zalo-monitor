@@ -147,7 +147,9 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       data: { resetToken: token, resetTokenExpires: expires },
     })
 
-    const base = process.env.DASHBOARD_URL ?? 'http://localhost:3000'
+    // Ưu tiên: Origin header (từ browser) → env DASHBOARD_URL → fallback localhost
+    const origin = (req.headers['origin'] as string | undefined)?.replace(/\/$/, '')
+    const base = origin ?? process.env.DASHBOARD_URL ?? 'http://localhost:3000'
     const resetLink = `${base}/reset-password?token=${token}`
 
     await sendMail({
