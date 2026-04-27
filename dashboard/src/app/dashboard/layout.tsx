@@ -28,17 +28,6 @@ const NAV = [
   { href: '/dashboard/settings',          label: 'Cài đặt',     icon: IconSettings, tint: 'bg-gray-500' },
 ]
 
-// Canvas URL theo host của backend (OpenClaw chạy cùng máy với backend)
-function getCanvasUrl() {
-  try {
-    const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
-    const host = new URL(api).hostname
-    return `http://${host}:18789/__openclaw__/canvas/`
-  } catch {
-    return 'http://localhost:18789/__openclaw__/canvas/'
-  }
-}
-const CANVAS_URL = getCanvasUrl()
 
 type SessionHealth = {
   status: 'healthy' | 'warning' | 'dead' | 'never'
@@ -125,31 +114,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Zalo disconnected banner */}
         {!bannerDismissed && (zaloConnected === false || sessionHealth?.status === 'dead') && !pathname.includes('/settings/channels') && (
-          <div className="bg-red-500 text-white px-4 py-2 flex items-center gap-2 shrink-0 flex-wrap">
-            <span className="text-sm font-medium flex-1 min-w-0">
-              🔴 Zalo bị đăng xuất {sessionHealth?.hoursSincePing ? `(${sessionHealth.hoursSincePing} tiếng trước)` : ''} — tin nhắn không được thu thập
-            </span>
-            <div className="flex items-center gap-2 shrink-0">
-              <a
-                href={CANVAS_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-semibold bg-white text-red-600 hover:bg-red-50 px-3 py-1 rounded-full transition-colors"
-              >
-                📷 Scan QR Zalo
-              </a>
-              <Link
-                href="/dashboard/settings/channels"
-                className="text-xs font-semibold bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full transition-colors"
-              >
-                Cài đặt →
-              </Link>
-              <button
-                onClick={() => setBannerDismissed(true)}
-                className="text-white/70 hover:text-white text-lg leading-none"
-              >×</button>
-            </div>
-          </div>
+          <ZaloDisconnectedBanner
+            hoursSincePing={sessionHealth?.hoursSincePing ?? null}
+            onDismiss={() => setBannerDismissed(true)}
+          />
         )}
 
         {/* Sidebar (icon-only mobile, expanded desktop) + Main */}
@@ -191,6 +159,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <Footer />
       </div>
     </BoardProvider>
+  )
+}
+
+function ZaloDisconnectedBanner({ hoursSincePing, onDismiss }: { hoursSincePing: number | null; onDismiss: () => void }) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <div className="bg-red-500 text-white shrink-0">
+      <div className="px-4 py-2 flex items-center gap-2">
+        <span className="text-sm font-medium flex-1 min-w-0">
+          🔴 Zalo bị đăng xuất{hoursSincePing ? ` (${hoursSincePing} tiếng trước)` : ''} — tin nhắn không được thu thập
+        </span>
+        <button
+          onClick={() => setExpanded(e => !e)}
+          className="shrink-0 text-xs font-semibold bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full transition-colors"
+        >
+          {expanded ? 'Ẩn' : 'Cách xử lý'}
+        </button>
+        <Link href="/dashboard/settings/channels" className="shrink-0 text-xs font-semibold bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full transition-colors">
+          Cài đặt →
+        </Link>
+        <button onClick={onDismiss} className="shrink-0 text-white/70 hover:text-white text-lg leading-none">×</button>
+      </div>
+      {expanded && (
+        <div className="px-4 pb-3 text-xs space-y-1.5 bg-red-600/40">
+          <p className="font-semibold pt-2">Cách đăng nhập lại Zalo:</p>
+          <p>1. SSH vào máy chủ đang chạy OpenClaw</p>
+          <p>2. Mở trình duyệt trên máy đó → vào <code className="bg-white/20 px-1 rounded">http://localhost:18789/__openclaw__/canvas/</code></p>
+          <p>3. Scan QR bằng app Zalo trên điện thoại</p>
+          <p className="text-white/70 pt-1">Hoặc dùng SSH tunnel: <code className="bg-white/20 px-1 rounded">ssh -L 18789:localhost:18789 user@server</code> → mở localhost:18789 trên máy tính của bạn</p>
+        </div>
+      )}
+    </div>
   )
 }
 
