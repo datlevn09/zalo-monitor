@@ -46,7 +46,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!ready) return null
 
   return (
-    <div className="h-[100dvh] overflow-hidden bg-[#f2f2f7] dark:bg-zinc-950 text-gray-900 dark:text-zinc-100 flex flex-col transition-colors" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif' }}>
+    <div className="h-[100dvh] overflow-hidden bg-[#f2f2f7] dark:bg-zinc-950 text-gray-900 dark:text-zinc-100 flex flex-col transition-colors">
       {/* Header — full width, cố định */}
       <Header
         right={

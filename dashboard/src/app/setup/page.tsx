@@ -47,7 +47,7 @@ export default function SetupPage() {
 
   if (mode === 'choose' && tenants.length > 0) {
     return (
-      <div className="min-h-screen bg-[#f2f2f7] dark:bg-zinc-950 flex items-center justify-center p-4" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
+      <div className="min-h-screen bg-[#f2f2f7] dark:bg-zinc-950 flex items-center justify-center p-4" >
         <div className="w-full max-w-md">
           <div className="text-center mb-6">
             <div className="w-16 h-16 mx-auto mb-3 rounded-3xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-blue-500/30">
@@ -94,7 +94,7 @@ export default function SetupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f2f2f7] dark:bg-zinc-950 flex items-center justify-center p-4" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif' }}>
+    <div className="min-h-screen bg-[#f2f2f7] dark:bg-zinc-950 flex items-center justify-center p-4" >
       <div className="w-full max-w-xl">
         {/* Header */}
         <div className="text-center mb-8">

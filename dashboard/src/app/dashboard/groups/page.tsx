@@ -108,11 +108,11 @@ export default function GroupsPage() {
   })
 
   return (
-    <div className="p-4 md:p-8 max-w-6xl mx-auto">
-      <div className="mb-6 flex items-start justify-between">
-        <div>
+    <div className="p-4 md:p-6 lg:p-8 max-w-6xl mx-auto w-full">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-zinc-100 tracking-tight">Nhóm chat</h1>
-          <p className="text-gray-500 dark:text-zinc-400 mt-1">
+          <p className="text-gray-500 dark:text-zinc-400 mt-1 text-sm">
             {pinnedGroupIds.length > 0
               ? `Hiển thị ${groups.length}/${allGroups.length} nhóm • `
               : `${groups.length} nhóm đang theo dõi`
@@ -130,7 +130,7 @@ export default function GroupsPage() {
         {pinnedGroupIds.length === 0 && (
           <button
             onClick={() => setShowCustomize(true)}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 rounded-lg border border-gray-200 dark:border-white/10 transition-colors"
+            className="shrink-0 px-4 py-2 text-sm font-medium text-gray-700 dark:text-zinc-300 bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 rounded-lg border border-gray-200 dark:border-white/10 transition-colors"
           >
             ⚙️ Tùy chỉnh board
           </button>
@@ -150,13 +150,13 @@ export default function GroupsPage() {
         />
       </div>
 
-      {/* Category filter - iOS segmented style */}
-      <div className="mb-4 flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0">
+      {/* Category filter - iOS segmented style, scrollable on mobile */}
+      <div className="mb-4 flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0 snap-x">
         {CATEGORIES.map(c => (
           <button
             key={c}
             onClick={() => setCategory(c)}
-            className={`shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+            className={`shrink-0 px-3 md:px-4 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
               category === c
                 ? 'bg-gray-900 dark:bg-white/15 text-white shadow-md'
                 : 'bg-white dark:bg-white/10 text-gray-700 dark:text-zinc-300 hover:bg-gray-50 dark:hover:bg-white/15 shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
@@ -189,7 +189,7 @@ export default function GroupsPage() {
           {filtered.map(g => {
             const deepLink = channelDeepLink(g.channelType, g.externalId)
             return (
-            <div key={g.id} className="px-4 py-3.5 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+            <div key={g.id} className="px-4 py-3.5 flex items-center gap-2 md:gap-3 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors overflow-hidden">
               {/* Avatar / channel icon */}
               <div className="shrink-0 relative">
                 {g.avatarUrl ? (
@@ -221,35 +221,35 @@ export default function GroupsPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <p className="text-xs text-gray-500 dark:text-zinc-400">
+                  <p className="text-xs text-gray-500 dark:text-zinc-400 truncate">
                     {g._count.messages} tin nhắn · {formatRelative(g.lastMessageAt)}
                   </p>
                   {g.category && (
-                    <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-400 rounded font-medium">
+                    <span className="shrink-0 text-[10px] px-1.5 py-0.5 bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-400 rounded font-medium">
                       {g.category}
                     </span>
                   )}
                 </div>
               </Link>
 
-              {/* Open in Zalo */}
+              {/* Open in Zalo - hidden on mobile */}
               {deepLink && (
                 <a href={deepLink} target="_blank" rel="noopener noreferrer"
                   onClick={e => e.stopPropagation()}
                   title={`Mở trong ${g.channelType}`}
-                  className="shrink-0 w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 flex items-center justify-center text-blue-600 transition-colors">
+                  className="shrink-0 w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 flex items-center justify-center text-blue-600 transition-colors hidden md:flex">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
                   </svg>
                 </a>
               )}
 
-              {/* Quick category picker */}
+              {/* Quick category picker - hidden on mobile */}
               <select
                 value={g.category ?? ''}
                 onChange={e => updateCategory(g.id, e.target.value)}
                 onClick={e => e.stopPropagation()}
-                className="text-xs bg-gray-100 dark:bg-white/10 border-0 rounded-lg px-2 py-1.5 text-gray-700 dark:text-zinc-300 cursor-pointer hover:bg-gray-200 dark:hover:bg-white/15 transition-colors"
+                className="hidden md:block text-xs bg-gray-100 dark:bg-white/10 border-0 rounded-lg px-2 py-1.5 text-gray-700 dark:text-zinc-300 cursor-pointer hover:bg-gray-200 dark:hover:bg-white/15 transition-colors shrink-0"
               >
                 <option value="">Phân loại...</option>
                 <option>Khách hàng</option>

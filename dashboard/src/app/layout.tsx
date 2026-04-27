@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin", "vietnamese"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
@@ -15,6 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Zalo Monitor",
   description: "AI Chat Monitoring Dashboard",
+  viewport: "width=device-width, initial-scale=1, maximum-scale=1",
 };
 
 // Chạy trước khi render — tránh flash khi chọn dark
@@ -41,8 +43,8 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      lang="vi"
+      className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>
