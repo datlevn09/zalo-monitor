@@ -3,10 +3,12 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { getToken, getTenantId, connectWebSocket } from '@/lib/api'
+import { getToken, getTenantId, connectWebSocket, api } from '@/lib/api'
 import { Footer } from '@/components/Footer'
 import { Header } from '@/components/Header'
 import { RemoteBanner } from '@/components/RemoteBanner'
+import { BoardProvider } from '@/lib/board-context'
+import { BoardSwitcher } from '@/components/BoardSwitcher'
 
 const NAV = [
   { href: '/',                    label: 'Home',       icon: IconHome,     tint: 'bg-blue-500',   exact: true },
@@ -31,12 +33,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter()
   const [ready, setReady] = useState(false)
   const [live, setLive] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [currentUserName, setCurrentUserName] = useState<string | null>(null)
 
   useEffect(() => {
     // Ưu tiên JWT — không có token → login. Không có tenant → setup wizard.
     if (!getToken()) router.replace('/login')
     else if (!getTenantId()) router.replace('/setup')
-    else setReady(true)
+    else {
+      // Fetch current user info
+      api<{ user: { id: string; name: string } }>('/api/auth/me')
+        .then((res) => {
+          setCurrentUserId(res.user.id)
+          setCurrentUserName(res.user.name)
+          setReady(true)
+        })
+        .catch(() => {
+          // Fallback if fetch fails
+          setReady(true)
+        })
+    }
   }, [router])
 
   useEffect(() => {
@@ -45,61 +61,66 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => close()
   }, [ready])
 
-  if (!ready) return null
+  if (!ready || !currentUserId || !currentUserName) return null
 
   return (
-    <div className="h-[100dvh] overflow-hidden bg-[#f2f2f7] dark:bg-zinc-950 text-gray-900 dark:text-zinc-100 flex flex-col transition-colors">
-      {/* Header — full width, cố định */}
-      <Header
-        right={
-          <span
-            title={live ? 'Live' : 'Offline'}
-            className={`w-2 h-2 rounded-full ${live ? 'bg-green-500 animate-pulse' : 'bg-gray-300 dark:bg-white/20'}`}
-          />
-        }
-      />
+    <BoardProvider currentUserId={currentUserId} currentUserName={currentUserName}>
+      <div className="h-[100dvh] overflow-hidden bg-[#f2f2f7] dark:bg-zinc-950 text-gray-900 dark:text-zinc-100 flex flex-col transition-colors">
+        {/* Header — full width, cố định */}
+        <Header
+          right={
+            <div className="flex items-center gap-3">
+              <BoardSwitcher />
+              <span
+                title={live ? 'Live' : 'Offline'}
+                className={`w-2 h-2 rounded-full ${live ? 'bg-green-500 animate-pulse' : 'bg-gray-300 dark:bg-white/20'}`}
+              />
+            </div>
+          }
+        />
 
-      {/* Remote Banner — full width, below header */}
-      <RemoteBanner />
+        {/* Remote Banner — full width, below header */}
+        <RemoteBanner />
 
-      {/* Sidebar (icon-only mobile, expanded desktop) + Main */}
-      <div className="flex-1 min-h-0 flex flex-row">
-        <aside className="flex shrink-0 w-14 md:w-56 p-1.5 md:p-3 flex-col gap-2 overflow-y-auto border-r border-gray-200 dark:border-white/10">
-          <nav className="bg-white dark:bg-zinc-900 rounded-2xl p-1 md:p-1.5 dark:ring-1 dark:ring-white/5 space-y-0.5 flex-1">
-            {NAV.map(item => {
-              const active = item.exact
-                ? pathname === item.href
-                : pathname === item.href || pathname.startsWith(item.href + '/')
-              const Icon = item.icon
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  title={item.label}
-                  className={`flex items-center md:gap-3 px-1.5 md:px-2.5 py-2 rounded-xl text-sm transition-all justify-center md:justify-start ${
-                    active
-                      ? 'bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white font-medium'
-                      : 'text-gray-700 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/5'
-                  }`}
-                >
-                  <div className={`w-8 h-8 md:w-7 md:h-7 rounded-lg ${item.tint} flex items-center justify-center text-white shadow-sm shrink-0`}>
-                    <Icon className="w-4 h-4" />
-                  </div>
-                  <span className="hidden md:inline truncate">{item.label}</span>
-                  {active && <ChevRight className="w-4 h-4 text-gray-400 dark:text-zinc-500 ml-auto hidden md:block" />}
-                </Link>
-              )
-            })}
-          </nav>
-        </aside>
+        {/* Sidebar (icon-only mobile, expanded desktop) + Main */}
+        <div className="flex-1 min-h-0 flex flex-row">
+          <aside className="flex shrink-0 w-14 md:w-56 p-1.5 md:p-3 flex-col gap-2 overflow-y-auto border-r border-gray-200 dark:border-white/10">
+            <nav className="bg-white dark:bg-zinc-900 rounded-2xl p-1 md:p-1.5 dark:ring-1 dark:ring-white/5 space-y-0.5 flex-1">
+              {NAV.map(item => {
+                const active = item.exact
+                  ? pathname === item.href
+                  : pathname === item.href || pathname.startsWith(item.href + '/')
+                const Icon = item.icon
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    title={item.label}
+                    className={`flex items-center md:gap-3 px-1.5 md:px-2.5 py-2 rounded-xl text-sm transition-all justify-center md:justify-start ${
+                      active
+                        ? 'bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white font-medium'
+                        : 'text-gray-700 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-white/5'
+                    }`}
+                  >
+                    <div className={`w-8 h-8 md:w-7 md:h-7 rounded-lg ${item.tint} flex items-center justify-center text-white shadow-sm shrink-0`}>
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <span className="hidden md:inline truncate">{item.label}</span>
+                    {active && <ChevRight className="w-4 h-4 text-gray-400 dark:text-zinc-500 ml-auto hidden md:block" />}
+                  </Link>
+                )
+              })}
+            </nav>
+          </aside>
 
-        {/* Main content — chỉ vùng này cuộn */}
-        <main className="flex-1 min-w-0 overflow-auto">{children}</main>
+          {/* Main content — chỉ vùng này cuộn */}
+          <main className="flex-1 min-w-0 overflow-auto">{children}</main>
+        </div>
+
+        {/* Footer — full width, cố định */}
+        <Footer />
       </div>
-
-      {/* Footer — full width, cố định */}
-      <Footer />
-    </div>
+    </BoardProvider>
   )
 }
 

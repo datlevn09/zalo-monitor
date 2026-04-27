@@ -51,6 +51,9 @@ model Tenant {
   messagesThisMonth Int     @default(0)
   usageResetAt      DateTime @default(now())
 
+  // License: max viewers per board (0 = unlimited)
+  maxBoardViewers Int @default(0)
+
   users                User[]
   groups               Group[]
   notificationChannels NotificationChannel[]
@@ -92,6 +95,11 @@ model User {
 
   // Board filter: nhóm muốn hiện trên dashboard. Trống = hiện tất cả.
   pinnedGroupIds String[] @default([])
+
+  // Board access relations
+  boardsOwned    BoardAccess[] @relation("BoardOwner")
+  boardsCanView  BoardAccess[] @relation("BoardViewer")
+  groupMonitors  GroupMonitor[]
 
   tenant Tenant @relation(fields: [tenantId], references: [id])
   ownedGroups Group[] @relation("GroupOwner")
@@ -162,6 +170,7 @@ model Group {
   messages  Message[]
   alerts    Alert[]
   permissions GroupPermission[]
+  monitors GroupMonitor[]
 
   @@unique([tenantId, externalId, channelType])
   @@index([tenantId, ownerUserId])
@@ -444,4 +453,59 @@ model GroupPermission {
   @@unique([groupId, userId])
   @@index([tenantId, userId])
   @@map("group_permissions")
+}
+
+// ─── BoardAccess — ai được xem board của ai ────────────────────────────────
+model BoardAccess {
+  id           String   @id @default(cuid())
+  tenantId     String
+  boardUserId  String   // board của user này
+  viewerUserId String   // user này được phép xem
+  grantedBy    String   // userId người mời
+  createdAt    DateTime @default(now())
+
+  boardUser  User @relation("BoardOwner",  fields: [boardUserId],  references: [id], onDelete: Cascade)
+  viewerUser User @relation("BoardViewer", fields: [viewerUserId], references: [id], onDelete: Cascade)
+
+  @@unique([boardUserId, viewerUserId])
+  @@index([tenantId, viewerUserId])
+  @@map("board_access")
+}
+
+// ─── GroupMonitor — user's OpenClaw monitors which groups ─────────────────
+// Tracks the source of each message: which user's OpenClaw forwarded it.
+// Used to:
+//   1. Filter "My board" (only groups I monitor)
+//   2. Prevent duplicate display when A and B both in Group X
+model GroupMonitor {
+  groupId  String
+  userId   String
+  tenantId String
+  createdAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId],  references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([tenantId, userId])
+  @@map("group_monitors")
+}
+
+// ─── TeamInvite — pending invitations (before user accepts) ───────────────
+// Separate from User.resetToken so we can track invites clearly
+model TeamInvite {
+  id           String   @id @default(cuid())
+  tenantId     String
+  email        String
+  name         String
+  role         UserRole @default(STAFF)
+  token        String   @unique @default(cuid())
+  boardUserId  String?  // nếu có: invite này grant board access luôn
+  invitedBy    String   // userId người mời
+  expiresAt    DateTime
+  acceptedAt   DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId])
+  @@map("team_invites")
 }

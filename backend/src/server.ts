@@ -24,6 +24,7 @@ import { configRoutes } from './routes/config.js'
 import { conversationAiRoutes } from './routes/conversation-ai.js'
 import { appointmentRoutes } from './routes/appointments.js'
 import { superAdminRoutes } from './routes/super-admin.js'
+import { boardRoutes } from './routes/board.js'
 import { registerTenantGuard } from './services/tenant-guard.js'
 import { registerAuthGuard } from './services/auth-guard.js'
 import { wsManager } from './services/websocket.js'
@@ -32,6 +33,7 @@ import { generateDigestForTenant } from './services/digest.js'
 import { startTelegramPoller } from './services/telegram-poller.js'
 import { validateLicense, getLicenseMode } from './services/license.js'
 import { installRoutes } from './routes/install.js'
+import { licenseValidateRoutes } from './routes/license-validate.js'
 
 const app = Fastify({ logger: true })
 
@@ -54,6 +56,7 @@ app.get('/ws', { websocket: true }, (socket) => {
 // Routes
 await app.register(installRoutes, { prefix: '/install' })
 await app.register(authRoutes,    { prefix: '/api/auth' })
+await app.register(licenseValidateRoutes, { prefix: '/api/license' })
 await app.register(setupRoutes,   { prefix: '/api/setup' })
 await app.register(webhookRoutes,     { prefix: '/webhook' })
 await app.register(zaloWebhookRoutes, { prefix: '/webhook/zalo' })
@@ -75,6 +78,7 @@ await app.register(configRoutes,    { prefix: '/api/config' })
 await app.register(superAdminRoutes, { prefix: '/api/super-admin' })
 await app.register(conversationAiRoutes, { prefix: '/api/groups' })
 await app.register(appointmentRoutes,    { prefix: '/api/appointments' })
+await app.register(boardRoutes, { prefix: '/api/board' })
 
 app.get('/health', async () => ({ status: 'ok', ts: Date.now() }))
 

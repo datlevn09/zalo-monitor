@@ -47,6 +47,19 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
     const cleanThreadId = String(threadId).replace(/^group:/, '')
     const senderType: 'SELF' | 'CONTACT' = raw.isSelf || raw.senderType === 'SELF' ? 'SELF' : 'CONTACT'
 
+    // Identify which user owns the OpenClaw (try to find by webhook secret)
+    let userId: string | undefined
+    if (raw.userId) {
+      userId = raw.userId
+    } else {
+      // Try to find user by webhook secret
+      const user = await db.user.findFirst({
+        where: { tenantId, webhookSecret: secret as string },
+        select: { id: true }
+      })
+      userId = user?.id
+    }
+
     // Auto-create group với monitor ON mặc định
     // (use case: tổng hợp tất cả nhóm Zalo admin có; user tắt từng nhóm nếu cần)
     const group = await db.group.upsert({
@@ -105,6 +118,15 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
 
     if (senderType === 'CONTACT' && message.content && message.content.trim().length >= 3) {
       await aiQueue.add('classify', { messageId: message.id, tenantId, groupId: group.id })
+    }
+
+    // Track which user monitors this group (for board scope)
+    if (userId && cleanThreadId) {
+      await db.groupMonitor.upsert({
+        where: { groupId_userId: { groupId: group.id, userId } },
+        create: { groupId: group.id, userId, tenantId },
+        update: {},
+      }).catch(() => undefined)
     }
 
     return reply.status(200).send({ ok: true, messageId: message.id })

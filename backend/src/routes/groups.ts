@@ -15,6 +15,25 @@ export const groupRoutes: FastifyPluginAsync = async (app) => {
     const auth = req.authUser
     const scope = (req.query as any)?.scope as string | undefined
     const pinned = (req.query as any)?.pinned === 'true'
+    const boardUserId = (req.query as any)?.boardUserId as string | undefined
+
+    // Board scope: viewing someone else's board
+    if (boardUserId && boardUserId !== auth?.userId) {
+      // Must have BoardAccess to view this board
+      const hasAccess = await db.boardAccess.findFirst({
+        where: { boardUserId, viewerUserId: auth?.userId ?? '', tenantId },
+      })
+      if (!hasAccess) return reply.status(403).send({ error: 'Không có quyền xem board này' })
+
+      // Return groups owned by the board user
+      const groups = await db.group.findMany({
+        where: { tenantId, ownerUserId: boardUserId },
+        orderBy: { lastMessageAt: 'desc' },
+        include: { _count: { select: { messages: true, alerts: true } }, ownerUser: { select: { id: true, name: true } } },
+      })
+      return groups
+    }
+
     const seeAll = auth && (auth.role === 'OWNER' || auth.role === 'MANAGER') && scope !== 'mine'
 
     const where: any = { tenantId }

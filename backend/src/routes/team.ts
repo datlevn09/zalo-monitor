@@ -35,7 +35,7 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
     const tenantId = req.headers['x-tenant-id'] as string
     if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
 
-    const body = req.body as { name: string; email: string; role?: 'MANAGER' | 'STAFF' }
+    const body = req.body as { name: string; email: string; role?: 'MANAGER' | 'STAFF'; boardUserId?: string }
     if (!body.name || !body.email) return reply.status(400).send({ error: 'Thiếu tên hoặc email' })
 
     // Check duplicate trong tenant
@@ -60,6 +60,18 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
         resetTokenExpires: expires,
       },
     })
+
+    // Grant board access if requested
+    if (body.boardUserId) {
+      // License check
+      const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { maxBoardViewers: true } })
+      if (!tenant || tenant.maxBoardViewers === 0 ||
+          await db.boardAccess.count({ where: { boardUserId: body.boardUserId, tenantId } }) < tenant.maxBoardViewers) {
+        await db.boardAccess.create({
+          data: { tenantId, boardUserId: body.boardUserId, viewerUserId: user.id, grantedBy: req.authUser?.userId ?? user.id }
+        }).catch(() => undefined) // silently fail if already exists
+      }
+    }
 
     const base = process.env.DASHBOARD_URL ?? 'http://localhost:3000'
     const inviteLink = `${base}/reset-password?token=${inviteToken}&invite=1`
