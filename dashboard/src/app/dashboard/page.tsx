@@ -34,6 +34,7 @@ export default function OverviewPage() {
   const [myGroupsCount, setMyGroupsCount] = useState<number | null>(null)
   const [installCmd, setInstallCmd] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [zaloConnected, setZaloConnected] = useState<boolean | null>(null)
 
   const load = () => api<Overview>('/api/stats/overview').then(setData).catch(() => undefined)
 
@@ -42,6 +43,10 @@ export default function OverviewPage() {
     // Check user đã cài hook chưa (bằng số groups họ sở hữu)
     api<any[]>('/api/groups?scope=mine').then(gs => setMyGroupsCount(gs.length)).catch(() => undefined)
     api<{ oneLineCommand: string }>('/api/auth/my-install-command').then(d => setInstallCmd(d.oneLineCommand)).catch(() => undefined)
+    // Check Zalo connection status — ẩn banner nếu đã kết nối
+    api<{ connected: boolean; containerRunning: boolean }>('/api/zalo/connection-status')
+      .then(s => setZaloConnected(s.connected || s.containerRunning))
+      .catch(() => setZaloConnected(false))
 
     const close = connectWebSocket((event) => {
       if (event === 'message:new' || event === 'alert:new' || event === 'analysis:result') {
@@ -65,8 +70,8 @@ export default function OverviewPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
-      {/* Onboarding banner — hiện nếu user chưa cài hook nào cho Zalo của họ */}
-      {myGroupsCount === 0 && installCmd && (
+      {/* Onboarding banner — chỉ hiện khi chưa có kết nối Zalo nào */}
+      {myGroupsCount === 0 && installCmd && zaloConnected === false && (
         <div className="mb-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-500/10 dark:to-indigo-500/10 border border-blue-200 dark:border-blue-500/30 rounded-2xl p-4 md:p-5">
           <div className="flex items-start gap-3">
             <div className="text-2xl">👋</div>

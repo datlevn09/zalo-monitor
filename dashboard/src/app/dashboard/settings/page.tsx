@@ -30,6 +30,7 @@ export default function SettingsPage() {
   const [install, setInstall] = useState<InstallCommand | null>(null)
   const [copied, setCopied] = useState(false)
   const [privacy, setPrivacy] = useState<{ monitorDMs: boolean; allowedDMIds: string[] } | null>(null)
+  const [zaloStatus, setZaloStatus] = useState<{ connected: boolean; containerRunning: boolean } | null>(null)
 
   useEffect(() => {
     api<Tenant>('/api/tenants/current').then(t => {
@@ -38,6 +39,7 @@ export default function SettingsPage() {
     })
     api<InstallCommand>('/api/auth/my-install-command').then(setInstall).catch(() => undefined)
     api<{ monitorDMs: boolean; allowedDMIds: string[] }>('/api/auth/my-privacy').then(setPrivacy).catch(() => undefined)
+    api<{ connected: boolean; containerRunning: boolean }>('/api/zalo/connection-status').then(setZaloStatus).catch(() => undefined)
   }, [])
 
   function copy(text: string) {
@@ -113,7 +115,18 @@ export default function SettingsPage() {
       {/* Hook install — cho Zalo cá nhân của user này */}
       {install && (
         <Section
-          title="📲 Zalo của tôi"
+          title={
+            <span className="flex items-center gap-2">
+              📲 Zalo của tôi
+              {zaloStatus === null ? null
+                : zaloStatus.connected
+                  ? <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 rounded-full">● Đang kết nối</span>
+                  : zaloStatus.containerRunning
+                    ? <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 rounded-full">● Chờ quét QR</span>
+                    : <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 rounded-full">● Chưa kết nối</span>
+              }
+            </span>
+          }
           description="Lệnh cài hook vào OpenClaw chạy trên máy có Zalo cá nhân của bạn. Mỗi nhân viên chạy lệnh của chính họ trên máy họ."
         >
           <div className="px-4 py-3.5 space-y-3">
@@ -213,7 +226,7 @@ export default function SettingsPage() {
   )
 }
 
-function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+function Section({ title, description, children }: { title: React.ReactNode; description?: string; children: React.ReactNode }) {
   return (
     <div className="mb-6">
       <div className="px-1 mb-2">
