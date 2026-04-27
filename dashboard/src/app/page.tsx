@@ -1,7 +1,29 @@
+'use client'
+
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { getToken, getTenantId } from '@/lib/api'
 import { ThemeToggle } from '@/components/ThemeToggle'
 
 export default function LandingPage() {
+  const router = useRouter()
+  const [checked, setChecked] = useState(false)
+
+  useEffect(() => {
+    // If already logged in → skip landing, go straight to dashboard
+    if (getToken() && getTenantId()) {
+      router.replace('/dashboard')
+    } else if (getToken() && !getTenantId()) {
+      router.replace('/setup')
+    } else {
+      setChecked(true)
+    }
+  }, [router])
+
+  // Blank screen while checking token — avoids landing page flash for logged-in users
+  if (!checked) return null
+
   return (
     <div className="min-h-[100dvh] bg-[#f2f2f7] dark:bg-zinc-950 text-gray-900 dark:text-zinc-100 flex flex-col">
 
@@ -55,19 +77,13 @@ export default function LandingPage() {
         {/* CTA Buttons */}
         <div className="flex flex-col sm:flex-row items-center gap-3">
           <Link
-            href="/dashboard"
+            href="/login"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold text-base rounded-2xl shadow-lg shadow-blue-500/25 transition-all hover:shadow-blue-500/40 hover:-translate-y-0.5"
           >
-            Vào Dashboard
+            Bắt đầu
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
             </svg>
-          </Link>
-          <Link
-            href="/login"
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-white dark:bg-zinc-900 text-gray-800 dark:text-zinc-200 font-semibold text-base rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm hover:bg-gray-50 dark:hover:bg-white/5 transition-all hover:-translate-y-0.5"
-          >
-            Đăng nhập
           </Link>
         </div>
       </section>
