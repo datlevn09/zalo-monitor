@@ -34,7 +34,7 @@ function hashPassword(p: string) {
 }
 
 // In-memory: các tenantId đã ping từ hook self-test. Auto-expire sau 10 phút.
-const hookPings = new Map<string, number>()
+export const hookPings = new Map<string, number>()
 setInterval(() => {
   const cutoff = Date.now() - 10 * 60 * 1000
   for (const [k, ts] of hookPings) if (ts < cutoff) hookPings.delete(k)

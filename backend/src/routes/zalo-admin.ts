@@ -8,6 +8,7 @@ import fs from 'node:fs'
 import { execSync } from 'node:child_process'
 import { syncZaloGroups, syncZaloGroupHistory, rerankTopGroups } from '../services/zalo-sync.js'
 import { syncAllAvatars } from '../services/zalo-avatar.js'
+import { hookPings } from './setup.js'
 
 const OPENCLAW_CONFIG = process.env.OPENCLAW_CONFIG ?? '/root/.openclaw/openclaw.json'
 const OPENCLAW_LOG    = process.env.OPENCLAW_LOG ?? '/tmp/gw.log'
@@ -159,12 +160,17 @@ export const zaloAdminRoutes: FastifyPluginAsync = async (app) => {
       orderBy: { sentAt: 'desc' },
     })
 
-    // Check openclaw container is running
+    // Check openclaw is running: Docker container OR native process (via recent hook ping)
     let containerRunning = false
     try {
       const out = execSync(`docker inspect --format="{{.State.Running}}" ${OPENCLAW_CONTAINER}`, { encoding: 'utf-8', timeout: 3000 }).trim()
       containerRunning = out === 'true'
-    } catch { /* docker not available or container not found */ }
+    } catch { /* docker not available or not containerised */ }
+    // Fallback: if hook pinged within last 10 minutes, OpenClaw IS running (native mode)
+    if (!containerRunning) {
+      const lastPing = hookPings.get(tenantId)
+      if (lastPing && Date.now() - lastPing < 10 * 60 * 1000) containerRunning = true
+    }
 
     // Check QR file — nếu qr.png mới (<5 phút) → đang chờ scan, chưa kết nối
     let qrPending = false
