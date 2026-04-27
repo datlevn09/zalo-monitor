@@ -8,7 +8,8 @@ import { Footer } from '@/components/Footer'
 import { Header } from '@/components/Header'
 
 const NAV = [
-  { href: '/dashboard',           label: 'Tổng quan',  icon: IconHome,     tint: 'bg-blue-500' },
+  { href: '/',                    label: 'Home',       icon: IconHome,     tint: 'bg-blue-500',   exact: true },
+  { href: '/dashboard',           label: 'Dashboard',  icon: IconDashboard, tint: 'bg-indigo-600', exact: true },
   { href: '/dashboard/ai',        label: 'AI Chat',    icon: IconSparkle,  tint: 'bg-indigo-500' },
   { href: '/dashboard/analytics', label: 'Phân tích',  icon: IconChart,    tint: 'bg-purple-500' },
   { href: '/dashboard/search',    label: 'Tìm kiếm',   icon: IconSearch,   tint: 'bg-amber-500' },
@@ -62,8 +63,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <aside className="flex shrink-0 w-14 md:w-56 p-1.5 md:p-3 flex-col gap-2 overflow-y-auto border-r border-gray-200 dark:border-white/10">
           <nav className="bg-white dark:bg-zinc-900 rounded-2xl p-1 md:p-1.5 dark:ring-1 dark:ring-white/5 space-y-0.5 flex-1">
             {NAV.map(item => {
-              const active = pathname === item.href ||
-                (item.href !== '/dashboard' && pathname.startsWith(item.href))
+              const active = item.exact
+                ? pathname === item.href
+                : pathname === item.href || pathname.startsWith(item.href + '/')
               const Icon = item.icon
               return (
                 <Link
@@ -98,6 +100,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 }
 
 function IconHome(p: React.SVGProps<SVGSVGElement>)    { return <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg> }
+function IconDashboard(p: React.SVGProps<SVGSVGElement>) { return <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v2a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10-3a1 1 0 011-1h4a1 1 0 011 1v7a1 1 0 01-1 1h-4a1 1 0 01-1-1v-7z"/></svg> }
 function IconChat(p: React.SVGProps<SVGSVGElement>)    { return <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg> }
 function IconChart(p: React.SVGProps<SVGSVGElement>)   { return <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg> }
 function IconSparkle(p: React.SVGProps<SVGSVGElement>) { return <svg {...p} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg> }

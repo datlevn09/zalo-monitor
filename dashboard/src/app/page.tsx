@@ -9,13 +9,10 @@ export default function LandingPage() {
   const [show, setShow] = useState(false)
 
   useEffect(() => {
-    const token = getToken()
-    const tenant = getTenantId()
-    if (token && tenant) {
-      // Already logged in → go to dashboard (hard redirect, no flash)
+    // If any token exists → user has logged in before → go to dashboard
+    // Dashboard layout will handle tenant check and redirect to /setup if needed
+    if (getToken()) {
       window.location.replace('/dashboard')
-    } else if (token && !tenant) {
-      window.location.replace('/setup')
     } else {
       setShow(true)
     }
