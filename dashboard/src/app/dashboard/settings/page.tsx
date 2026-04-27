@@ -208,6 +208,9 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* Đổi mật khẩu */}
+      <ChangePasswordSection />
+
       {/* Danger zone */}
       <Section title="Danger zone">
         <button
@@ -238,6 +241,103 @@ function Section({ title, description, children }: { title: React.ReactNode; des
         {children}
       </div>
     </div>
+  )
+}
+
+const PASSWORD_RULES = [
+  { label: 'Ít nhất 8 ký tự',       test: (p: string) => p.length >= 8 },
+  { label: 'Chứa chữ hoa (A-Z)',    test: (p: string) => /[A-Z]/.test(p) },
+  { label: 'Chứa chữ thường (a-z)', test: (p: string) => /[a-z]/.test(p) },
+  { label: 'Chứa số (0-9)',         test: (p: string) => /[0-9]/.test(p) },
+  { label: 'Chứa ký tự đặc biệt',  test: (p: string) => /[!@#$%^&*()\-_=+\[\]{}|;':",.<>?/\\`~]/.test(p) },
+]
+
+function ChangePasswordSection() {
+  const [open, setOpen] = useState(false)
+  const [form, setForm] = useState({ current: '', newPwd: '', confirm: '' })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [saved, setSaved] = useState(false)
+
+  const pwdValid = PASSWORD_RULES.every(r => r.test(form.newPwd))
+  const confirmMatch = form.confirm.length > 0 && form.newPwd === form.confirm
+  const confirmMismatch = form.confirm.length > 0 && form.newPwd !== form.confirm
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!pwdValid || !confirmMatch) return
+    setLoading(true); setError('')
+    try {
+      await api('/api/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword: form.current, newPassword: form.newPwd }),
+      })
+      setSaved(true)
+      setOpen(false)
+      setForm({ current: '', newPwd: '', confirm: '' })
+      setTimeout(() => setSaved(false), 3000)
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Section title="Bảo mật">
+      <div className="px-4 py-3.5">
+        {!open ? (
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-600 dark:text-zinc-400">Mật khẩu</span>
+            <button onClick={() => setOpen(true)} className="text-sm text-blue-500 hover:underline font-medium">
+              {saved ? '✓ Đã đổi' : 'Đổi mật khẩu'}
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="space-y-3">
+            <p className="text-sm font-medium text-gray-900 dark:text-zinc-100">Đổi mật khẩu</p>
+            <input type="password" required placeholder="Mật khẩu hiện tại"
+              value={form.current} onChange={e => setForm(f => ({ ...f, current: e.target.value }))}
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-zinc-100" />
+            <div>
+              <input type="password" required placeholder="Mật khẩu mới"
+                value={form.newPwd} onChange={e => setForm(f => ({ ...f, newPwd: e.target.value }))}
+                className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-zinc-100" />
+              {form.newPwd.length > 0 && (
+                <div className="mt-1.5 space-y-0.5">
+                  {PASSWORD_RULES.map(rule => {
+                    const ok = rule.test(form.newPwd)
+                    return (
+                      <p key={rule.label} className={`text-xs flex items-center gap-1 ${ok ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
+                        <span>{ok ? '✓' : '✗'}</span><span>{rule.label}</span>
+                      </p>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+            <div>
+              <input type="password" required placeholder="Nhập lại mật khẩu mới"
+                value={form.confirm} onChange={e => setForm(f => ({ ...f, confirm: e.target.value }))}
+                className="w-full px-3 py-2 bg-gray-50 dark:bg-white/5 rounded-xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-zinc-100" />
+              {confirmMismatch && <p className="text-xs text-red-500 mt-1">✗ Không khớp</p>}
+              {confirmMatch && pwdValid && <p className="text-xs text-green-600 dark:text-green-400 mt-1">✓ Khớp</p>}
+            </div>
+            {error && <p className="text-xs text-red-500">{error}</p>}
+            <div className="flex gap-2">
+              <button type="submit" disabled={!pwdValid || !confirmMatch || loading}
+                className="flex-1 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-colors">
+                {loading ? 'Đang lưu...' : 'Lưu'}
+              </button>
+              <button type="button" onClick={() => { setOpen(false); setError(''); setForm({ current: '', newPwd: '', confirm: '' }) }}
+                className="px-4 py-2 text-sm text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors">
+                Hủy
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </Section>
   )
 }
 

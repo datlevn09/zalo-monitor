@@ -43,6 +43,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [currentUserName, setCurrentUserName] = useState<string | null>(null)
   const [sessionHealth, setSessionHealth] = useState<SessionHealth | null>(null)
   const [bannerDismissed, setBannerDismissed] = useState(false)
+  const [zaloConnected, setZaloConnected] = useState<boolean | null>(null)
 
   useEffect(() => {
     // Ưu tiên JWT — không có token → login. Không có tenant → setup wizard.
@@ -74,6 +75,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (!ready) return
+    const checkConn = () =>
+      api<{ connected: boolean }>('/api/zalo/connection-status')
+        .then(r => setZaloConnected(r.connected))
+        .catch(() => undefined)
+    checkConn()
+    const t = setInterval(checkConn, 60_000)
+    return () => clearInterval(t)
+  }, [ready])
+
+  useEffect(() => {
+    if (!ready) return
     const close = connectWebSocket(() => setLive(true))
     return () => close()
   }, [ready])
@@ -99,22 +111,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Remote Banner — full width, below header */}
         <RemoteBanner />
 
-        {/* Session dead banner */}
-        {!bannerDismissed && sessionHealth?.status === 'dead' && !pathname.includes('/settings/channels') && (
-          <div className="bg-red-500 text-white px-4 py-2 flex items-center gap-3 shrink-0">
-            <span className="text-sm font-medium flex-1">
-              🔴 Kết nối Zalo bị ngắt {sessionHealth.hoursSincePing ? `${sessionHealth.hoursSincePing} tiếng` : ''} rồi — tin nhắn không được thu thập
+        {/* Zalo disconnected banner */}
+        {!bannerDismissed && (zaloConnected === false || sessionHealth?.status === 'dead') && !pathname.includes('/settings/channels') && (
+          <div className="bg-red-500 text-white px-4 py-2 flex items-center gap-2 shrink-0 flex-wrap">
+            <span className="text-sm font-medium flex-1 min-w-0">
+              🔴 Zalo bị đăng xuất {sessionHealth?.hoursSincePing ? `(${sessionHealth.hoursSincePing} tiếng trước)` : ''} — tin nhắn không được thu thập
             </span>
-            <Link
-              href="/dashboard/settings/channels"
-              className="shrink-0 text-xs font-semibold bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full transition-colors"
-            >
-              Kết nối lại →
-            </Link>
-            <button
-              onClick={() => setBannerDismissed(true)}
-              className="shrink-0 text-white/70 hover:text-white text-lg leading-none ml-1"
-            >×</button>
+            <div className="flex items-center gap-2 shrink-0">
+              <a
+                href="http://localhost:18789/__openclaw__/canvas/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-semibold bg-white text-red-600 hover:bg-red-50 px-3 py-1 rounded-full transition-colors"
+              >
+                📷 Scan QR Zalo
+              </a>
+              <Link
+                href="/dashboard/settings/channels"
+                className="text-xs font-semibold bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full transition-colors"
+              >
+                Cài đặt →
+              </Link>
+              <button
+                onClick={() => setBannerDismissed(true)}
+                className="text-white/70 hover:text-white text-lg leading-none"
+              >×</button>
+            </div>
           </div>
         )}
 

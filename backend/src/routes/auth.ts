@@ -28,6 +28,11 @@ const resetSchema = z.object({
   password: z.string().min(6),
 })
 
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8),
+})
+
 function hashPassword(password: string) {
   return createHash('sha256').update(password).digest('hex')
 }
@@ -264,6 +269,30 @@ Nếu không phải anh/chị yêu cầu, bỏ qua email này. Mật khẩu cũ 
       },
     })
 
+    return { ok: true }
+  })
+
+  // ── Change password (đã đăng nhập) ────────────────────────────────────
+  app.post('/change-password', async (req, reply) => {
+    const auth = req.headers.authorization ?? ''
+    if (!auth.startsWith('Bearer ')) return reply.status(401).send({ error: 'Unauthorized' })
+    let p: any
+    try { p = app.jwt.verify(auth.slice(7)) } catch { return reply.status(401).send({ error: 'Invalid token' }) }
+
+    const body = changePasswordSchema.safeParse(req.body)
+    if (!body.success) return reply.status(400).send({ error: 'Dữ liệu không hợp lệ' })
+
+    const user = await db.user.findUnique({ where: { id: p.userId } })
+    if (!user) return reply.status(404).send({ error: 'User không tồn tại' })
+    if (!user.passwordHash) return reply.status(400).send({ error: 'Tài khoản này đăng nhập qua Google, không có mật khẩu' })
+    if (user.passwordHash !== hashPassword(body.data.currentPassword)) {
+      return reply.status(400).send({ error: 'Mật khẩu hiện tại không đúng' })
+    }
+
+    await db.user.update({
+      where: { id: user.id },
+      data: { passwordHash: hashPassword(body.data.newPassword) },
+    })
     return { ok: true }
   })
 

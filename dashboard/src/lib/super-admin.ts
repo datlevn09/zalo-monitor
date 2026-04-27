@@ -4,15 +4,15 @@ const TOKEN_KEY = 'zm:super-admin-token'
 
 export function getSuperAdminToken(): string | null {
   if (typeof window === 'undefined') return null
-  return sessionStorage.getItem(TOKEN_KEY)
+  return localStorage.getItem(TOKEN_KEY)
 }
 
 export function setSuperAdminToken(token: string) {
-  sessionStorage.setItem(TOKEN_KEY, token)
+  localStorage.setItem(TOKEN_KEY, token)
 }
 
 export function clearSuperAdminToken() {
-  sessionStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(TOKEN_KEY)
 }
 
 export async function saApi<T = any>(path: string, init?: RequestInit): Promise<T> {

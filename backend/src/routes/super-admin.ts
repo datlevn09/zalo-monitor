@@ -2,10 +2,26 @@ import type { FastifyPluginAsync } from 'fastify'
 import { randomBytes } from 'node:crypto'
 import { db } from '../services/db.js'
 import { invalidateTenantCache } from '../services/tenant-guard.js'
+import bcrypt from 'bcryptjs'
 
-// Gatekeeper: header x-super-admin-token phải khớp env SUPER_ADMIN_TOKEN
-function requireSuperAdmin(req: any, reply: any): boolean {
+// Gatekeeper: kiểm tra x-super-admin-token
+// Ưu tiên: 1) bcrypt hash lưu trong DB, 2) env var SUPER_ADMIN_TOKEN (plain)
+async function requireSuperAdminAsync(req: any, reply: any): Promise<boolean> {
   const token = req.headers['x-super-admin-token'] as string | undefined
+  if (!token) {
+    reply.status(401).send({ error: 'Unauthorized' })
+    return false
+  }
+
+  // Thử DB hash trước
+  const setting = await db.systemSetting.findUnique({ where: { key: 'super_admin_password_hash' } }).catch(() => null)
+  if (setting?.value) {
+    const ok = await bcrypt.compare(token, setting.value)
+    if (!ok) { reply.status(401).send({ error: 'Unauthorized' }); return false }
+    return true
+  }
+
+  // Fallback: env var plain token
   const expected = process.env.SUPER_ADMIN_TOKEN
   if (!expected) {
     reply.status(500).send({ error: 'SUPER_ADMIN_TOKEN not set on server' })
@@ -27,7 +43,22 @@ function generateLicenseKey(): string {
 export const superAdminRoutes: FastifyPluginAsync = async (app) => {
   // Middleware áp dụng cho toàn bộ prefix
   app.addHook('preHandler', async (req, reply) => {
-    if (!requireSuperAdmin(req, reply)) return reply
+    if (!await requireSuperAdminAsync(req, reply)) return reply
+  })
+
+  // POST /api/super-admin/change-password — đổi mật khẩu super admin
+  app.post('/change-password', async (req, reply) => {
+    const { newPassword } = req.body as { newPassword?: string }
+    if (!newPassword || newPassword.length < 6) {
+      return reply.status(400).send({ error: 'Mật khẩu phải ít nhất 6 ký tự' })
+    }
+    const hash = await bcrypt.hash(newPassword, 12)
+    await db.systemSetting.upsert({
+      where: { key: 'super_admin_password_hash' },
+      create: { key: 'super_admin_password_hash', value: hash },
+      update: { value: hash },
+    })
+    return { ok: true }
   })
 
   // GET /api/super-admin/tenants — list toàn bộ tenants + usage
