@@ -4,9 +4,9 @@ export function Header({ right }: { right?: React.ReactNode }) {
   return (
     <header className="shrink-0 z-40 bg-white/80 dark:bg-zinc-900/70 backdrop-blur-xl border-b border-gray-200 dark:border-white/10">
       <div className="max-w-7xl mx-auto px-3 md:px-4 py-2 flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-sm font-bold shadow-sm shadow-blue-500/30 shrink-0">
+        <Link href="/dashboard" className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-sm font-bold shadow-sm shadow-blue-500/30 shrink-0">
           Z
-        </div>
+        </Link>
         <div className="min-w-0 flex-1 leading-tight">
           <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100 truncate">Zalo Monitor</p>
           <p className="text-[10px] text-gray-500 dark:text-zinc-400 truncate">

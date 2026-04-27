@@ -1,28 +1,28 @@
 'use client'
 
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { getToken, getTenantId } from '@/lib/api'
 import { ThemeToggle } from '@/components/ThemeToggle'
 
 export default function LandingPage() {
-  const router = useRouter()
-  const [checked, setChecked] = useState(false)
+  const [show, setShow] = useState(false)
 
   useEffect(() => {
-    // If already logged in → skip landing, go straight to dashboard
-    if (getToken() && getTenantId()) {
-      router.replace('/dashboard')
-    } else if (getToken() && !getTenantId()) {
-      router.replace('/setup')
+    const token = getToken()
+    const tenant = getTenantId()
+    if (token && tenant) {
+      // Already logged in → go to dashboard (hard redirect, no flash)
+      window.location.replace('/dashboard')
+    } else if (token && !tenant) {
+      window.location.replace('/setup')
     } else {
-      setChecked(true)
+      setShow(true)
     }
-  }, [router])
+  }, [])
 
-  // Blank screen while checking token — avoids landing page flash for logged-in users
-  if (!checked) return null
+  // Show nothing while checking — logged-in users never see landing page
+  if (!show) return null
 
   return (
     <div className="min-h-[100dvh] bg-[#f2f2f7] dark:bg-zinc-950 text-gray-900 dark:text-zinc-100 flex flex-col">
