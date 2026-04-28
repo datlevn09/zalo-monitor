@@ -888,15 +888,24 @@ function ComingSoonCard({ config }: { config: any }) {
 
 function ManualLoginFallback() {
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [copied, setCopied] = useState<'restart' | 'push' | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
+  const [os, setOs] = useState<'linux' | 'windows'>(() => {
+    if (typeof navigator === 'undefined') return 'linux'
+    return navigator.userAgent.toLowerCase().includes('windows') ? 'windows' : 'linux'
+  })
 
-  // Lệnh 1: restart listener — kích lại login_zalo từ pending queue
-  const restartCmd = 'systemctl --user restart zalo-monitor-listener'
+  // Linux/Mac
+  const linuxRestart = 'systemctl --user restart zalo-monitor-listener'
+  const linuxPush = `set -a; . ~/.zalo-monitor/.env; set +a; openzca --profile zalo-monitor auth login --qr-base64 2>&1 | grep -oE 'data:image/[a-z]+;base64,[A-Za-z0-9+/=]+' | head -1 | xargs -I{} curl -s -X POST "$BACKEND_URL/api/setup/qr-push" -H "content-type: application/json" -H "x-webhook-secret: $WEBHOOK_SECRET" -H "x-tenant-id: $TENANT_ID" -d '{"dataUrl":"{}"}'`
 
-  // Lệnh 2: push QR trực tiếp lên dashboard (tự đọc creds từ ~/.zalo-monitor/.env)
-  const pushCmd = `set -a; . ~/.zalo-monitor/.env; set +a; openzca --profile zalo-monitor auth login --qr-base64 2>&1 | grep -oE 'data:image/[a-z]+;base64,[A-Za-z0-9+/=]+' | head -1 | xargs -I{} curl -s -X POST "$BACKEND_URL/api/setup/qr-push" -H "content-type: application/json" -H "x-webhook-secret: $WEBHOOK_SECRET" -H "x-tenant-id: $TENANT_ID" -d '{"dataUrl":"{}"}'`
+  // Windows PowerShell — Run as Admin
+  const winRestart = 'schtasks /End /TN ZaloMonitorListener; Start-Sleep 1; schtasks /Run /TN ZaloMonitorListener'
+  const winPush = `$envFile = "$env:USERPROFILE\\.zalo-monitor\\.env"; Get-Content $envFile | ForEach-Object { if ($_ -match '^([^=]+)=(.*)$') { Set-Variable -Name $matches[1] -Value $matches[2] } }; $log = "$env:TEMP\\openzca-qr.log"; Start-Process openzca -ArgumentList @('--profile','zalo-monitor','auth','login','--qr-base64') -RedirectStandardOutput $log -WindowStyle Hidden; Start-Sleep 6; $qr = (Select-String -Path $log -Pattern 'data:image/[a-z]+;base64,[A-Za-z0-9+/=]+' | Select-Object -First 1).Matches.Value; if ($qr) { Invoke-WebRequest -Uri "$BACKEND_URL/api/setup/qr-push" -Method POST -Headers @{'Content-Type'='application/json';'x-webhook-secret'=$WEBHOOK_SECRET;'x-tenant-id'=$TENANT_ID} -Body (@{dataUrl=$qr}|ConvertTo-Json) -UseBasicParsing }`
 
-  function copy(text: string, key: 'restart' | 'push') {
+  const restartCmd = os === 'windows' ? winRestart : linuxRestart
+  const pushCmd = os === 'windows' ? winPush : linuxPush
+
+  function copy(text: string, key: string) {
     navigator.clipboard.writeText(text)
     setCopied(key)
     setTimeout(() => setCopied(null), 2000)
@@ -914,6 +923,16 @@ function ManualLoginFallback() {
       </p>
       {showAdvanced && (
         <div className="pt-2 border-t border-amber-200 dark:border-amber-500/30 space-y-3">
+          <div className="flex gap-1 text-[11px]">
+            <button
+              onClick={() => setOs('windows')}
+              className={`px-2 py-1 rounded ${os === 'windows' ? 'bg-amber-600 text-white' : 'bg-white/40 dark:bg-white/10'}`}
+            >🪟 Windows</button>
+            <button
+              onClick={() => setOs('linux')}
+              className={`px-2 py-1 rounded ${os === 'linux' ? 'bg-amber-600 text-white' : 'bg-white/40 dark:bg-white/10'}`}
+            >🍎 Mac/Linux</button>
+          </div>
           <div className="space-y-1.5">
             <p className="font-medium">Cách 1 — Restart listener (đơn giản):</p>
             <div className="flex items-center gap-2">
