@@ -163,39 +163,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 }
 
 function ZaloDisconnectedBanner({ hoursSincePing, onDismiss }: { hoursSincePing: number | null; onDismiss: () => void }) {
-  const [expanded, setExpanded] = useState(false)
   return (
-    <div className="bg-red-500 text-white shrink-0">
-      <div className="px-4 py-2 flex items-center gap-2">
-        <span className="text-sm font-medium flex-1 min-w-0">
-          🔴 Zalo bị đăng xuất{hoursSincePing ? ` (${hoursSincePing} tiếng trước)` : ''} — tin nhắn không được thu thập
-        </span>
-        <button
-          onClick={() => setExpanded(e => !e)}
-          className="shrink-0 text-xs font-semibold bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full transition-colors"
-        >
-          {expanded ? 'Ẩn' : 'Cách xử lý'}
-        </button>
-        <Link href="/dashboard/settings/channels" className="shrink-0 text-xs font-semibold bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full transition-colors">
-          Cài đặt →
-        </Link>
-        <button onClick={onDismiss} className="shrink-0 text-white/70 hover:text-white text-lg leading-none">×</button>
-      </div>
-      {expanded && (
-        <div className="px-4 pb-3 text-xs space-y-2 bg-red-600/40">
-          <p className="font-semibold pt-2">Cách đăng nhập lại Zalo — làm trên máy tính (không phải điện thoại):</p>
-          <div className="space-y-1">
-            <p className="font-medium">📦 OpenClaw cài trên máy tính của bạn:</p>
-            <p>Mở trình duyệt → vào <code className="bg-white/20 px-1 rounded select-all">http://localhost:18789/__openclaw__/canvas/</code> → scan QR bằng Zalo điện thoại</p>
-          </div>
-          <div className="space-y-1">
-            <p className="font-medium">☁️ OpenClaw cài trên VPS/server:</p>
-            <p>Chạy lệnh này trên terminal máy tính của bạn để tạo tunnel:</p>
-            <code className="block bg-white/20 px-2 py-1 rounded select-all">ssh -L 18789:localhost:18789 user@&lt;ip-server&gt;</code>
-            <p>Sau đó mở trình duyệt → vào <code className="bg-white/20 px-1 rounded">http://localhost:18789/__openclaw__/canvas/</code> → scan QR</p>
-          </div>
-        </div>
-      )}
+    <div className="bg-red-500 text-white shrink-0 px-4 py-2 flex items-center gap-2">
+      <span className="text-sm font-medium flex-1 min-w-0">
+        🔴 Zalo bị đăng xuất{hoursSincePing ? ` (${hoursSincePing} tiếng trước)` : ''} — tin nhắn không được thu thập
+      </span>
+      <Link
+        href="/dashboard/settings/channels"
+        className="shrink-0 text-xs font-semibold bg-white text-red-600 hover:bg-red-50 px-3 py-1 rounded-full transition-colors"
+      >
+        Đăng nhập lại →
+      </Link>
+      <button onClick={onDismiss} className="shrink-0 text-white/70 hover:text-white text-lg leading-none">×</button>
     </div>
   )
 }

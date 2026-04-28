@@ -934,6 +934,19 @@ function ZaloQRModal({
           )}
         </div>
 
+        {/* Đã quét xong button — khách bấm để đóng modal khi login thành công */}
+        {qrDataUrl && (
+          <button
+            onClick={async () => {
+              try { await api('/api/zalo/clear-qr', { method: 'POST', body: JSON.stringify({}) }) } catch {}
+              onClose()
+            }}
+            className="w-full py-2 text-sm font-medium text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-500/10 hover:bg-green-100 dark:hover:bg-green-500/20 rounded-lg transition-colors"
+          >
+            ✓ Tôi đã đăng nhập xong
+          </button>
+        )}
+
         {/* Manual fallback: nếu hook không phản hồi, khách copy lệnh chạy thủ công */}
         {!qrDataUrl && (
           <ManualLoginFallback />

@@ -21,6 +21,11 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
     const tenantId = req.headers['x-tenant-id'] as string
     if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
 
+    // Có message từ Zalo nghĩa là login đã thành công → clear QR + cập nhật hook ping
+    const { clearQrFromStore, hookPings } = await import('./setup.js')
+    clearQrFromStore(tenantId)
+    hookPings.set(tenantId, Date.now())
+
     // Tenant check — Zalo có enabled không?
     const tenant = await db.tenant.findUnique({
       where: { id: tenantId },

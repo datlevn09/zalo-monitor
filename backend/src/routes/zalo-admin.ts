@@ -195,8 +195,11 @@ export const zaloAdminRoutes: FastifyPluginAsync = async (app) => {
       } catch { /* ignore */ }
     }
 
+    // Connected nếu: không có QR pending VÀ (có message gần đây HOẶC hook đang ping đều)
+    const lastPing = hookPings.get(tenantId)
+    const hookPingedRecently = !!lastPing && Date.now() - lastPing < 5 * 60 * 1000
     return {
-      connected: !qrPending && !!recentMsg,
+      connected: !qrPending && (hookPingedRecently || !!recentMsg),
       qrPending,
       containerRunning,
       lastMessageAt: recentMsg?.sentAt ?? null,
@@ -230,6 +233,15 @@ export const zaloAdminRoutes: FastifyPluginAsync = async (app) => {
     } catch (err: any) {
       return reply.status(404).send({ error: 'QR not available' })
     }
+  })
+
+  // POST /api/zalo/clear-qr — khách đã scan xong, xóa QR khỏi store
+  app.post('/clear-qr', async (req, reply) => {
+    const auth = req.authUser
+    if (!auth) return reply.status(401).send({ error: 'Unauthorized' })
+    const { clearQrFromStore } = await import('./setup.js')
+    clearQrFromStore(auth.tenantId)
+    return { ok: true }
   })
 
   // POST /api/zalo/reconnect — gửi yêu cầu login Zalo qua hook (không cần SSH)

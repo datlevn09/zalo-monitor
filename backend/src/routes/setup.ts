@@ -52,6 +52,10 @@ export function getQrFromStore(tenantId: string) {
   return entry.dataUrl
 }
 
+export function clearQrFromStore(tenantId: string) {
+  qrStore.delete(tenantId)
+}
+
 // Pending actions (dashboard → hook): tenantId → Set<action>
 // Hook poll endpoint /pending-actions, exec lệnh tương ứng (vd login_zalo → openzca login)
 const pendingActions = new Map<string, Set<string>>()
@@ -585,6 +589,8 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     if (!secret) return reply.status(401).send({ error: 'Missing secret' })
     const tenant = await db.tenant.findFirst({ where: { webhookSecret: secret } })
     if (!tenant) return reply.status(403).send({ error: 'Invalid secret' })
+    // Hook đang poll → cập nhật ping để dashboard biết hook còn sống
+    hookPings.set(tenant.id, Date.now())
     const set = pendingActions.get(tenant.id)
     const actions = set ? Array.from(set) : []
     if (set) set.clear() // consume — hook đã nhận, không gửi lại
@@ -1203,7 +1209,7 @@ if [ "$TEST_STATUS" = "200" ]; then
     if command -v openzca >/dev/null 2>&1; then
       echo ""
       echo "  Đang tạo QR..."
-      openzca --profile default auth login --qr-file /tmp/zalo-qr.png >/dev/null 2>&1 &
+      openzca --profile default auth login --qr-path /tmp/zalo-qr.png >/dev/null 2>&1 &
       OPENZCA_PID=$!
       # Chờ file QR xuất hiện tối đa 10s
       for _i in $(seq 1 10); do
