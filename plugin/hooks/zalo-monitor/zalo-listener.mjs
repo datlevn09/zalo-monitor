@@ -225,6 +225,40 @@ async function pollPendingActions() {
             console.log('✅ Đã push QR lên backend')
           }
         )
+      } else if (action === 'sync_history') {
+        console.log(`▶️ Action 'sync_history' — chạy zalo-history-push.mjs`)
+        const { execSync } = await import('node:child_process')
+        const path = await import('node:path')
+        const fs = await import('node:fs')
+        const tmpDir = fs.mkdtempSync('/tmp/zsync-')
+        try {
+          // Tải zalo-history-push.mjs về tmpDir + cài better-sqlite3 local
+          execSync(`curl -fsSL "${cfg.backendUrl}/api/setup/hook-files/zalo-history-push.mjs" -o ${path.join(tmpDir, 'zalo-history-push.mjs')}`, { timeout: 30_000 })
+          execSync('npm init -y && npm install better-sqlite3 --no-audit --no-fund', { cwd: tmpDir, timeout: 120_000, stdio: 'ignore' })
+          execFile('node', [path.join(tmpDir, 'zalo-history-push.mjs')], {
+            cwd: tmpDir, timeout: 600_000, maxBuffer: 100 * 1024 * 1024,
+            env: {
+              ...process.env,
+              BACKEND_URL: cfg.backendUrl,
+              WEBHOOK_SECRET: cfg.secret,
+              TENANT_ID: cfg.tenantId,
+              PROFILE: cfg.profile,
+            },
+          }, async (err, stdout, stderr) => {
+            if (err) console.error(`❌ sync_history: ${err.message}\n${stderr}`)
+            else console.log(`✅ sync_history done\n${(stdout || '').slice(-500)}`)
+            // Notify backend (best-effort)
+            await fetch(`${cfg.backendUrl}/api/setup/sync-history-done`, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json', 'x-webhook-secret': cfg.secret, 'x-tenant-id': cfg.tenantId },
+              body: JSON.stringify({ ok: !err, output: (stdout || '').slice(-2000) }),
+            }).catch(() => undefined)
+            // Cleanup
+            try { fs.rmSync(tmpDir, { recursive: true, force: true }) } catch {}
+          })
+        } catch (e) {
+          console.error(`❌ sync_history setup: ${e.message}`)
+        }
       }
     }
   } catch { /* silent */ } finally {

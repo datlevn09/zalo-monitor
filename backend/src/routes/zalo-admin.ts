@@ -245,6 +245,17 @@ export const zaloAdminRoutes: FastifyPluginAsync = async (app) => {
     return { ok: true }
   })
 
+  // POST /api/zalo/sync-history-server — yêu cầu listener server tự sync history
+  // Listener đã login Zalo → tự chạy zalo-history-push.mjs → push DB
+  // User KHÔNG cần làm gì trên máy mình (không phải quét QR lần 2).
+  app.post('/sync-history-server', async (req, reply) => {
+    const auth = req.authUser
+    if (auth?.role === 'STAFF') return reply.status(403).send({ error: 'Không đủ quyền' })
+    const { queueAction } = await import('./setup.js')
+    queueAction(auth!.tenantId, 'sync_history')
+    return { ok: true, message: 'Đã gửi lệnh đồng bộ — listener server sẽ tự chạy trong vài giây' }
+  })
+
   // POST /api/zalo/reconnect — gửi yêu cầu login Zalo qua hook (không cần SSH)
   // Hook sẽ poll /api/setup/pending-actions, thấy 'login_zalo' → exec `openzca login`
   // → QR file sinh ra → existing watcher push lên backend → dashboard hiện QR

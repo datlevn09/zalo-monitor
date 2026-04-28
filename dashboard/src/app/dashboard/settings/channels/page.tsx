@@ -667,16 +667,42 @@ function ZaloChannelCard({
                       📚 Import lịch sử CŨ (tuỳ chọn — 1 lần đầu)
                     </p>
                     <p className="text-xs text-gray-500 dark:text-zinc-400 mb-2.5 leading-relaxed">
-                      Listener chỉ bắt tin nhắn từ lúc kết nối. Để import toàn bộ lịch sử <strong>CŨ</strong> → chạy script bên dưới trên máy có <strong>Zalo PC App</strong> (đã đăng nhập tài khoản đó). Script đọc SQLite của Zalo PC App rồi đẩy lên dashboard.
+                      Listener chỉ bắt tin nhắn từ lúc kết nối. Để import toàn bộ lịch sử <strong>CŨ</strong>, anh có 2 cách:
                     </p>
-                    <div className="text-xs text-amber-700 dark:text-amber-400 mb-2.5 space-y-1">
-                      <p>💡 <strong>Trước khi chạy:</strong></p>
-                      <ul className="list-disc list-inside ml-1 space-y-0.5">
-                        <li>Mở Zalo PC App, đăng nhập rồi đợi sync xong (khoảng 1 phút)</li>
-                        <li>Đợi listener đã forward ít nhất 1 tin → các nhóm hiện trên dashboard (script chỉ sync nhóm đã biết)</li>
-                        <li>Có thể tắt Zalo PC sau khi mở (script đọc DB file, không cần app chạy)</li>
-                      </ul>
+
+                    {/* CÁCH 1 — 1 click qua server (đề xuất) */}
+                    <div className="rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 p-3 mb-3">
+                      <p className="text-xs font-semibold text-blue-800 dark:text-blue-300 mb-1.5">
+                        ✨ Cách 1 — 1 click trên server (đề xuất)
+                      </p>
+                      <p className="text-xs text-blue-700 dark:text-blue-400 leading-relaxed mb-2.5">
+                        Listener server đã login Zalo của anh → tự chạy import. <strong>KHÔNG cần làm gì trên máy, không quét QR lần 2.</strong>
+                      </p>
+                      <ServerSyncButton />
+                      <div className="mt-2.5 text-[11px] text-blue-700 dark:text-blue-400 leading-relaxed border-t border-blue-200 dark:border-blue-500/20 pt-2">
+                        <p className="font-semibold mb-1">⚠️ Giới hạn từ Zalo:</p>
+                        <ul className="list-disc list-inside ml-1 space-y-0.5">
+                          <li>API Zalo chỉ trả tối đa <strong>~20 tin gần nhất / nhóm</strong> — tin cũ hơn KHÔNG lấy được qua cloud.</li>
+                          <li>Để có toàn bộ lịch sử: từ giờ trở đi listener tự forward 100% (real-time, không bị giới hạn).</li>
+                          <li>Tin LÂU hơn (vài tháng/năm trước): chỉ lấy được nếu máy còn <strong>Zalo PC App đời cũ</strong> (folder <code>ZaloPC</code>, không phải <code>ZaloData</code> đã mã hoá). Cách 2 bên dưới.</li>
+                        </ul>
+                      </div>
                     </div>
+
+                    <details className="rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 p-3 mb-3">
+                      <summary className="text-xs font-semibold text-gray-700 dark:text-zinc-300 cursor-pointer">
+                        Cách 2 — Tự chạy trên máy anh (nâng cao, tuỳ chọn)
+                      </summary>
+                      <div className="text-xs text-amber-700 dark:text-amber-400 mt-3 space-y-1.5 bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded-lg p-3">
+                        <p className="font-semibold">⚠️ Zalo PC App đời mới đã mã hoá DB — phải dùng openzca CLI:</p>
+                        <ol className="list-decimal list-inside ml-1 space-y-1.5 text-amber-800 dark:text-amber-300">
+                          <li>
+                            Login openzca trên máy (sẽ kick session Zalo PC):
+                            <pre className="mt-1 bg-gray-900 dark:bg-black text-green-400 text-[11px] font-mono p-2 rounded overflow-x-auto">openzca auth login</pre>
+                          </li>
+                          <li>Chạy lệnh bên dưới (Mac/Linux/Windows).</li>
+                        </ol>
+                      </div>
 
                     {/* 1 lệnh duy nhất: tự cài Node + openzca + better-sqlite3 + chạy import */}
                     {pushConfig ? (
@@ -741,6 +767,7 @@ iwr -useb "$env:BACKEND_URL/api/setup/hook-files/zalo-history-import.ps1" | iex`
                     <p className="text-[11px] text-gray-400 dark:text-zinc-500 mt-2.5 leading-relaxed">
                       Script tự cài Node.js + openzca nếu máy chưa có. Chạy 1 lần trên máy có Zalo PC App đã đăng nhập tài khoản đó.
                     </p>
+                    </details>
                   </div>
                 </div>
               )}
@@ -1008,6 +1035,61 @@ function ZaloQRModal({
           Đóng
         </button>
       </div>
+    </div>
+  )
+}
+
+function ServerSyncButton() {
+  const [state, setState] = useState<'idle' | 'requesting' | 'syncing' | 'done' | 'error'>('idle')
+  const [output, setOutput] = useState<string>('')
+  const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
+
+  async function start() {
+    setState('requesting'); setOutput('')
+    try {
+      await api('/api/zalo/sync-history-server', { method: 'POST' })
+      setState('syncing')
+      // Poll status every 5s for max 5min
+      let ticks = 0
+      pollRef.current = setInterval(async () => {
+        ticks++
+        try {
+          const s = await api<{ ok: boolean | null; output: string; at: number }>('/api/setup/sync-history-status')
+          if (s?.ok !== null && s.at > Date.now() - 10 * 60_000) {
+            clearInterval(pollRef.current)
+            setState(s.ok ? 'done' : 'error')
+            setOutput(s.output || '')
+          } else if (ticks > 60) {
+            clearInterval(pollRef.current)
+            setState('error')
+            setOutput('Timeout — listener không phản hồi sau 5 phút. Kiểm tra listener service.')
+          }
+        } catch {}
+      }, 5_000)
+    } catch (e: any) {
+      setState('error')
+      setOutput(e?.message || 'Không gửi được lệnh')
+    }
+  }
+
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
+
+  return (
+    <div>
+      <button
+        onClick={start}
+        disabled={state === 'requesting' || state === 'syncing'}
+        className="px-4 py-2 text-xs font-semibold text-white bg-blue-500 hover:bg-blue-600 disabled:opacity-60 rounded-lg transition-colors"
+      >
+        {state === 'idle' ? '⚡ Đồng bộ ngay' :
+         state === 'requesting' ? 'Đang gửi lệnh...' :
+         state === 'syncing' ? '⟳ Đang chạy trên server (~1-3 phút)...' :
+         state === 'done' ? '✓ Hoàn tất — chạy lại' :
+         '⚠ Lỗi — thử lại'}
+      </button>
+      {output && (
+        <pre className="mt-2 text-[11px] bg-gray-900 dark:bg-black text-gray-300 p-2 rounded max-h-48 overflow-auto whitespace-pre-wrap">{output}</pre>
+      )}
     </div>
   )
 }

@@ -270,10 +270,14 @@ async function getMessagesViaSqlite(dbPath, externalId) {
     }
   } catch (err) {
     if (db && db.close) db.close()
-    logError(`Failed to load sqlite3 or better-sqlite3. Install one with:`)
-    logError(`  npm install -g better-sqlite3  # OR`)
-    logError(`  npm install -g sqlite3`)
-    logError(`Error: ${err.message}`)
+    if (String(err.message || '').toLowerCase().includes('not a database') || err.code === 'SQLITE_NOTADB') {
+      logError(`Zalo PC App đời mới đã mã hoá database (MsgInfo.db) — không thể đọc trực tiếp.`)
+      logError(`→ Cách duy nhất hiện tại: dùng openzca CLI có login`)
+      logError(`   1. Login: openzca auth login   (quét QR trong terminal)`)
+      logError(`   2. Chạy lại lệnh import này — script sẽ tự dùng openzca CLI thay SQLite`)
+    } else {
+      logError(`Lỗi đọc SQLite: ${err.message}`)
+    }
     return null
   }
 }
@@ -417,6 +421,35 @@ async function main() {
     console.log('')
     logInfo('Syncing via SQLite...')
     console.log('')
+
+    // Probe DB encryption — Zalo PC mới mã hoá MsgInfo.db, không đọc plain được
+    try {
+      const { default: Database } = await import('better-sqlite3')
+      const probe = new Database(sqlitePath, { readonly: true })
+      probe.prepare("SELECT name FROM sqlite_master LIMIT 1").get()
+      probe.close()
+    } catch (e) {
+      const msg = String(e.message || '').toLowerCase()
+      if (msg.includes('not a database') || e.code === 'SQLITE_NOTADB') {
+        console.log('')
+        logError('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+        logError('Zalo PC App đời mới đã MÃ HOÁ database — không thể đọc trực tiếp')
+        logError('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+        console.log('')
+        logInfo('💡 Giải pháp: dùng openzca CLI (login bằng QR thay vì đọc DB)')
+        console.log('')
+        console.log('   Bước 1 — Login Zalo qua openzca:')
+        console.log('     openzca auth login')
+        console.log('   (terminal sẽ in QR — quét bằng Zalo trên điện thoại)')
+        console.log('')
+        console.log('   Bước 2 — Chạy lại lệnh import này:')
+        console.log('   (script sẽ tự dùng openzca CLI thay SQLite, lấy được tin)')
+        console.log('')
+        process.exit(1)
+      }
+      logError(`Lỗi mở SQLite: ${e.message}`)
+      process.exit(1)
+    }
 
     for (const group of groups) {
       try {

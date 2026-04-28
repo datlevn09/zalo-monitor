@@ -68,6 +68,9 @@ export function clearQrFromStore(tenantId: string) {
 // Pending actions (dashboard → hook): tenantId → Set<action>
 // Hook poll endpoint /pending-actions, exec lệnh tương ứng (vd login_zalo → openzca login)
 const pendingActions = new Map<string, Set<string>>()
+
+// Trạng thái sync history: tenantId → { ok, output, at }
+const syncHistoryStatus = new Map<string, { ok: boolean | null; output: string; at: number }>()
 export function queueAction(tenantId: string, action: string) {
   if (!pendingActions.has(tenantId)) pendingActions.set(tenantId, new Set())
   pendingActions.get(tenantId)!.add(action)
@@ -721,6 +724,32 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     }
 
     return { ok: true, total: body.groups.length, renamed, flipped, merged }
+  })
+
+  // POST /api/setup/sync-history-done — listener báo đã sync xong
+  app.post('/sync-history-done', async (req, reply) => {
+    const secret = req.headers['x-webhook-secret'] as string
+    const tenantId = req.headers['x-tenant-id'] as string
+    if (!secret || !tenantId) return reply.status(400).send({ error: 'Missing headers' })
+    const tenant = await db.tenant.findFirst({ where: { id: tenantId } })
+    if (!tenant) return reply.status(404).send({ error: 'Not found' })
+    let ok = secret === tenant.webhookSecret
+    if (!ok) {
+      const u = await db.user.findFirst({ where: { tenantId, webhookSecret: secret } })
+      ok = !!u
+    }
+    if (!ok) return reply.status(401).send({ error: 'Invalid' })
+    const body = req.body as { ok?: boolean; output?: string }
+    syncHistoryStatus.set(tenantId, { ok: !!body.ok, output: body.output ?? '', at: Date.now() })
+    return { ok: true }
+  })
+
+  // GET /api/setup/sync-history-status — UI poll để hiện kết quả
+  app.get('/sync-history-status', async (req, reply) => {
+    const tenantId = (req as any).authUser?.tenantId
+      ?? (req.headers['x-tenant-id'] as string)
+    if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
+    return syncHistoryStatus.get(tenantId) ?? { ok: null, output: '', at: 0 }
   })
 
   // POST /api/setup/listener-ping — zalo-listener.mjs ping mỗi 5p để báo còn sống

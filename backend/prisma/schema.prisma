@@ -34,6 +34,12 @@ model Tenant {
   maxGroups  Int    @default(50)              // số nhóm tối đa được monitor
   maxMessagesPerMonth Int @default(10000)     // quota message/tháng
 
+  // AI provider config — tenant tự cấu hình API key của mình (dùng key họ trả tiền)
+  // Nếu null → fallback ANTHROPIC_API_KEY env của system
+  aiProvider String? // 'anthropic' | 'openai' | 'google' | null
+  aiApiKey   String? // encrypted/plain key — TRUST tenant (per-tenant isolation)
+  aiModel    String? // 'claude-haiku-4-5-20251001' | 'gpt-4o-mini' | etc
+
   // Webhook secret — mỗi tenant 1 secret riêng (OpenClaw hook dùng để auth)
   webhookSecret   String  @unique @default(cuid())
 

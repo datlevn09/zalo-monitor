@@ -7,15 +7,80 @@ import type { FastifyPluginAsync } from 'fastify'
 import Anthropic from '@anthropic-ai/sdk'
 import { db } from '../services/db.js'
 
-const anthropic = process.env.ANTHROPIC_API_KEY
+// Default Anthropic instance dùng env key (fallback nếu tenant không tự cấu hình)
+const defaultAnthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null
+
+// Lấy AI client cho 1 tenant — ưu tiên config của tenant, fallback system env.
+async function getAiConfigForTenant(tenantId: string): Promise<{
+  provider: 'anthropic' | 'openai' | 'google'
+  apiKey: string
+  model: string
+} | null> {
+  const t = await db.tenant.findUnique({
+    where: { id: tenantId },
+    select: { aiProvider: true, aiApiKey: true, aiModel: true },
+  })
+  if (t?.aiProvider && t.aiApiKey) {
+    return {
+      provider: t.aiProvider as any,
+      apiKey: t.aiApiKey,
+      model: t.aiModel || (t.aiProvider === 'openai' ? 'gpt-4o-mini' : t.aiProvider === 'google' ? 'gemini-1.5-flash' : 'claude-haiku-4-5-20251001'),
+    }
+  }
+  if (process.env.ANTHROPIC_API_KEY) {
+    return { provider: 'anthropic', apiKey: process.env.ANTHROPIC_API_KEY, model: 'claude-haiku-4-5-20251001' }
+  }
+  return null
+}
+
+async function callAi(cfg: { provider: string; apiKey: string; model: string }, system: string, messages: Array<{ role: string; content: string }>): Promise<string> {
+  if (cfg.provider === 'anthropic') {
+    const client = new Anthropic({ apiKey: cfg.apiKey })
+    const resp = await client.messages.create({
+      model: cfg.model, max_tokens: 1000, system,
+      messages: messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+    })
+    return resp.content[0].type === 'text' ? resp.content[0].text : ''
+  }
+  if (cfg.provider === 'openai') {
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cfg.apiKey}` },
+      body: JSON.stringify({
+        model: cfg.model,
+        messages: [{ role: 'system', content: system }, ...messages],
+        max_tokens: 1000,
+      }),
+    })
+    if (!r.ok) throw new Error(`OpenAI ${r.status}: ${await r.text()}`)
+    const d = await r.json() as any
+    return d.choices?.[0]?.message?.content ?? ''
+  }
+  if (cfg.provider === 'google') {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${cfg.model}:generateContent?key=${cfg.apiKey}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: messages.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+        generationConfig: { maxOutputTokens: 1000 },
+      }),
+    })
+    if (!r.ok) throw new Error(`Gemini ${r.status}: ${await r.text()}`)
+    const d = await r.json() as any
+    return d.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+  }
+  throw new Error(`Provider không hỗ trợ: ${cfg.provider}`)
+}
 
 export const aiChatRoutes: FastifyPluginAsync = async (app) => {
   app.post('/', async (req, reply) => {
     const tenantId = req.headers['x-tenant-id'] as string
     if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
-    if (!anthropic) return reply.send({ answer: 'AI chưa được cấu hình (thiếu ANTHROPIC_API_KEY). Dùng search + charts thay thế.' })
+
+    const aiCfg = await getAiConfigForTenant(tenantId)
+    if (!aiCfg) return reply.send({ answer: 'AI chưa cấu hình. Vào Cài đặt → AI → nhập API key của bạn (Anthropic / OpenAI / Google).' })
 
     const { question, history } = req.body as {
       question: string
@@ -71,14 +136,46 @@ ${JSON.stringify(context, null, 2).slice(0, 15000)}`
     ]
 
     try {
-      const response = await anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001', max_tokens: 1000,
-        system: systemPrompt, messages,
-      })
-      const answer = response.content[0].type === 'text' ? response.content[0].text : ''
-      return { answer }
+      const answer = await callAi(aiCfg, systemPrompt, messages)
+      return { answer, provider: aiCfg.provider, model: aiCfg.model }
     } catch (err: any) {
       return reply.status(500).send({ error: err.message })
     }
+  })
+
+  // GET / PUT /api/ai/config — quản lý AI config của tenant
+  app.get('/config', async (req, reply) => {
+    const tenantId = req.headers['x-tenant-id'] as string
+    if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
+    const t = await db.tenant.findUnique({
+      where: { id: tenantId },
+      select: { aiProvider: true, aiModel: true, aiApiKey: true },
+    })
+    return {
+      provider: t?.aiProvider ?? null,
+      model: t?.aiModel ?? null,
+      hasKey: !!t?.aiApiKey,
+      keyPreview: t?.aiApiKey ? `${t.aiApiKey.slice(0, 7)}...${t.aiApiKey.slice(-4)}` : null,
+      systemFallback: !!process.env.ANTHROPIC_API_KEY,
+    }
+  })
+
+  app.put('/config', async (req, reply) => {
+    const tenantId = req.headers['x-tenant-id'] as string
+    if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
+    const body = req.body as { provider?: string | null; apiKey?: string | null; model?: string | null }
+    const allowed = ['anthropic', 'openai', 'google', null]
+    if (body.provider !== undefined && !allowed.includes(body.provider as any)) {
+      return reply.status(400).send({ error: 'Provider phải là anthropic / openai / google / null' })
+    }
+    await db.tenant.update({
+      where: { id: tenantId },
+      data: {
+        ...(body.provider !== undefined ? { aiProvider: body.provider } : {}),
+        ...(body.apiKey !== undefined ? { aiApiKey: body.apiKey } : {}),
+        ...(body.model !== undefined ? { aiModel: body.model } : {}),
+      },
+    })
+    return { ok: true }
   })
 }
