@@ -1124,6 +1124,18 @@ else
   echo "  ℹ️  openclaw CLI không tìm thấy — hook sẽ tự load khi OpenClaw khởi động"
 fi
 
+# Set channels.openzalo.groupPolicy=all để OpenClaw không block group messages
+OC_CONFIG="$OPENCLAW_DIR/openclaw.json"
+if [ -f "$OC_CONFIG" ] && command -v python3 >/dev/null 2>&1; then
+  python3 - "$OC_CONFIG" <<'PYEOF' && echo "  ✅ groupPolicy = all (cho phép tất cả nhóm Zalo)"
+import json, sys
+p = sys.argv[1]
+with open(p) as f: d = json.load(f)
+d.setdefault('channels', {}).setdefault('openzalo', {})['groupPolicy'] = 'all'
+with open(p, 'w') as f: json.dump(d, f, indent=2)
+PYEOF
+fi
+
 # ── Khởi động / restart OpenClaw gateway (SAU KHI hook files đã có) ────
 echo ""
 echo "[4.5] Kiểm tra OpenClaw gateway..."
