@@ -49,10 +49,19 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
     const { companyName, ownerName, email, password, phone } = body.data
 
-    // Check email not already used
+    // Email đã có → cho phép tạo tenant MỚI (1 user nhiều doanh nghiệp = nhiều Zalo)
+    // Nhưng password phải MATCH user cũ để xác thực cùng người
     const existing = await db.user.findFirst({ where: { email } })
+    let reusePasswordHash: string | null = null
     if (existing) {
-      return reply.status(400).send({ error: 'Email đã được đăng ký' })
+      const inputHash = hashPassword(password)
+      if (inputHash !== existing.passwordHash) {
+        return reply.status(400).send({
+          error: 'Email đã đăng ký với mật khẩu khác. Để tạo doanh nghiệp mới với cùng email, vui lòng nhập đúng mật khẩu hiện tại của email này.',
+          code: 'PASSWORD_MISMATCH_EXISTING_EMAIL',
+        })
+      }
+      reusePasswordHash = existing.passwordHash
     }
 
     // Generate slug from companyName (lowercase, spaces → hyphens, add random suffix)
@@ -78,14 +87,13 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       },
     })
 
-    // Create owner user: role='OWNER', hash password
-    const passwordHash = hashPassword(password)
+    // Create owner user: role='OWNER'. Reuse passwordHash nếu email đã có (cùng người, nhiều DN/Zalo)
     await db.user.create({
       data: {
         tenantId: tenant.id,
         name: ownerName,
         email,
-        passwordHash,
+        passwordHash: reusePasswordHash ?? hashPassword(password),
         role: 'OWNER',
       },
     })

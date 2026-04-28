@@ -167,7 +167,11 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(200).send({ ok: true, skipped: 'group_monitor_off', groupId: group.id })
     }
 
-    // Save message
+    // Save message — phân biệt tạo mới vs upsert để tăng counter đúng
+    const existingMsg = await db.message.findUnique({
+      where: { groupId_externalId: { groupId: group.id, externalId: String(messageId) } },
+      select: { id: true },
+    })
     const message = await db.message.upsert({
       where: { groupId_externalId: { groupId: group.id, externalId: String(messageId) } },
       update: {},
@@ -194,6 +198,14 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
       where: { id: group.id },
       data: { lastMessageAt: new Date() },
     })
+
+    // Tăng counter messagesThisMonth (chỉ tin mới, không count duplicate upsert)
+    if (!existingMsg) {
+      db.tenant.update({
+        where: { id: tenantId },
+        data: { messagesThisMonth: { increment: 1 } },
+      }).catch(() => undefined)
+    }
 
     wsManager.broadcast('message:new', {
       groupId: group.id,
