@@ -333,7 +333,7 @@ async function runPendingSends(cfg: Config) {
       let status: 'sent' | 'failed' = 'failed'
       try {
         const safe = item.text.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, ' ')
-        execSyncSend(`openzca msg send ${item.groupExternalId} "${safe}"`, { timeout: 10_000 })
+        execSyncSend(`"${getOpenzcaBin()}" msg send ${item.groupExternalId} "${safe}"`, { timeout: 10_000 })
         status = 'sent'
       } catch { /* keep failed */ }
 
@@ -380,7 +380,7 @@ async function runPendingActions(cfg: Config) {
         try {
           // Mode --qr-base64: in QR data URL ra stdout rồi exit ngay
           const { execFile } = await import('child_process')
-          execFile('openzca', ['--profile', 'default', 'auth', 'login', '--qr-base64'],
+          execFile(getOpenzcaBin(), ['--profile', 'default', 'auth', 'login', '--qr-base64'],
             { timeout: 30_000, env: { ...process.env, OPENZCA_QR_OPEN: '0' } },
             async (err, stdout) => {
               if (err) return
@@ -417,7 +417,7 @@ async function watchLoginSuccess(cfg: Config) {
   const startedAt = Date.now()
   const timer = setInterval(() => {
     if (Date.now() - startedAt > 5 * 60_000) { clearInterval(timer); loginWatcherActive = false; return }
-    execFile('openzca', ['--profile', 'default', 'auth', 'status'], { timeout: 5_000 }, async (err, stdout) => {
+    execFile(getOpenzcaBin(), ['--profile', 'default', 'auth', 'status'], { timeout: 5_000 }, async (err, stdout) => {
       if (err) return
       // openzca trả "logged in as ..." khi đã đăng nhập (thường có "logged in" hoặc tên user)
       const ok = /logged ?in:?\s*true|đã đăng nhập|profile.*active/i.test(stdout)
@@ -438,6 +438,31 @@ async function watchLoginSuccess(cfg: Config) {
   timer.unref?.()
 }
 
+// Tìm openzca binary path từ openclaw.json (zcaBinary) hoặc fallback common paths
+let cachedOpenzcaBin: string | null = null
+function getOpenzcaBin(): string {
+  if (cachedOpenzcaBin) return cachedOpenzcaBin
+  // Đọc từ openclaw config (zcaBinary)
+  try {
+    const cfgPath = path.join(os.homedir(), '.openclaw', 'openclaw.json')
+    if (fs.existsSync(cfgPath)) {
+      const raw = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'))
+      const bin = raw?.channels?.openzalo?.zcaBinary
+      if (bin && fs.existsSync(bin)) { cachedOpenzcaBin = bin; return bin }
+    }
+  } catch { /* ignore */ }
+  // Fallback paths
+  for (const p of [
+    path.join(os.homedir(), '.npm-global/bin/openzca'),
+    '/usr/local/bin/openzca',
+    '/usr/bin/openzca',
+  ]) {
+    if (fs.existsSync(p)) { cachedOpenzcaBin = p; return p }
+  }
+  cachedOpenzcaBin = 'openzca' // last resort - nhờ PATH
+  return cachedOpenzcaBin
+}
+
 // Watch openzca login state — báo backend ngay khi state đổi (kể cả user login trực tiếp qua terminal)
 let lastLoginState: 'logged_in' | 'logged_out' | 'unknown' = 'unknown'
 function initLoginStateWatcher() {
@@ -445,7 +470,7 @@ function initLoginStateWatcher() {
     const cfg = loadConfig()
     if (!cfg) return
     const { execFile } = await import('child_process')
-    execFile('openzca', ['--profile', 'default', 'auth', 'status'], { timeout: 5_000 }, async (err, stdout, stderr) => {
+    execFile(getOpenzcaBin(), ['--profile', 'default', 'auth', 'status'], { timeout: 5_000 }, async (err, stdout, stderr) => {
       const out = (stdout ?? '') + (stderr ?? '')
       const isLoggedIn = !err && /logged ?in:?\s*true|đã đăng nhập|profile.*active/i.test(out)
       const newState = isLoggedIn ? 'logged_in' : 'logged_out'

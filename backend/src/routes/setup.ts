@@ -48,7 +48,8 @@ const qrStore = new Map<string, { dataUrl: string; pushedAt: number }>()
 export function getQrFromStore(tenantId: string) {
   const entry = qrStore.get(tenantId)
   if (!entry) return null
-  if (Date.now() - entry.pushedAt > 5 * 60 * 1000) { qrStore.delete(tenantId); return null }
+  // QR Zalo chỉ valid ~60s, sau đó coi như đã scan/expired → clear
+  if (Date.now() - entry.pushedAt > 90 * 1000) { qrStore.delete(tenantId); return null }
   return entry.dataUrl
 }
 
