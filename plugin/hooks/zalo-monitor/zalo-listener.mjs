@@ -172,7 +172,35 @@ async function pollPendingSends() {
 }
 setInterval(pollPendingSends, 10_000).unref?.()
 
-// Health ping mỗi 5 phút để dashboard biết listener đang sống
+// Check openzca auth status để biết Zalo đã login chưa (mỗi 30s)
+async function zaloStatusCheck() {
+  try {
+    const { execSync } = await import('node:child_process')
+    const out = execSync(`"${OPENZCA}" --profile ${cfg.profile} auth status 2>&1`, { timeout: 5_000, encoding: 'utf-8' })
+    const isLoggedIn = /loggedIn:\s*true|displayName/i.test(out)
+    await fetch(`${cfg.backendUrl}/api/setup/zalo-status`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-webhook-secret': cfg.secret,
+        'x-tenant-id': cfg.tenantId,
+      },
+      body: JSON.stringify({ loggedIn: isLoggedIn, at: Date.now() }),
+    }).catch(() => undefined)
+  } catch {
+    // openzca status fail = Zalo chưa login
+    await fetch(`${cfg.backendUrl}/api/setup/zalo-status`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-webhook-secret': cfg.secret,
+        'x-tenant-id': cfg.tenantId,
+      },
+      body: JSON.stringify({ loggedIn: false, at: Date.now() }),
+    }).catch(() => undefined)
+  }
+}
+// Health ping mỗi 5 phút (listener service alive — KHÔNG đảm bảo Zalo logged in)
 async function healthPing() {
   try {
     await fetch(`${cfg.backendUrl}/api/setup/listener-ping`, {
@@ -189,6 +217,9 @@ async function healthPing() {
 
 setInterval(healthPing, 5 * 60_000).unref?.()
 healthPing()
+// Check Zalo login status mỗi 30s
+setInterval(zaloStatusCheck, 30_000).unref?.()
+zaloStatusCheck()
 
 startListener()
 

@@ -43,6 +43,14 @@ setInterval(() => {
   for (const [k, ts] of hookPings) if (ts < cutoff) hookPings.delete(k)
 }, 60_000).unref?.()
 
+// CHỈ set khi openzca auth status = logged in. Listener gọi /zalo-status mỗi 30s.
+// Đây là source of truth duy nhất để biết Zalo đã login chưa (KHÔNG dùng hookPings).
+export const zaloLoggedInTenants = new Map<string, number>()
+setInterval(() => {
+  const cutoff = Date.now() - 5 * 60 * 1000  // 5 min không ping → coi như offline
+  for (const [k, ts] of zaloLoggedInTenants) if (ts < cutoff) zaloLoggedInTenants.delete(k)
+}, 60_000).unref?.()
+
 // In-memory QR store: tenantId → { dataUrl, pushedAt }
 const qrStore = new Map<string, { dataUrl: string; pushedAt: number }>()
 export function getQrFromStore(tenantId: string) {
@@ -591,6 +599,29 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     const tenant = await db.tenant.findFirst({ where: { webhookSecret: secret } })
     if (!tenant) return reply.status(403).send({ error: 'Invalid secret' })
     await db.sendQueue.update({ where: { id, tenantId: tenant.id }, data: { status } })
+    return { ok: true }
+  })
+
+  // POST /api/setup/zalo-status — listener báo Zalo đã/chưa login (chính xác hơn hookPing)
+  app.post('/zalo-status', async (req, reply) => {
+    const secret = req.headers['x-webhook-secret'] as string
+    const tenantId = req.headers['x-tenant-id'] as string
+    if (!secret || !tenantId) return reply.status(400).send({ error: 'Missing headers' })
+    const tenant = await db.tenant.findFirst({ where: { id: tenantId } })
+    if (!tenant) return reply.status(404).send({ error: 'Not found' })
+    let ok = secret === tenant.webhookSecret
+    if (!ok) {
+      const u = await db.user.findFirst({ where: { tenantId, webhookSecret: secret } })
+      ok = !!u
+    }
+    if (!ok) return reply.status(401).send({ error: 'Invalid' })
+    const { loggedIn } = req.body as { loggedIn?: boolean }
+    if (loggedIn) {
+      zaloLoggedInTenants.set(tenantId, Date.now())
+    } else {
+      zaloLoggedInTenants.delete(tenantId)
+      qrStore.delete(tenantId) // chưa login → clear QR cũ
+    }
     return { ok: true }
   })
 

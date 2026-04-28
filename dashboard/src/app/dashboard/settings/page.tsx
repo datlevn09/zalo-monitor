@@ -120,7 +120,7 @@ export default function SettingsPage() {
               📲 Zalo của tôi
               {zaloStatus === null ? null
                 : zaloStatus.connected
-                  ? <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 rounded-full">● Đang kết nối</span>
+                  ? <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 rounded-full">● Đã kết nối</span>
                   : zaloStatus.containerRunning
                     ? <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 rounded-full">● Chờ quét QR</span>
                     : <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 rounded-full">● Chưa kết nối</span>

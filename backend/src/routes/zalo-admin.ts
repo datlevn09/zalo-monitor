@@ -195,11 +195,12 @@ export const zaloAdminRoutes: FastifyPluginAsync = async (app) => {
       } catch { /* ignore */ }
     }
 
-    // Connected nếu: không có QR pending VÀ (có message gần đây HOẶC hook đang ping đều)
-    const lastPing = hookPings.get(tenantId)
-    const hookPingedRecently = !!lastPing && Date.now() - lastPing < 5 * 60 * 1000
+    // Source of truth: zaloLoggedInTenants — chỉ set khi listener xác nhận openzca logged in
+    const { zaloLoggedInTenants } = await import('./setup.js')
+    const zaloLoginAt = zaloLoggedInTenants.get(tenantId)
+    const zaloLoggedIn = !!zaloLoginAt && Date.now() - zaloLoginAt < 2 * 60 * 1000  // ping mới <2min
     return {
-      connected: !qrPending && (hookPingedRecently || !!recentMsg),
+      connected: zaloLoggedIn,
       qrPending,
       containerRunning,
       lastMessageAt: recentMsg?.sentAt ?? null,

@@ -398,7 +398,7 @@ function ZaloChannelCard({
 
   const getStatusBadge = () => {
     if (notInstalled)      return { color: 'bg-gray-100 dark:bg-white/5 text-gray-500 dark:text-zinc-400',    dot: 'bg-gray-400',                          text: 'Chưa cài đặt' }
-    if (status.connected)  return { color: 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-300', dot: 'bg-green-600 dark:bg-green-400',   text: 'Đang kết nối' }
+    if (status.connected)  return { color: 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-300', dot: 'bg-green-600 dark:bg-green-400',   text: 'Đã kết nối' }
     if (status.qrPending)  return { color: 'bg-yellow-100 dark:bg-yellow-500/20 text-yellow-700 dark:text-yellow-300', dot: 'bg-yellow-500 animate-pulse', text: 'Chờ quét QR...' }
     return                        { color: 'bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-300',     dot: 'bg-red-500',                           text: 'Mất kết nối' }
   }

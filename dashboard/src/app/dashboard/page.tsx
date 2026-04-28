@@ -377,7 +377,7 @@ function ZaloStatusWidget({ health }: {
   }
 }) {
   const sessionCfg = {
-    healthy: { dot: 'bg-green-500', text: 'Đang kết nối',     color: 'text-green-600 dark:text-green-400' },
+    healthy: { dot: 'bg-green-500', text: 'Đã kết nối',     color: 'text-green-600 dark:text-green-400' },
     warning: { dot: 'bg-amber-400 animate-pulse', text: 'Tín hiệu yếu', color: 'text-amber-600 dark:text-amber-400' },
     dead:    { dot: 'bg-red-500',   text: 'Mất kết nối',      color: 'text-red-600 dark:text-red-400' },
     never:   { dot: 'bg-gray-400',  text: 'Chưa kết nối',     color: 'text-gray-500 dark:text-zinc-400' },
