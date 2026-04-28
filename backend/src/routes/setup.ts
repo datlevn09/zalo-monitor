@@ -1074,7 +1074,7 @@ if oz:
         rest = out[idx+12:].lstrip()
         if rest and rest[0] in ("'", '"'): rest = rest[1:]
         end = 0
-        while end < len(rest) and rest[end] not in ("'", '"', "\n", ",", "}"):
+        while end < len(rest) and rest[end] not in ("'", '"', chr(10), ",", "}"):
           end += 1
         name = rest[:end].strip()
       if logged_in:
