@@ -120,8 +120,23 @@ function startListener() {
   console.log(`▶️  Spawn openzca listen (restart #${restartCount})`)
 
   const proc = spawn(quoteWin(OPENZCA), ['--profile', cfg.profile, 'listen', '--raw', '--keep-alive'], {
-    stdio: ['ignore', 'pipe', 'inherit'],
+    stdio: ['ignore', 'pipe', 'pipe'],
     ...SPAWN_OPTS_BASE,
+  })
+
+  // Detect "already owns profile" → another instance đang chạy. Exit gracefully,
+  // không restart loop (sẽ thoát process — Scheduled Task tự re-trigger sau).
+  let stderrBuf = ''
+  proc.stderr?.on('data', (chunk) => {
+    const text = chunk.toString()
+    stderrBuf += text
+    process.stderr.write(text)
+    if (stderrBuf.includes('already owns profile')) {
+      console.error('💥 Phát hiện listener khác đang chạy cùng profile — exit để tránh restart loop')
+      restartCount = 999  // disable restart
+      try { proc.kill() } catch {}
+      process.exit(2)
+    }
   })
 
   let buf = ''

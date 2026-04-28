@@ -895,6 +895,18 @@ $envContent = "BACKEND_URL=$BACKEND_URL\`r\`nWEBHOOK_SECRET=$SECRET\`r\`nTENANT_
 Set-Content -Path $envPath -Value $envContent -Encoding UTF8 -NoNewline
 Write-Host "  OK .env: $envPath" -ForegroundColor Green
 
+# Stop scheduled task cu + kill process listener stale (tranh duplicate lock conflict)
+Write-Host "[*] Don dep listener cu (neu co)..." -ForegroundColor DarkGray
+$prevEAP2 = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+& cmd /c "schtasks /End /TN ZaloMonitorListener" 2>&1 | Out-Null
+Get-Process openzca -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+# Kill node processes dang chay zalo-listener.mjs (giu lai npm.exe vv)
+Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
+  Where-Object { $_.CommandLine -match 'zalo-listener' } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+$ErrorActionPreference = $prevEAP2
+
 # Wrapper script load .env roi exec node
 # Note: PS escape \`$ trong @"..."@ heredoc de tranh interpolate variables cua wrapper script
 $wrapperPath = Join-Path $LISTENER_DIR "run-listener.ps1"
