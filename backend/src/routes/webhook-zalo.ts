@@ -53,16 +53,22 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
 
     const raw = req.body as Record<string, any>
 
+    // DEBUG: log raw payload key set (not full content) để diagnose
+    if (process.env.DEBUG_WEBHOOK === '1' || tenantId === 'cmoijmwfp0056sa7x4mu54b0g') {
+      app.log.info({ tenantId, keys: Object.keys(raw), preview: JSON.stringify(raw).slice(0, 500) }, '[zalo-webhook] raw payload')
+    }
+
     // openzca payload:
     // { msgId, cliMsgId, senderId, toId, threadId, content, mediaPath, mediaUrl, ... }
     // Recall events có: type='undo' | event='delete' | content.deletedMsgId
-    const threadId = raw.threadId ?? raw.idTo ?? raw.groupId
-    const messageId = raw.msgId ?? raw.cliMsgId
-    const senderId = raw.senderId ?? raw.uidFrom
+    const threadId = raw.threadId ?? raw.idTo ?? raw.groupId ?? raw.toUid ?? raw.uidTo ?? raw.tid
+    const messageId = raw.msgId ?? raw.cliMsgId ?? raw.id
+    const senderId = raw.senderId ?? raw.uidFrom ?? raw.fromUid ?? raw.from
     const text = raw.content ?? raw.message ?? raw.text
 
     if (!threadId || !messageId || !senderId) {
-      return reply.status(200).send({ ok: true, skipped: 'incomplete' })
+      app.log.warn({ tenantId, keys: Object.keys(raw), threadId, messageId, senderId }, '[zalo-webhook] skipped: missing required fields')
+      return reply.status(200).send({ ok: true, skipped: 'incomplete', missingFields: { threadId: !threadId, messageId: !messageId, senderId: !senderId }, hint: 'check listener payload format' })
     }
 
     // Detect recall: openzca event có type/msgType là 'undo' hoặc content có deletedMsgId
