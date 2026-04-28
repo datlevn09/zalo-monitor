@@ -136,7 +136,13 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
         senderName: raw.senderName ?? raw.dName ?? null,
         contentType: detectContentType(raw),
         content: typeof text === 'string' ? text : JSON.stringify(text),
-        attachments: raw.mediaUrl ? [raw.mediaUrl] : undefined,
+        attachments: (() => {
+          const urls: string[] = []
+          if (raw.mediaUrl) urls.push(String(raw.mediaUrl))
+          const fromText = extractMediaUrl(text)
+          if (fromText && !urls.includes(fromText)) urls.push(fromText)
+          return urls.length > 0 ? urls : undefined
+        })(),
         sentAt: raw.timestamp ? new Date(raw.timestamp) : new Date(),
       },
     })
@@ -215,11 +221,32 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
 }
 
 function detectContentType(raw: Record<string, any>): 'TEXT' | 'IMAGE' | 'VIDEO' | 'FILE' | 'STICKER' | 'VOICE' {
+  // Ưu tiên explicit field
   const mt = (raw.mediaType ?? raw.msgType ?? '').toLowerCase()
   if (mt.includes('image') || mt.includes('photo')) return 'IMAGE'
   if (mt.includes('video')) return 'VIDEO'
   if (mt.includes('voice') || mt.includes('audio')) return 'VOICE'
   if (mt.includes('sticker')) return 'STICKER'
+
+  // openzca format: content text có "[media attached: ... (mime) | url]"
+  const text = typeof raw.content === 'string' ? raw.content : (typeof raw.text === 'string' ? raw.text : '')
+  const m = text.match(/\(([\w/-]+\/[\w-]+)\)/)
+  if (m) {
+    const mime = m[1].toLowerCase()
+    if (mime.startsWith('image/')) return 'IMAGE'
+    if (mime.startsWith('video/')) return 'VIDEO'
+    if (mime.startsWith('audio/')) return 'VOICE'
+    return 'FILE'
+  }
+
   if (raw.mediaPath || raw.mediaUrl) return 'FILE'
   return 'TEXT'
+}
+
+// Extract public URL from openzca bracket format
+function extractMediaUrl(content: string | unknown): string | null {
+  if (typeof content !== 'string') return null
+  // [media attached: <path> (<mime>) | <url>]
+  const m = content.match(/\|\s*(https?:\/\/[^\s\]]+)/)
+  return m ? m[1] : null
 }

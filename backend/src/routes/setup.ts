@@ -569,7 +569,8 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
       take: 20,
       select: { id: true, groupExternalId: true, text: true },
     })
-    return pending
+    // Mặc định coi là group (zalo monitor mainly cho group). DM hiếm.
+    return pending.map(p => ({ ...p, isGroup: true }))
   })
 
   // POST /api/setup/ack-send — hook reports send result

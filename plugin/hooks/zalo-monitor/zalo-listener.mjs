@@ -151,7 +151,10 @@ async function pollPendingSends() {
       let status = 'failed'
       try {
         const safe = String(item.text).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, ' ')
-        execSync(`"${OPENZCA}" --profile ${cfg.profile} msg send ${item.groupExternalId} "${safe}"`, { timeout: 10_000 })
+        // -g = group send (cần cho thread group), --raw = không parse format markers
+        const isGroup = !!item.isGroup // backend cần truyền field này
+        const groupFlag = isGroup ? '-g' : ''
+        execSync(`"${OPENZCA}" --profile ${cfg.profile} msg send ${groupFlag} --raw ${item.groupExternalId} "${safe}"`, { timeout: 10_000 })
         status = 'sent'
         console.log(`   ✉️  Sent ${item.id} → ${item.groupExternalId}`)
       } catch (err) {
