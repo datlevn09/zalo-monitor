@@ -618,26 +618,26 @@ function ZaloChannelCard({
 
               {showHistoryImport && (
                 <div className="mt-3 space-y-4">
-                  {/* Case 1 — Auto */}
+                  {/* Case 1 — Real-time forward */}
                   <div className="rounded-lg bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 p-3">
                     <p className="text-xs font-semibold text-green-800 dark:text-green-300 mb-1">
-                      ✅ Tự động (đã chạy)
+                      ✅ Tin nhắn MỚI (real-time)
                     </p>
                     <p className="text-xs text-green-700 dark:text-green-400 leading-relaxed">
-                      Hook tự sync <strong>50 tin/nhóm</strong> gần nhất qua <code className="bg-green-100 dark:bg-green-500/20 px-1 rounded">openzca</code> ngay khi kết nối. Liên hệ admin nếu muốn tăng số lượng (max 9999).
+                      Listener (<code className="bg-green-100 dark:bg-green-500/20 px-1 rounded">openzca listen</code>) tự động forward mọi tin Zalo mới về dashboard. Không cần làm gì thêm.
                     </p>
                   </div>
 
                   {/* Case 2 — Manual import full history */}
                   <div className="rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 p-3">
                     <p className="text-xs font-semibold text-gray-700 dark:text-zinc-200 mb-1">
-                      📚 Import TOÀN BỘ lịch sử cũ (tuỳ chọn)
+                      📚 Import lịch sử CŨ (tuỳ chọn — 1 lần đầu)
                     </p>
                     <p className="text-xs text-gray-500 dark:text-zinc-400 mb-2.5 leading-relaxed">
-                      Nếu bạn có <strong>Zalo PC App</strong> trên máy Windows/Mac (đã đăng nhập tài khoản đó nhiều ngày) → chạy script sau trên chính máy đó để đẩy toàn bộ lịch sử cũ lên dashboard. Script đọc SQLite của Zalo PC App.
+                      Listener chỉ bắt tin nhắn từ lúc kết nối trở đi. Nếu muốn import toàn bộ lịch sử CŨ → cần có <strong>Zalo PC App</strong> trên máy Windows/Mac (đã đăng nhập tài khoản đó). Chạy script bên dưới trên chính máy đó để đẩy lịch sử cũ lên dashboard (đọc SQLite của Zalo PC App).
                     </p>
                     <p className="text-xs text-amber-700 dark:text-amber-400 mb-2.5">
-                      💡 <strong>Lưu ý:</strong> Chỉ chạy khi đã có ít nhất 1 nhóm Zalo hiển thị trong dashboard (cần đợi 1 tin nhắn đầu tiên đến).
+                      💡 <strong>Lưu ý:</strong> Chỉ chạy khi đã có ít nhất 1 nhóm Zalo hiển thị trong dashboard (đợi vài tin Zalo mới đến để listener tạo group).
                     </p>
 
                     {/* Step 1: Tải script */}

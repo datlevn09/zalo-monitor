@@ -113,7 +113,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <RemoteBanner />
 
         {/* Zalo disconnected banner */}
-        {!bannerDismissed && (zaloConnected === false || sessionHealth?.status === 'dead') && !pathname.includes('/settings/channels') && (
+        {!bannerDismissed && (zaloConnected === false || sessionHealth?.status === 'dead') && !pathname.includes('/settings') && (
           <ZaloDisconnectedBanner
             hoursSincePing={sessionHealth?.hoursSincePing ?? null}
             onDismiss={() => setBannerDismissed(true)}

@@ -127,30 +127,9 @@ export default function SettingsPage() {
               }
             </span>
           }
-          description="Lệnh cài hook vào OpenClaw chạy trên máy có Zalo cá nhân của bạn. Mỗi nhân viên chạy lệnh của chính họ trên máy họ."
+          description="Listener chỉ ĐỌC tin Zalo của bạn — không bao giờ tự reply. Chỉ gửi khi bạn chủ động bấm Gửi từ dashboard."
         >
-          <div className="px-4 py-3.5 space-y-3">
-            <div className="bg-gray-900 dark:bg-black/60 rounded-xl p-3 font-mono text-xs text-green-400 break-all whitespace-pre-wrap">
-              {install.oneLineCommand}
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => copy(install.oneLineCommand)}
-                className="flex-1 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg"
-              >
-                {copied ? '✓ Đã copy' : '📋 Copy lệnh'}
-              </button>
-              <button
-                onClick={() => copy(install.dockerCommand)}
-                className="flex-1 py-2 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 text-gray-700 dark:text-zinc-300 text-xs font-medium rounded-lg"
-              >
-                🐳 Copy Docker
-              </button>
-            </div>
-            <p className="text-[11px] text-gray-500 dark:text-zinc-400">
-              Paste vào terminal máy có OpenClaw → tin nhắn Zalo của bạn sẽ forward về đây, stamp là "của bạn". Team khác không đọc được DM của bạn.
-            </p>
-          </div>
+          <InstallCommandTabs install={install} copy={copy} copied={copied} />
         </Section>
       )}
 
@@ -348,6 +327,83 @@ function Row({ label, value, mono, small }: { label: string; value: string; mono
       <span className={`text-sm text-gray-900 dark:text-zinc-100 font-medium truncate text-right ${mono ? 'font-mono' : ''} ${small ? 'text-xs' : ''}`}>
         {value}
       </span>
+    </div>
+  )
+}
+
+function InstallCommandTabs({ install, copy, copied }: { install: InstallCommand; copy: (s: string) => void; copied: boolean }) {
+  const [tab, setTab] = useState<'linux' | 'docker' | 'mac'>('linux')
+
+  // Build Docker command từ oneLineCommand (extract URL, parse query)
+  const dockerCmd = (() => {
+    const m = install.oneLineCommand.match(/inject\.sh\?([^"' ]+)/)
+    if (!m) return install.dockerCommand || ''
+    const params = new URLSearchParams(m[1])
+    const tenantId = params.get('tenantId') || ''
+    const userId = params.get('userId')
+    const apiUrl = install.oneLineCommand.match(/https:\/\/[^\/]+/)?.[0] || 'https://api.datthongdong.com'
+    return `docker run -d --name zalo-listener \\
+  -v zalo-data:/home/node/.openzca \\
+  -e BACKEND_URL=${apiUrl} \\
+  -e WEBHOOK_SECRET=<secret-từ-team> \\
+  -e TENANT_ID=${tenantId} \\
+  --restart unless-stopped \\
+  datlevn09/zalo-monitor-listener:latest
+
+# Login Zalo (lần đầu, scan QR):
+docker exec -it zalo-listener openzca --profile default auth login`
+  })()
+
+  const apiUrl = install.oneLineCommand.match(/https:\/\/[^\/]+/)?.[0] || 'https://api.datthongdong.com'
+  const tenantId = install.oneLineCommand.match(/tenantId=([^&"' ]+)/)?.[1] || '<tenant-id>'
+  const macCmd = `# 1. Cài Node + openzca
+brew install node
+npm install -g openzca
+
+# 2. Login Zalo (scan QR)
+openzca --profile default auth login
+
+# 3. Tải listener + chạy
+curl -O ${apiUrl}/api/setup/hook-files/zalo-listener.mjs
+BACKEND_URL=${apiUrl} \\
+WEBHOOK_SECRET=<secret-từ-team> \\
+TENANT_ID=${tenantId} \\
+node zalo-listener.mjs`
+
+  const current = tab === 'linux' ? install.oneLineCommand : tab === 'docker' ? dockerCmd : macCmd
+
+  return (
+    <div className="px-4 py-3.5 space-y-3">
+      <div className="flex gap-1 bg-gray-100 dark:bg-white/5 rounded-lg p-1">
+        <button onClick={() => setTab('linux')}
+          className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${tab === 'linux' ? 'bg-white dark:bg-white/10 shadow-sm text-gray-900 dark:text-zinc-100' : 'text-gray-600 dark:text-zinc-400'}`}>
+          🐧 Linux VPS
+        </button>
+        <button onClick={() => setTab('docker')}
+          className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${tab === 'docker' ? 'bg-white dark:bg-white/10 shadow-sm text-gray-900 dark:text-zinc-100' : 'text-gray-600 dark:text-zinc-400'}`}>
+          🐳 Docker / NAS
+        </button>
+        <button onClick={() => setTab('mac')}
+          className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${tab === 'mac' ? 'bg-white dark:bg-white/10 shadow-sm text-gray-900 dark:text-zinc-100' : 'text-gray-600 dark:text-zinc-400'}`}>
+          🍎 Mac/Desktop
+        </button>
+      </div>
+
+      <pre className="bg-gray-900 dark:bg-black/60 rounded-xl p-3 font-mono text-[11px] text-green-400 overflow-x-auto whitespace-pre-wrap break-all select-all">{current}</pre>
+
+      <button onClick={() => copy(current)}
+        className="w-full py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg">
+        {copied ? '✓ Đã copy' : '📋 Copy lệnh'}
+      </button>
+
+      <p className="text-[11px] text-gray-500 dark:text-zinc-400">
+        {tab === 'linux' && '→ SSH vào VPS Linux → paste 1 lệnh → tự cài Node + openzca + systemd service.'}
+        {tab === 'docker' && '→ Chạy trên NAS Synology / Windows / mọi nơi có Docker. Sau đó docker exec để login Zalo.'}
+        {tab === 'mac' && '→ Cài Node bằng Homebrew, chạy node trong terminal. Để chạy ngầm dùng pm2 hoặc launchd.'}
+      </p>
+      <p className="text-[11px] text-amber-700 dark:text-amber-400">
+        🔒 <strong>Chỉ ĐỌC:</strong> listener không bao giờ tự reply. Gửi tin chỉ khi bạn bấm Gửi từ dashboard.
+      </p>
     </div>
   )
 }

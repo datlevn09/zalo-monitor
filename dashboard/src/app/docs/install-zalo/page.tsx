@@ -16,9 +16,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
 
 function Code({ children }: { children: string }) {
   return (
-    <div className="bg-gray-900 dark:bg-zinc-950 rounded-lg p-4 overflow-x-auto">
-      <code className="text-sm font-mono text-green-400 select-all">{children}</code>
-    </div>
+    <pre className="bg-gray-900 dark:bg-zinc-950 rounded-lg p-3 overflow-x-auto text-xs font-mono text-green-400 select-all whitespace-pre-wrap break-all">{children}</pre>
   )
 }
 
@@ -26,7 +24,7 @@ export default function InstallZaloPage() {
   return (
     <div className="min-h-[100dvh] bg-[#f2f2f7] dark:bg-zinc-950 text-gray-900 dark:text-zinc-100 flex flex-col">
       <div className="bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-white/10">
-        <div className="max-w-2xl mx-auto px-4 md:px-6 py-4">
+        <div className="max-w-3xl mx-auto px-4 md:px-6 py-4">
           <Link href="/dashboard/settings/channels" className="inline-flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline mb-4">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -34,86 +32,106 @@ export default function InstallZaloPage() {
             Quay lại Cài đặt Kênh
           </Link>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Kết nối Zalo</h1>
-          <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1">Chỉ cần 1 lệnh — tự động cài đặt và hiện QR để quét</p>
+          <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1">
+            Listener chỉ <strong>ĐỌC</strong> tin nhắn và báo cáo về dashboard. <strong>Không reply tự động</strong>. Chỉ gửi tin khi bạn chủ động bấm Gửi từ dashboard.
+          </p>
         </div>
       </div>
 
-      <div className="flex-1 max-w-2xl mx-auto w-full px-4 md:px-6 py-8 space-y-6">
+      <div className="flex-1 max-w-3xl mx-auto w-full px-4 md:px-6 py-8 space-y-6">
         <div className="bg-white dark:bg-zinc-900 dark:ring-1 dark:ring-white/5 rounded-xl p-6 md:p-8 space-y-6">
 
-          <Step n={1} title="Lấy lệnh cài đặt">
-            <p className="text-sm text-gray-600 dark:text-zinc-400 mb-3">
-              Vào{' '}
-              <Link href="/dashboard/settings/channels" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
-                Cài đặt → Kênh
-              </Link>
-              {' '}→ bấm <strong>Kết nối Zalo</strong> → copy lệnh cài đặt hiển thị trên màn hình.
-            </p>
-            <p className="text-xs text-gray-500 dark:text-zinc-500">
-              Lệnh có dạng: <code className="bg-gray-100 dark:bg-white/10 px-1 rounded">curl -fsSL https://api.../inject.sh?... | bash</code>
+          <Step n={1} title="Lấy lệnh cài đặt từ dashboard">
+            <p className="text-sm text-gray-600 dark:text-zinc-400">
+              Vào <Link href="/dashboard/settings/channels" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">Cài đặt → Kênh</Link>, chọn cách cài phù hợp với máy chủ của bạn → copy lệnh.
             </p>
           </Step>
 
-          <Step n={2} title="Chạy lệnh trên máy chủ">
-            <p className="text-sm text-gray-600 dark:text-zinc-400 mb-3">
-              SSH vào máy chủ (VPS/NAS/máy tính) rồi paste và chạy lệnh vừa copy. Script sẽ tự động:
-            </p>
-            <ul className="text-sm text-gray-600 dark:text-zinc-400 space-y-1 mb-3">
-              {['Cài OpenClaw nếu chưa có', 'Cài hook Zalo Monitor vào OpenClaw', 'Khởi động daemon tự động (chạy ngầm, không cần giữ terminal)'].map(t => (
-                <li key={t} className="flex items-start gap-2"><span className="text-green-500 font-bold mt-0.5">✓</span><span>{t}</span></li>
-              ))}
-            </ul>
-            <div className="bg-blue-50 dark:bg-blue-500/10 rounded-lg p-3 text-xs text-blue-800 dark:text-blue-300">
-              💡 Không cần cài Docker. Script chạy khoảng 1–2 phút.
+          <Step n={2} title="3 cách cài tuỳ máy chủ">
+            <div className="space-y-5 mt-3">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-lg">🐧</span>
+                  <strong className="text-gray-900 dark:text-zinc-100">Linux VPS / Cloud server</strong>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-zinc-400 mb-2">SSH vào máy chủ, paste 1 lệnh — script tự cài Node, openzca, systemd service.</p>
+                <Code>{'curl -fsSL "https://api.../api/setup/inject.sh?..." | bash'}</Code>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-lg">🐳</span>
+                  <strong className="text-gray-900 dark:text-zinc-100">Docker (NAS Synology / Windows / mọi nơi có Docker)</strong>
+                </div>
+                <p className="text-xs text-gray-500 dark:text-zinc-400 mb-2">Container có sẵn Node + openzca, chạy 1 lệnh.</p>
+                <Code>{`docker run -d --name zalo-listener \\
+  -v zalo-data:/home/node/.openzca \\
+  -e BACKEND_URL=https://api... \\
+  -e WEBHOOK_SECRET=xxx \\
+  -e TENANT_ID=xxx \\
+  --restart unless-stopped \\
+  datlevn09/zalo-monitor-listener:latest
+
+# Login Zalo (interactive QR scan):
+docker exec -it zalo-listener openzca --profile default auth login`}</Code>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-lg">🍎</span>
+                  <strong className="text-gray-900 dark:text-zinc-100">macOS / Linux Desktop (chạy trong terminal)</strong>
+                </div>
+                <Code>{`brew install node          # macOS, hoặc apt/yum trên Linux
+npm install -g openzca
+openzca --profile default auth login   # Scan QR
+
+curl -O https://api.../api/setup/hook-files/zalo-listener.mjs
+BACKEND_URL=https://api... WEBHOOK_SECRET=xxx TENANT_ID=xxx \\
+  node zalo-listener.mjs`}</Code>
+              </div>
             </div>
           </Step>
 
-          <Step n={3} title="Quét QR trên Zalo">
-            <p className="text-sm text-gray-600 dark:text-zinc-400 mb-3">
-              Sau khi script chạy xong, mã QR sẽ tự hiện trong dashboard. Quét bằng điện thoại:
-            </p>
-            <ul className="text-sm text-gray-600 dark:text-zinc-400 space-y-2">
-              {[
-                'Mở app Zalo trên điện thoại',
-                'Vào Cài đặt → Thiết bị đã đăng nhập',
-                'Nhấn "Thêm thiết bị"',
-                'Quét mã QR hiển thị trong dashboard',
-              ].map((t, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  <span className="text-blue-500 font-semibold shrink-0">•</span>
-                  <span>{t}</span>
-                </li>
-              ))}
+          <Step n={3} title="Quét QR đăng nhập Zalo">
+            <p className="text-sm text-gray-600 dark:text-zinc-400 mb-2">Trên app Zalo điện thoại:</p>
+            <ul className="text-sm text-gray-600 dark:text-zinc-400 space-y-1 list-disc list-inside">
+              <li>Cài đặt → Thiết bị đã đăng nhập → Thêm thiết bị</li>
+              <li>Quét QR hiển thị trong terminal</li>
             </ul>
           </Step>
 
-          <Step n={4} title="Xong!">
-            <p className="text-sm text-gray-600 dark:text-zinc-400">
-              Dashboard tự nhận ra kết nối. Bắt đầu thêm nhóm Zalo để theo dõi tại{' '}
-              <Link href="/dashboard/settings/channels" className="text-blue-600 dark:text-blue-400 hover:underline">Cài đặt → Kênh</Link>.
-            </p>
+          <Step n={4} title="Xong — Listener tự forward tin về dashboard">
+            <ul className="text-sm text-gray-600 dark:text-zinc-400 space-y-1 list-disc list-inside">
+              <li><strong>Chỉ ĐỌC</strong> — listener không bao giờ tự reply</li>
+              <li>Bấm <strong>Gửi</strong> trên dashboard → backend queue → listener exec <code className="bg-gray-100 dark:bg-white/10 px-1 rounded">openzca msg send</code></li>
+              <li>Auto-restart khi mất kết nối / reboot máy</li>
+            </ul>
           </Step>
         </div>
 
-        {/* FAQ */}
         <div className="bg-white dark:bg-zinc-900 dark:ring-1 dark:ring-white/5 rounded-xl p-6 space-y-4">
-          <h2 className="font-semibold text-gray-900 dark:text-zinc-100">Câu hỏi thường gặp</h2>
+          <h2 className="font-semibold text-gray-900 dark:text-zinc-100">FAQ</h2>
 
           <div className="space-y-1">
-            <p className="text-sm font-medium text-gray-800 dark:text-zinc-200">QR không hiện trong dashboard?</p>
-            <p className="text-sm text-gray-500 dark:text-zinc-400">Kiểm tra script đã chạy thành công chưa. Nếu lỗi, thử chạy lại lệnh cài đặt.</p>
+            <p className="text-sm font-medium text-gray-800 dark:text-zinc-200">Listener có gửi tin nhắn tự động không?</p>
+            <p className="text-sm text-gray-500 dark:text-zinc-400">
+              <strong>Không.</strong> Chỉ đọc + forward. Gửi chỉ khi user chủ động bấm Gửi từ dashboard. Không có agent AI nào tự reply.
+            </p>
           </div>
 
           <div className="space-y-1">
             <p className="text-sm font-medium text-gray-800 dark:text-zinc-200">Zalo bị đăng xuất phải làm gì?</p>
             <p className="text-sm text-gray-500 dark:text-zinc-400">
-              Vào <Link href="/dashboard/settings/channels" className="text-blue-600 dark:text-blue-400 hover:underline">Cài đặt → Kênh</Link> → bấm <strong>Kết nối lại</strong> để lấy QR mới.
+              SSH (hoặc <code className="bg-gray-100 dark:bg-white/10 px-1 rounded">docker exec</code>) vào máy → <code className="bg-gray-100 dark:bg-white/10 px-1 rounded">openzca --profile default auth login</code> → scan QR mới.
             </p>
           </div>
 
           <div className="space-y-1">
-            <p className="text-sm font-medium text-gray-800 dark:text-zinc-200">Daemon có tự chạy lại sau khi reboot không?</p>
-            <p className="text-sm text-gray-500 dark:text-zinc-400">Có — script cài dưới dạng systemd service (Linux) hoặc launchd (Mac), tự khởi động cùng máy.</p>
+            <p className="text-sm font-medium text-gray-800 dark:text-zinc-200">Cập nhật listener phiên bản mới?</p>
+            <p className="text-sm text-gray-500 dark:text-zinc-400">
+              Linux VPS: chạy lại lệnh inject.sh (idempotent).<br/>
+              Docker: <code className="bg-gray-100 dark:bg-white/10 px-1 rounded">docker pull ... && docker restart zalo-listener</code>
+            </p>
           </div>
         </div>
       </div>
