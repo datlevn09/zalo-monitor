@@ -107,8 +107,9 @@ export function SetupPageClient() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f2f2f7] dark:bg-zinc-950 flex items-center justify-center p-4" >
-      <div className="w-full max-w-xl">
+    <div className="min-h-screen bg-[#f2f2f7] dark:bg-zinc-950 flex flex-col" >
+      <div className="flex-1 flex items-center justify-center p-4">
+       <div className="w-full max-w-xl">
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-zinc-100">Zalo Monitor</h1>
@@ -155,6 +156,7 @@ export function SetupPageClient() {
             ← Quay lại danh sách doanh nghiệp
           </button>
         )}
+       </div>
       </div>
       <Footer />
     </div>
