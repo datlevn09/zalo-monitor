@@ -205,7 +205,7 @@ export default function GroupsPage() {
             <div className="text-5xl mb-3">💬</div>
             <p className="text-gray-600 dark:text-zinc-400 font-medium">Chưa có nhóm nào</p>
             <p className="text-sm text-gray-400 dark:text-zinc-500 mt-1">
-              Nhóm sẽ tự xuất hiện khi có tin nhắn mới từ OpenClaw
+              Nhóm sẽ tự xuất hiện khi listener forward tin nhắn mới về
             </p>
           </div>
         )}

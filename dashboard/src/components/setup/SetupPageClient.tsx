@@ -23,7 +23,7 @@ type Tenant = {
   _count: { groups: number }
 }
 
-const STEPS = ['Kết nối OpenClaw', 'Thông báo', 'Hoàn tất']
+const STEPS = ['Kết nối Zalo', 'Thông báo', 'Hoàn tất']
 
 export function SetupPageClient() {
   const router = useRouter()

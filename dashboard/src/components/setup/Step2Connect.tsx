@@ -59,14 +59,14 @@ export function Step2Connect({ setup, onDone }: { setup: SetupState; onDone: () 
   // Text gửi admin khi cần hỗ trợ
   const supportMessage = `Xin chào ${admin?.name ?? 'support'}, tôi cần hỗ trợ cài đặt Zalo Monitor.
 Tenant: ${setup.tenantId}
-Lệnh cần chạy trong OpenClaw của tôi:
+Lệnh cần chạy trên máy chủ của tôi:
 ${commands.dockerCommand || commands.oneLineCommand}`
 
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-zinc-100">Kết nối với OpenClaw</h2>
-        <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1">Chạy lệnh sau để hook tự cài vào OpenClaw</p>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-zinc-100">Kết nối Zalo</h2>
+        <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1">Chạy lệnh sau trên máy chủ để cài listener Zalo Monitor</p>
       </div>
 
       {/* Mode selector - iOS segmented */}
@@ -92,7 +92,7 @@ ${commands.dockerCommand || commands.oneLineCommand}`
             ? 'Mở terminal trên máy đang chạy Docker, paste lệnh này:'
             : mode === 'windows'
             ? 'Mở PowerShell (Run as Administrator), paste lệnh này:'
-            : 'Mở terminal trên máy cài OpenClaw, paste lệnh này:'}
+            : 'Mở terminal trên máy chủ, paste lệnh này:'}
         </p>
         <div className="bg-gray-900 dark:bg-black/60 dark:ring-1 dark:ring-white/5 rounded-xl p-4 font-mono text-xs text-green-400 break-all whitespace-pre-wrap">
           {command || 'Đang tải...'}
@@ -142,9 +142,9 @@ ${commands.dockerCommand || commands.oneLineCommand}`
       <div className="bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 rounded-xl p-3.5 text-sm text-blue-900 dark:text-blue-200">
         <p className="font-medium mb-1 text-xs">Lệnh này sẽ:</p>
         <ul className="text-xs space-y-0.5 text-blue-800 dark:text-blue-300">
-          <li>• Tải hook vào <code className="bg-blue-100 dark:bg-blue-500/20 px-1 rounded text-[11px]">~/.openclaw/hooks/zalo-monitor/</code></li>
-          <li>• Auto enable hook</li>
-          <li>• Forward tin nhắn Telegram/Lark/Zalo tới backend</li>
+          <li>• Cài listener vào <code className="bg-blue-100 dark:bg-blue-500/20 px-1 rounded text-[11px]">~/.zalo-monitor/</code></li>
+          <li>• Auto chạy nền dạng systemd service</li>
+          <li>• Forward tin nhắn Zalo tới backend (read-only)</li>
         </ul>
       </div>
 
@@ -166,7 +166,7 @@ ${commands.dockerCommand || commands.oneLineCommand}`
                 ? (source === 'hook-ping'
                     ? 'Script install đã ping backend — gửi 1 tin trong nhóm để test luồng end-to-end'
                     : 'Hook đã hoạt động, dashboard đã nhận được tin nhắn')
-                : 'Copy lệnh trên, chạy trong terminal của máy cài OpenClaw'}
+                : 'Copy lệnh trên, chạy trong terminal của máy chủ'}
             </p>
           </div>
           {connected && <Badge className="bg-green-500">Live</Badge>}

@@ -95,9 +95,9 @@ export default function OverviewPage() {
           <div className="flex items-start gap-3">
             <div className="text-2xl">👋</div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Chào mừng! Cài hook để bắt đầu theo dõi Zalo của bạn</p>
+              <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Chào mừng! Cài listener để bắt đầu theo dõi Zalo của bạn</p>
               <p className="text-xs text-gray-600 dark:text-zinc-400 mt-0.5 mb-3">
-                Chạy lệnh sau trên máy có OpenClaw + Zalo cá nhân của bạn. Tin nhắn sẽ forward về đây và chỉ bạn (và OWNER/MANAGER) thấy được.
+                Chạy lệnh sau trên máy chủ có Zalo cá nhân của bạn. Tin nhắn sẽ forward về đây và chỉ bạn (và OWNER/MANAGER) thấy được.
               </p>
               <div className="bg-gray-900 dark:bg-black/60 rounded-xl p-2.5 font-mono text-[11px] text-green-400 break-all whitespace-pre-wrap">
                 {installCmd}
