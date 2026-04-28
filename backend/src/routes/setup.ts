@@ -1199,12 +1199,28 @@ curl -fsSL --connect-timeout 10 "$BACKEND_URL/api/setup/hook-files/zalo-listener
 chmod +x "$LISTENER_DIR/zalo-listener.mjs"
 
 # Ghi env file riêng cho listener service
+# PROFILE=zalo-monitor — tránh xung đột với OpenClaw của khách (default profile)
 cat > "$LISTENER_DIR/.env" <<EOF
 BACKEND_URL=$BACKEND_URL
 WEBHOOK_SECRET=$SECRET
 TENANT_ID=$TENANT_ID
+PROFILE=zalo-monitor
 EOF
 chmod 600 "$LISTENER_DIR/.env"
+
+# Login Zalo cho profile RIÊNG (không đụng OpenClaw default)
+echo ""
+echo "📱 Đăng nhập Zalo cho profile 'zalo-monitor' (KHÔNG đụng OpenClaw của bạn)..."
+if ! openzca --profile zalo-monitor auth status >/dev/null 2>&1; then
+  echo "  ℹ️  Profile 'zalo-monitor' chưa login. Hãy chạy lệnh sau để scan QR:"
+  echo ""
+  echo "     openzca --profile zalo-monitor auth login"
+  echo ""
+  echo "  → QR sẽ hiện trong terminal. Quét bằng Zalo điện thoại (chọn 'Thêm thiết bị')."
+  echo "  → Listener tự kết nối khi profile login xong."
+else
+  echo "  ✅ Profile 'zalo-monitor' đã login — listener sẽ tự nhận messages"
+fi
 
 # ── Bước 4.7: Tạo systemd user service zalo-monitor-listener ────
 NODE_BIN="$(command -v node || echo /usr/bin/node)"

@@ -29,7 +29,7 @@ const cfg = {
   backendUrl: (process.env.BACKEND_URL || '').replace(/\/$/, ''),
   secret: process.env.WEBHOOK_SECRET || '',
   tenantId: process.env.TENANT_ID || '',
-  profile: process.env.PROFILE || 'default',
+  profile: process.env.PROFILE || 'zalo-monitor',
 }
 
 if (!cfg.backendUrl || !cfg.secret || !cfg.tenantId) {

@@ -9,7 +9,10 @@
 #           zalo-monitor-listener
 #
 # Login Zalo lần đầu (interactive QR scan):
-#   docker exec -it zalo-listener openzca --profile default auth login
+#   docker exec -it zalo-listener openzca --profile zalo-monitor auth login
+#
+# Profile 'zalo-monitor' tách biệt với 'default' (nếu khách dùng OpenClaw)
+# → KHÔNG xung đột session, có thể chạy song song.
 
 FROM node:22-alpine
 

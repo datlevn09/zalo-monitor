@@ -351,7 +351,7 @@ function InstallCommandTabs({ install, copy, copied }: { install: InstallCommand
   datlevn09/zalo-monitor-listener:latest
 
 # Login Zalo (lần đầu, scan QR):
-docker exec -it zalo-listener openzca --profile default auth login`
+docker exec -it zalo-listener openzca --profile zalo-monitor auth login`
   })()
 
   const apiUrl = install.oneLineCommand.match(/https:\/\/[^\/]+/)?.[0] || 'https://api.datthongdong.com'
@@ -361,7 +361,7 @@ brew install node
 npm install -g openzca
 
 # 2. Login Zalo (scan QR)
-openzca --profile default auth login
+openzca --profile zalo-monitor auth login
 
 # 3. Tải listener + chạy
 curl -O ${apiUrl}/api/setup/hook-files/zalo-listener.mjs

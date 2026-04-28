@@ -73,7 +73,7 @@ export default function InstallZaloPage() {
   datlevn09/zalo-monitor-listener:latest
 
 # Login Zalo (interactive QR scan):
-docker exec -it zalo-listener openzca --profile default auth login`}</Code>
+docker exec -it zalo-listener openzca --profile zalo-monitor auth login`}</Code>
               </div>
 
               <div>
@@ -83,7 +83,7 @@ docker exec -it zalo-listener openzca --profile default auth login`}</Code>
                 </div>
                 <Code>{`brew install node          # macOS, hoặc apt/yum trên Linux
 npm install -g openzca
-openzca --profile default auth login   # Scan QR
+openzca --profile zalo-monitor auth login   # Scan QR
 
 curl -O https://api.../api/setup/hook-files/zalo-listener.mjs
 BACKEND_URL=https://api... WEBHOOK_SECRET=xxx TENANT_ID=xxx \\
@@ -122,7 +122,7 @@ BACKEND_URL=https://api... WEBHOOK_SECRET=xxx TENANT_ID=xxx \\
           <div className="space-y-1">
             <p className="text-sm font-medium text-gray-800 dark:text-zinc-200">Zalo bị đăng xuất phải làm gì?</p>
             <p className="text-sm text-gray-500 dark:text-zinc-400">
-              SSH (hoặc <code className="bg-gray-100 dark:bg-white/10 px-1 rounded">docker exec</code>) vào máy → <code className="bg-gray-100 dark:bg-white/10 px-1 rounded">openzca --profile default auth login</code> → scan QR mới.
+              SSH (hoặc <code className="bg-gray-100 dark:bg-white/10 px-1 rounded">docker exec</code>) vào máy → <code className="bg-gray-100 dark:bg-white/10 px-1 rounded">openzca --profile zalo-monitor auth login</code> → scan QR mới.
             </p>
           </div>
 
