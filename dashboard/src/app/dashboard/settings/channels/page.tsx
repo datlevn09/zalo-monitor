@@ -448,8 +448,28 @@ function ZaloChannelCard({
             </div>
           )}
 
-          {/* Session health warning */}
-          {sessionHealth && sessionHealth.status !== 'healthy' && sessionHealth.status !== 'never' && (
+          {/* Vừa đăng nhập — chờ tin đầu tiên */}
+          {(() => {
+            const scannedAt = typeof window !== 'undefined' ? Number(localStorage.getItem('zm:scanned-at') ?? 0) : 0
+            const justScanned = scannedAt && (Date.now() - scannedAt) < 30 * 60_000
+            if (!justScanned) return null
+            if (sessionHealth?.status === 'healthy') return null
+            return (
+              <div className="mt-2 flex items-start gap-2 rounded-lg px-3 py-2 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/25">
+                <span className="shrink-0 mt-0.5">✓</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">Đã đăng nhập Zalo</p>
+                  <p className="text-xs mt-0.5 text-blue-600 dark:text-blue-400">
+                    Hệ thống sẽ tự động đồng bộ ngay khi có tin nhắn mới đến nhóm Zalo của bạn.
+                  </p>
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* Session health warning — ẩn nếu vừa scan xong */}
+          {sessionHealth && sessionHealth.status !== 'healthy' && sessionHealth.status !== 'never' &&
+           !(typeof window !== 'undefined' && Number(localStorage.getItem('zm:scanned-at') ?? 0) > Date.now() - 30 * 60_000) && (
             <div className={`mt-2 flex items-start gap-2 rounded-lg px-3 py-2 ${
               sessionHealth.status === 'dead'
                 ? 'bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/25'
@@ -938,6 +958,7 @@ function ZaloQRModal({
           <button
             onClick={async () => {
               try { await api('/api/zalo/clear-qr', { method: 'POST', body: JSON.stringify({}) }) } catch {}
+              try { localStorage.setItem('zm:scanned-at', String(Date.now())) } catch {}
               onClose()
             }}
             className="w-full py-2 text-sm font-medium text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-500/10 hover:bg-green-100 dark:hover:bg-green-500/20 rounded-lg transition-colors"

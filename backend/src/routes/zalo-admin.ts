@@ -313,7 +313,10 @@ export const zaloAdminRoutes: FastifyPluginAsync = async (app) => {
     if (!tenant) return reply.status(404).send({ error: 'Tenant not found' })
 
     const now = Date.now()
-    const lastPing = tenant.lastHookPingAt?.getTime() ?? null
+    // Lấy lastPing tốt nhất giữa: hookPings in-memory (poll/qr-push) HOẶC DB (lastHookPingAt từ message webhook)
+    const memPing = hookPings.get(tenantId) ?? null
+    const dbPing = tenant.lastHookPingAt?.getTime() ?? null
+    const lastPing = memPing && dbPing ? Math.max(memPing, dbPing) : (memPing ?? dbPing)
     const msSincePing = lastPing ? now - lastPing : null
     const hoursSincePing = msSincePing ? Math.floor(msSincePing / 3_600_000) : null
 
