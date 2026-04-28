@@ -28,10 +28,13 @@ export const groupRoutes: FastifyPluginAsync = async (app) => {
         })
         if (!hasAccess) return reply.status(403).send({ error: 'Không có quyền xem board này' })
       }
-      // Trả groups thuộc về board user đó (ownerUserId === boardUserId)
-      // Bao gồm cả "Board của tôi" — STRICT: chỉ groups ownerUserId = me
+      // Board của tôi: groups owned (ownerUserId = me) HOẶC legacy (ownerUserId IS NULL)
+      // Board người khác (đã pass BoardAccess): chỉ groups họ sở hữu
+      const where: any = isOwnBoard
+        ? { tenantId, OR: [{ ownerUserId: boardUserId }, { ownerUserId: null }] }
+        : { tenantId, ownerUserId: boardUserId }
       const groups = await db.group.findMany({
-        where: { tenantId, ownerUserId: boardUserId },
+        where,
         orderBy: { lastMessageAt: 'desc' },
         include: { _count: { select: { messages: true, alerts: true } }, ownerUser: { select: { id: true, name: true } } },
       })
