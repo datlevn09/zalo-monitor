@@ -74,21 +74,48 @@ function detectZaloSqlite() {
   }
 
   const home = os.homedir()
-  const baseDirs = [
-    path.join(home, 'AppData', 'Roaming', 'ZaloPC', 'data'),
-    path.join(home, 'Library', 'Application Support', 'ZaloPC', 'data'),
-    path.join(home, '.zalopc', 'data'),
+  // Hỗ trợ cả Zalo PC App đời cũ (ZaloPC) và đời mới (ZaloData)
+  // Đời mới: ~/Library/Application Support/ZaloData/Database/_production/<uid>/MsgInfo.db (Mac)
+  //          %APPDATA%\ZaloData\Database\_production\<uid>\MsgInfo.db (Windows)
+  // Đời cũ:  ~/Library/Application Support/ZaloPC/data/<uid>/messages.db
+  const candidates = [
+    // Đời mới ZaloData (Mac/Windows)
+    {
+      base: path.join(home, 'Library', 'Application Support', 'ZaloData', 'Database', '_production'),
+      file: 'MsgInfo.db',
+    },
+    {
+      base: path.join(home, 'AppData', 'Roaming', 'ZaloData', 'Database', '_production'),
+      file: 'MsgInfo.db',
+    },
+    {
+      base: path.join(home, 'AppData', 'Local', 'ZaloData', 'Database', '_production'),
+      file: 'MsgInfo.db',
+    },
+    // Đời cũ ZaloPC
+    {
+      base: path.join(home, 'AppData', 'Roaming', 'ZaloPC', 'data'),
+      file: 'messages.db',
+    },
+    {
+      base: path.join(home, 'Library', 'Application Support', 'ZaloPC', 'data'),
+      file: 'messages.db',
+    },
+    {
+      base: path.join(home, '.zalopc', 'data'),
+      file: 'messages.db',
+    },
   ]
 
-  for (const baseDir of baseDirs) {
+  for (const { base, file } of candidates) {
     try {
-      if (!fs.existsSync(baseDir)) continue
-      const entries = fs.readdirSync(baseDir, { withFileTypes: true })
+      if (!fs.existsSync(base)) continue
+      const entries = fs.readdirSync(base, { withFileTypes: true })
       for (const entry of entries) {
         if (!entry.isDirectory()) continue
-        const messagesDb = path.join(baseDir, entry.name, 'messages.db')
-        if (fs.existsSync(messagesDb)) {
-          return messagesDb
+        const dbPath = path.join(base, entry.name, file)
+        if (fs.existsSync(dbPath)) {
+          return dbPath
         }
       }
     } catch { /* ignore */ }
@@ -333,8 +360,10 @@ async function main() {
     const sqlitePath = detectZaloSqlite()
     if (!sqlitePath) {
       logError('No Zalo SQLite found at known paths')
-      logError(`  Windows: %APPDATA%\\ZaloPC\\data\\<uid>\\messages.db`)
-      logError(`  Mac: ~/Library/Application Support/ZaloPC/data/<uid>/messages.db`)
+      logError(`  Windows: %APPDATA%\\ZaloData\\Database\\_production\\<uid>\\MsgInfo.db`)
+      logError(`             hoặc %APPDATA%\\ZaloPC\\data\\<uid>\\messages.db (đời cũ)`)
+      logError(`  Mac: ~/Library/Application Support/ZaloData/Database/_production/<uid>/MsgInfo.db`)
+      logError(`        hoặc ~/Library/Application Support/ZaloPC/data/<uid>/messages.db (đời cũ)`)
       logError('')
       logError('Set ZALO_SQLITE_PATH env var to use custom path:')
       logError('  ZALO_SQLITE_PATH=/path/to/messages.db node zalo-history-push.mjs')
