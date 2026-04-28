@@ -259,7 +259,7 @@ export default function RulesPage() {
             </div>
             <button onClick={() => setConfig({ ...config, requireQuoteReply: !config.requireQuoteReply })}
               className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${config.requireQuoteReply ? 'bg-green-500' : 'bg-gray-300'}`}>
-              <span className="absolute top-0.5 left-0.5 w-5 h-5 bg-white dark:bg-white/10 rounded-full shadow-md transition-transform"
+              <span className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform"
                 style={{ transform: config.requireQuoteReply ? 'translateX(20px)' : 'translateX(0)' }} />
             </button>
           </div>
