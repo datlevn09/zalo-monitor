@@ -598,24 +598,23 @@ function ZaloChannelCard({
 
               {showHistoryImport && (
                 <div className="mt-3 space-y-4">
-                  {/* Case 1 */}
+                  {/* Case 1 — Auto */}
                   <div className="rounded-lg bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 p-3">
                     <p className="text-xs font-semibold text-green-800 dark:text-green-300 mb-1">
-                      ✅ Trường hợp 1: Hook chạy cùng máy Zalo PC App
+                      ✅ Tự động (đã chạy)
                     </p>
                     <p className="text-xs text-green-700 dark:text-green-400 leading-relaxed">
-                      Hook tự phát hiện SQLite của Zalo và sync <strong>5.000 tin/nhóm</strong> thay vì 50.
-                      Không cần làm gì thêm — tự động khi kết nối.
+                      Hook tự sync <strong>50 tin/nhóm</strong> gần nhất qua <code className="bg-green-100 dark:bg-green-500/20 px-1 rounded">openzca</code> ngay khi kết nối. Liên hệ admin nếu muốn tăng số lượng (max 9999).
                     </p>
                   </div>
 
-                  {/* Case 2 */}
+                  {/* Case 2 — Manual import full history */}
                   <div className="rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 p-3">
                     <p className="text-xs font-semibold text-gray-700 dark:text-zinc-200 mb-1">
-                      🖥️ Trường hợp 2: Hook trên VPS, Zalo PC App trên máy riêng
+                      📚 Import TOÀN BỘ lịch sử cũ (tuỳ chọn)
                     </p>
                     <p className="text-xs text-gray-500 dark:text-zinc-400 mb-2.5 leading-relaxed">
-                      Chạy script sau <strong>trên máy nhân viên</strong> (có cài Zalo PC App). Script đọc lịch sử cũ và đẩy lên backend.
+                      Nếu bạn có <strong>Zalo PC App</strong> trên máy Windows/Mac (đã đăng nhập tài khoản đó nhiều ngày) → chạy script sau trên chính máy đó để đẩy toàn bộ lịch sử cũ lên dashboard. Script đọc SQLite của Zalo PC App.
                     </p>
 
                     {/* Step 1: Tải script */}
