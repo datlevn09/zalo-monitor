@@ -172,6 +172,55 @@ async function pollPendingSends() {
 }
 setInterval(pollPendingSends, 10_000).unref?.()
 
+// Pending actions poller: dashboard "Kết nối lại" → exec openzca login → push QR về backend
+let actionPolling = false
+async function pollPendingActions() {
+  if (actionPolling) return
+  actionPolling = true
+  try {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), 5_000)
+    const res = await fetch(`${cfg.backendUrl}/api/setup/pending-actions`, {
+      signal: ctrl.signal,
+      headers: { 'x-webhook-secret': cfg.secret, 'x-tenant-id': cfg.tenantId },
+    }).catch(() => null)
+    clearTimeout(t)
+    if (!res?.ok) return
+    const data = await res.json()
+    const actions = data?.actions || []
+    if (!actions.length) return
+
+    const { execFile } = await import('node:child_process')
+
+    for (const action of actions) {
+      if (action === 'login_zalo') {
+        console.log(`▶️ Action 'login_zalo' — exec openzca auth login --qr-base64`)
+        execFile(OPENZCA, ['--profile', cfg.profile, 'auth', 'login', '--qr-base64'],
+          { timeout: 90_000, env: { ...process.env, OPENZCA_QR_OPEN: '0' } },
+          async (err, stdout) => {
+            if (err) { console.error(`❌ openzca login: ${err.message}`); return }
+            const m = (stdout || '').match(/data:image\/[a-z]+;base64,[A-Za-z0-9+/=]+/)
+            if (!m) { console.error('❌ Không parse được QR data URL từ stdout'); return }
+            await fetch(`${cfg.backendUrl}/api/setup/qr-push`, {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+                'x-webhook-secret': cfg.secret,
+                'x-tenant-id': cfg.tenantId,
+              },
+              body: JSON.stringify({ dataUrl: m[0] }),
+            }).catch(() => undefined)
+            console.log('✅ Đã push QR lên backend')
+          }
+        )
+      }
+    }
+  } catch { /* silent */ } finally {
+    actionPolling = false
+  }
+}
+setInterval(pollPendingActions, 5_000).unref?.()
+
 // Check openzca auth status để biết Zalo đã login chưa (mỗi 30s)
 async function zaloStatusCheck() {
   try {

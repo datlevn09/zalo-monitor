@@ -434,7 +434,7 @@ function ZaloChannelCard({
           {/* Not installed — install hint */}
           {notInstalled && (
             <p className="text-xs text-amber-600 dark:text-amber-400 mt-1.5">
-              OpenClaw chưa chạy. Cài đặt theo hướng dẫn để bắt đầu theo dõi Zalo.
+              Listener chưa cài. Lấy lệnh cài để bắt đầu theo dõi Zalo.
             </p>
           )}
 
@@ -548,7 +548,7 @@ function ZaloChannelCard({
           {notInstalled && showInstall && (
             <div className="mt-3 bg-gray-50 dark:bg-white/5 rounded-xl p-3 space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-medium text-gray-700 dark:text-zinc-300">Chạy lệnh sau trên server có OpenClaw:</p>
+                <p className="text-xs font-medium text-gray-700 dark:text-zinc-300">Chạy lệnh sau trên server đã cài listener:</p>
                 <button
                   onClick={() => {
                     if (!installCmd) return
@@ -566,7 +566,7 @@ function ZaloChannelCard({
                 {installCmd ?? 'Đang tải...'}
               </pre>
               <p className="text-[11px] text-gray-500 dark:text-zinc-400">
-                💡 Script tự cài OpenClaw + hook + daemon. Sau đó QR sẽ hiện ngay tại đây.
+                💡 Script tự cài Node + openzca + listener service. Sau đó QR sẽ hiện ngay tại đây.
               </p>
             </div>
           )}
@@ -951,7 +951,7 @@ function ZaloQRModal({
           {/* Restarting hint */}
           {isRestarting && !qrDataUrl && (
             <p className="text-xs text-blue-600 dark:text-blue-400 text-center max-w-[200px]">
-              🔄 Đang khởi động OpenClaw...<br/>QR sẽ hiện ngay, đừng đi đâu cả!
+              🔄 Đang khởi động listener...<br/>QR sẽ hiện ngay, đừng đi đâu cả!
             </p>
           )}
         </div>
@@ -1011,7 +1011,7 @@ function ComingSoonCard({ config }: { config: any }) {
 function ManualLoginFallback() {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [copied, setCopied] = useState(false)
-  const cmd = 'openzca --profile default auth login'
+  const cmd = 'openzca --profile zalo-monitor auth login'
 
   function copyCmd() {
     navigator.clipboard.writeText(cmd)
@@ -1021,9 +1021,9 @@ function ManualLoginFallback() {
 
   return (
     <div className="w-full bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-lg p-3 text-xs text-amber-800 dark:text-amber-300 space-y-2">
-      <p className="font-medium">⏱ Đang đợi OpenClaw phản hồi...</p>
+      <p className="font-medium">⏱ Đang đợi listener phản hồi...</p>
       <p className="text-[11px] opacity-90">
-        Hệ thống đã gửi yêu cầu login Zalo tới OpenClaw — QR sẽ tự hiện trong vài giây.
+        Hệ thống đã gửi yêu cầu login Zalo tới listener — QR sẽ tự hiện trong vài giây.
         Nếu không thấy QR sau ~15 giây →{' '}
         <button onClick={() => setShowAdvanced(s => !s)} className="underline font-medium">
           {showAdvanced ? 'ẩn' : 'chạy thủ công'}
@@ -1031,7 +1031,7 @@ function ManualLoginFallback() {
       </p>
       {showAdvanced && (
         <div className="pt-2 border-t border-amber-200 dark:border-amber-500/30 space-y-2">
-          <p>SSH vào server có OpenClaw, paste lệnh:</p>
+          <p>SSH vào server đã cài listener, paste lệnh:</p>
           <div className="flex items-center gap-2">
             <code className="flex-1 bg-gray-900 text-green-400 text-[11px] font-mono px-2 py-1.5 rounded overflow-x-auto select-all">
               {cmd}
