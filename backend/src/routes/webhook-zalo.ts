@@ -114,8 +114,9 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
         tenantId,
         externalId: cleanThreadId,
         channelType: 'ZALO',
-        name: raw.groupName ?? raw.threadName ?? `Nhóm ${cleanThreadId.slice(-6)}`,
+        name: raw.groupName ?? raw.threadName ?? raw.dName ?? raw.senderName ?? (isGroup ? `Nhóm ${cleanThreadId.slice(-6)}` : `DM ${cleanThreadId.slice(-6)}`),
         monitorEnabled: true,
+        isDirect: !isGroup,
       },
     })
 

@@ -569,8 +569,18 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
       take: 20,
       select: { id: true, groupExternalId: true, text: true },
     })
-    // Mặc định coi là group (zalo monitor mainly cho group). DM hiếm.
-    return pending.map(p => ({ ...p, isGroup: true }))
+    if (pending.length === 0) return []
+    // Tra cứu Group.isDirect để biết là DM hay group → listener add flag -g cho group
+    const groups = await db.group.findMany({
+      where: {
+        tenantId: tenant.id,
+        externalId: { in: pending.map(p => p.groupExternalId) },
+        channelType: 'ZALO',
+      },
+      select: { externalId: true, isDirect: true },
+    })
+    const isDirectMap = Object.fromEntries(groups.map(g => [g.externalId, g.isDirect]))
+    return pending.map(p => ({ ...p, isGroup: !(isDirectMap[p.groupExternalId] ?? false) }))
   })
 
   // POST /api/setup/ack-send — hook reports send result
