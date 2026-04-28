@@ -636,6 +636,9 @@ function ZaloChannelCard({
                     <p className="text-xs text-gray-500 dark:text-zinc-400 mb-2.5 leading-relaxed">
                       Nếu bạn có <strong>Zalo PC App</strong> trên máy Windows/Mac (đã đăng nhập tài khoản đó nhiều ngày) → chạy script sau trên chính máy đó để đẩy toàn bộ lịch sử cũ lên dashboard. Script đọc SQLite của Zalo PC App.
                     </p>
+                    <p className="text-xs text-amber-700 dark:text-amber-400 mb-2.5">
+                      💡 <strong>Lưu ý:</strong> Chỉ chạy khi đã có ít nhất 1 nhóm Zalo hiển thị trong dashboard (cần đợi 1 tin nhắn đầu tiên đến).
+                    </p>
 
                     {/* Step 1: Tải script */}
                     <p className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide mb-1.5">

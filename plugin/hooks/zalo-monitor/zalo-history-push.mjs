@@ -265,9 +265,17 @@ async function main() {
   // Step 1: Fetch group list from backend
   logInfo('Fetching group list from backend...')
   const syncRequest = await getSyncRequest()
-  if (!syncRequest || !syncRequest.groups) {
-    logError('Failed to fetch sync-request from backend')
+  if (!syncRequest) {
+    logError('Failed to connect to backend (network/auth error)')
     process.exit(1)
+  }
+  if (!syncRequest.groups || syncRequest.groups.length === 0) {
+    console.log('')
+    console.log('  ⚠️  Chưa có nhóm Zalo nào trong dashboard.')
+    console.log('  Hệ thống sẽ tự tạo nhóm khi có tin nhắn đầu tiên đến.')
+    console.log('  → Đợi 1 tin nhắn bất kỳ vào nhóm Zalo, sau đó chạy lại lệnh này.')
+    console.log('')
+    process.exit(0)
   }
   const groups = syncRequest.groups
   logSuccess(`Found ${groups.length} groups to sync`)
