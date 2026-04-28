@@ -5,6 +5,7 @@ import { api } from '@/lib/api'
 import { GradientAreaChart, MultiLineChart } from '@/components/charts/AreaChart'
 import { DonutChart, DonutLegend } from '@/components/charts/Donut'
 import { Heatmap } from '@/components/charts/Heatmap'
+import { WordCloud } from '@/components/charts/WordCloud'
 import { TopList } from '@/components/charts/TopList'
 import { LABEL_CFG, formatRelative } from '@/lib/format'
 import { zaloChatUserLink } from '@/lib/deeplink'
@@ -29,6 +30,7 @@ type WeekCompare = {
 }
 type LabelDist = Array<{ label: string; count: number }>
 type ChannelBreak = Array<{ channel: string; total: number; positive: number; negative: number; opportunity: number }>
+type WordCloudData = { words: Array<{ word: string; count: number }>; total: number }
 type SlowReply = Array<{ id: string; name: string; avgLagSec: number | null; openMessages: number }>
 
 // Plan-gated time ranges
@@ -60,6 +62,7 @@ export default function AnalyticsPage() {
   const [week, setWeek] = useState<WeekCompare | null>(null)
   const [labels, setLabels] = useState<LabelDist>([])
   const [channels, setChannels] = useState<ChannelBreak>([])
+  const [wordCloud, setWordCloud] = useState<WordCloudData | null>(null)
   const [slow, setSlow] = useState<SlowReply>([])
 
   // Effective days for API
@@ -80,6 +83,7 @@ export default function AnalyticsPage() {
       api<WeekCompare>(`/api/analytics/weekly-compare?filter=${filter}`).then(setWeek),
       api<LabelDist>(`/api/analytics/label-distribution?${q}`).then(setLabels),
       api<ChannelBreak>(`/api/analytics/channel-breakdown?${q}`).then(setChannels),
+      api<WordCloudData>(`/api/analytics/word-cloud?${q}`).then(setWordCloud),
       api<SlowReply>(`/api/analytics/slow-reply?${q}`).then(setSlow),
     ]).catch(() => undefined)
   }, [days, filter])
@@ -323,7 +327,7 @@ export default function AnalyticsPage() {
         </Card>
 
         <Card>
-          <CardHeader title="🌐 Phân bố theo kênh" subtitle="Tin nhắn theo nguồn" />
+          <CardHeader title="🌐 Phân bố theo kênh" subtitle={`${days} ngày gần nhất · ${filter === 'all' ? 'tất cả' : filter === 'group' ? 'chỉ nhóm' : 'chỉ DM'}`} />
           <div className="space-y-3 mt-2">
             {channels.map(c => {
               const emoji = c.channel === 'ZALO' ? 'Z' : c.channel === 'TELEGRAM' ? '✈️' : '🪶'
@@ -346,6 +350,17 @@ export default function AnalyticsPage() {
               )
             })}
           </div>
+        </Card>
+      </div>
+
+      {/* Row: Word cloud — full width */}
+      <div className="mb-6">
+        <Card>
+          <CardHeader
+            title="☁️ Từ khoá khách hàng"
+            subtitle={`Top từ xuất hiện nhiều nhất trong ${days} ngày · ${wordCloud?.total ?? 0} tin được phân tích`}
+          />
+          <WordCloud words={wordCloud?.words ?? []} />
         </Card>
       </div>
     </div>

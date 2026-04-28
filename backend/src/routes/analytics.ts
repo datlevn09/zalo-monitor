@@ -22,6 +22,38 @@ function filterClause(filter: string): string {
   return ''
 }
 
+// Stop words tiếng Việt + Anh — bỏ khi tạo word cloud
+const STOP_WORDS = new Set([
+  // Vietnamese function words
+  'và', 'là', 'của', 'có', 'được', 'cho', 'với', 'này', 'đó', 'những', 'các', 'một', 'không',
+  'cũng', 'để', 'thì', 'mà', 'như', 'nên', 'còn', 'đã', 'sẽ', 'rồi', 'đang', 'lại', 'vào', 'ra',
+  'lên', 'xuống', 'từ', 'bằng', 'theo', 'qua', 'hay', 'hoặc', 'nhưng', 'nếu', 'khi', 'sau', 'trước',
+  'trong', 'ngoài', 'trên', 'dưới', 'giữa', 'bên', 'thế', 'rất', 'quá', 'lắm', 'thật', 'mới', 'cũ',
+  'chỉ', 'chứ', 'đi', 'làm', 'nói', 'biết', 'thấy', 'gì', 'sao', 'nào', 'ai', 'đâu', 'bao',
+  'ạ', 'ơi', 'ấy', 'em', 'anh', 'chị', 'bạn', 'mình', 'tôi', 'mẹ', 'ba', 'cha', 'tớ', 'nhé', 'nha',
+  'oke', 'ok', 'oki', 'vâng', 'dạ', 'ừm', 'ừ', 'à', 'ờ', 'ê', 'ahihi', 'huhu', 'haha',
+  // English common
+  'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had',
+  'do', 'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might', 'must', 'can',
+  'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them',
+  'this', 'that', 'these', 'those', 'and', 'or', 'but', 'if', 'when', 'while', 'as', 'because',
+  'of', 'in', 'on', 'at', 'to', 'from', 'by', 'with', 'for', 'about', 'against', 'between',
+  // Common chat noise
+  'http', 'https', 'www', 'com', 'vn', 'jpg', 'png', 'gif', 'mp4', 'pdf',
+  'media', 'attached', 'image', 'video', 'file', 'sticker', 'voice',
+])
+
+function tokenizeForCloud(text: string): string[] {
+  if (!text) return []
+  // Lower + bỏ URL + bỏ media attached
+  let t = text.toLowerCase()
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/\[media[^\]]*\]/g, ' ')
+    .replace(/[\d]+/g, ' ')   // bỏ số (sđt, giá)
+    .replace(/[^\p{L}\s]/gu, ' ')   // chỉ giữ chữ cái Unicode
+  return t.split(/\s+/).filter(w => w.length >= 3 && !STOP_WORDS.has(w))
+}
+
 export const analyticsRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/analytics/group-health?days=7&filter=all|group|dm
   app.get('/group-health', async (req, reply) => {
@@ -197,6 +229,47 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
     for (const r of rows) grid[r.dow][r.hour] = Number(r.count)
 
     return { grid, maxValue: Math.max(...grid.flat()) }
+  })
+
+  // GET /api/analytics/word-cloud?days=7&filter=all|group|dm
+  // Trả top từ khoá xuất hiện trong tin nhắn của khách hàng (CONTACT)
+  app.get('/word-cloud', async (req, reply) => {
+    const tenantId = requireTenant(req, reply); if (!tenantId) return
+    const reqDays = Number((req.query as any)?.days ?? 7)
+    const t = await db.tenant.findUnique({ where: { id: tenantId }, select: { plan: true } })
+    const planMax: Record<string, number> = { free: 30, pro: 90, business: 365, unlimited: 3650 }
+    const days = Math.min(reqDays, planMax[t?.plan ?? 'free'] ?? 30)
+    const filter = String((req.query as any)?.filter ?? 'all')
+    const filterSql = filterClause(filter)
+    const since = new Date(Date.now() - days * 24 * 3600 * 1000)
+
+    // Lấy content từ messages (giới hạn 5000 tin để không tốn RAM)
+    const rows = await db.$queryRawUnsafe<Array<{ content: string | null }>>(`
+      SELECT m.content
+      FROM messages m
+      JOIN groups g ON g.id = m."groupId"
+      WHERE g."tenantId" = $1 AND g."monitorEnabled" = true ${filterSql}
+        AND m."createdAt" >= $2 AND m."senderType" = 'CONTACT'
+        AND m.content IS NOT NULL AND length(m.content) > 0
+      ORDER BY m."createdAt" DESC
+      LIMIT 5000
+    `, tenantId, since)
+
+    const counts = new Map<string, number>()
+    for (const row of rows) {
+      const tokens = tokenizeForCloud(row.content || '')
+      for (const tk of tokens) {
+        counts.set(tk, (counts.get(tk) ?? 0) + 1)
+      }
+    }
+    // Top 60 từ
+    const top = Array.from(counts.entries())
+      .filter(([, c]) => c >= 2)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 60)
+      .map(([word, count]) => ({ word, count }))
+
+    return { words: top, total: rows.length }
   })
 
   // GET /api/analytics/sentiment-trend?days=30
