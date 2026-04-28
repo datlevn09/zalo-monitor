@@ -1052,7 +1052,7 @@ if oz:
   print('  📱 Zalo:')
   zca_bin = oz.get('zcaBinary') or 'openzca'
   for acc_id, profile_name in profiles_to_check:
-    # Ưu tiên: gọi `openzca auth status --json` để lấy session HIỆN TẠI (không cache)
+    # Ưu tiên: gọi openzca auth status để lấy session HIỆN TẠI (không cache)
     name, phone, logged_in = '', '', False
     try:
       import subprocess
