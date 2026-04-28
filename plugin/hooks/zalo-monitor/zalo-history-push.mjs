@@ -127,7 +127,8 @@ function detectZaloSqlite() {
 /**
  * Resolve openzca profile to use:
  *   1) env PROFILE nếu set + non-empty
- *   2) auto-detect: chọn profile có loggedIn=true (ưu tiên default=true)
+ *   2) auto-detect từ `openzca account list` (parse ASCII table output):
+ *      - Ưu tiên loggedIn=true + default=true → chỉ loggedIn → default → first
  *   3) fallback 'default'
  */
 let _resolvedProfile = null
@@ -135,16 +136,24 @@ function resolveProfile() {
   if (_resolvedProfile) return _resolvedProfile
   if (process.env.PROFILE) { _resolvedProfile = process.env.PROFILE; return _resolvedProfile }
   try {
-    const raw = execSync('openzca account list --json', { encoding: 'utf-8', timeout: 10_000 })
-    const accounts = JSON.parse(raw)
-    if (Array.isArray(accounts)) {
-      // Ưu tiên: loggedIn=true + default=true → chỉ loggedIn → default → first
-      const loggedDefault = accounts.find(a => a.loggedIn && a.default)
-      const logged = accounts.find(a => a.loggedIn)
-      const def = accounts.find(a => a.default)
-      const picked = loggedDefault || logged || def || accounts[0]
-      if (picked?.name) { _resolvedProfile = picked.name; return _resolvedProfile }
+    // openzca account list trả ASCII table:
+    // │ 0 │ 'default' │ '' │ true │ true │ true │ ... │
+    //   idx │ name    │ label │ default │ active │ loggedIn
+    const raw = execSync('openzca account list', { encoding: 'utf-8', timeout: 10_000 })
+    let logged = null, def = null, first = null, bestMatch = null
+    for (const line of raw.split('\n')) {
+      // Match: │ <num> │ '<name>' │ '<label>' │ <bool> │ <bool> │ <bool> │ ...
+      const m = line.match(/[│|]\s*\d+\s*[│|]\s*'?([^'│|]+?)'?\s*[│|]\s*'?[^│|]*?'?\s*[│|]\s*(true|false)\s*[│|]\s*(true|false)\s*[│|]\s*(true|false)/)
+      if (!m) continue
+      const [, name, isDefault, , isLogged] = m
+      const trimmed = name.trim()
+      if (!first) first = trimmed
+      if (isDefault === 'true' && !def) def = trimmed
+      if (isLogged === 'true' && !logged) logged = trimmed
+      if (isLogged === 'true' && isDefault === 'true') { bestMatch = trimmed; break }
     }
+    _resolvedProfile = bestMatch || logged || def || first || 'default'
+    return _resolvedProfile
   } catch { /* ignore — fallback below */ }
   _resolvedProfile = 'default'
   return _resolvedProfile

@@ -82,11 +82,22 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(200).send({ ok: true, recalled: true })
     }
 
-    const isGroup = raw.chatType === 1 || raw.isGroup === true || String(threadId).startsWith('group:')
-    // GIỮ prefix 'group:' trong externalId để KHÔNG collision giữa DM "123" và group "group:123"
-    // (Zalo có thể có cùng số ID cho DM và group khác nhau)
-    const fullExternalId = isGroup && !String(threadId).startsWith('group:') ? `group:${threadId}` : String(threadId)
     const numericId = String(threadId).replace(/^group:/, '')
+    // openzca không nhất quán emit chatType / 'group:' prefix cho group chat.
+    // Strategy:
+    //   1) Trust hint từ raw nếu có (chatType=1 / isGroup=true / threadId prefix)
+    //   2) Nếu DB đã có record 'group:X' cho cùng numericId → tiếp tục treat as group
+    //   3) Default DM
+    let isGroup = raw.chatType === 1 || raw.isGroup === true || String(threadId).startsWith('group:')
+    if (!isGroup) {
+      const knownGroup = await db.group.findFirst({
+        where: { tenantId, externalId: `group:${numericId}`, channelType: 'ZALO' },
+        select: { id: true },
+      })
+      if (knownGroup) isGroup = true
+    }
+    // GIỮ prefix 'group:' trong externalId để KHÔNG collision giữa DM "123" và group "group:123"
+    const fullExternalId = isGroup ? `group:${numericId}` : numericId
     const senderType: 'SELF' | 'CONTACT' = raw.isSelf || raw.senderType === 'SELF' ? 'SELF' : 'CONTACT'
 
     // Identify which user owns the OpenClaw (try to find by webhook secret)

@@ -13,9 +13,10 @@ type Tenant = {
   plan: string
   status: 'active' | 'suspended' | 'trial'
   licenseExpiresAt: string | null
-  _count: { groups: number }
-  owner: { name: string; email: string } | null
-  messageCount: number
+  stats?: { groups: number; users: number; customers: number }
+  owner?: { name: string; email: string } | null
+  messagesThisMonth?: number
+  contactEmail?: string | null
 }
 
 const STATUS_COLORS: Record<string, { label: string; color: string; dot: string }> = {
@@ -184,7 +185,7 @@ export default function TenantsPage() {
                         </p>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-700 dark:text-zinc-300">
-                        {tenant.owner?.email ?? '—'}
+                        {tenant.owner?.email ?? tenant.contactEmail ?? '—'}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-700 dark:text-zinc-300">
                         {tenant.industry ?? '—'}
@@ -205,7 +206,7 @@ export default function TenantsPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-700 dark:text-zinc-300 tabular-nums">
-                        {tenant._count.groups}
+                        {tenant.stats?.groups ?? 0}
                       </td>
                       <td className="px-6 py-4">
                         <Link
