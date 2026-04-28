@@ -22,9 +22,16 @@ export function Footer() {
         </p>
 
         {/* Contact + theme */}
-        <div className="flex items-center gap-1.5 flex-wrap justify-center">
-          <Pill href={TELE}  tint="bg-sky-500 hover:bg-sky-600"   icon="✈️" title="Telegram @datlevn">Tele</Pill>
-          <Pill href={EMAIL} tint="bg-gray-600 hover:bg-gray-700" icon="✉️" title="datle@outlook.com">Email</Pill>
+        <div className="flex items-center gap-2 flex-wrap justify-center text-[10px] text-gray-400 dark:text-zinc-500">
+          <a href={TELE} target="_blank" rel="noopener noreferrer" title="Telegram @datlevn"
+             className="hover:underline font-medium text-gray-500 dark:text-zinc-400 inline-flex items-center gap-0.5">
+            <span className="text-[9px]">✈️</span>Tele
+          </a>
+          <span className="text-gray-300 dark:text-zinc-600">·</span>
+          <a href={EMAIL} title="datle@outlook.com"
+             className="hover:underline font-medium text-gray-500 dark:text-zinc-400 inline-flex items-center gap-0.5">
+            <span className="text-[9px]">✉️</span>Email
+          </a>
           <span className="mx-1 w-px h-4 bg-gray-200 dark:bg-white/10" />
           <ThemeToggleCompact />
         </div>

@@ -634,11 +634,16 @@ function ZaloChannelCard({
                       📚 Import lịch sử CŨ (tuỳ chọn — 1 lần đầu)
                     </p>
                     <p className="text-xs text-gray-500 dark:text-zinc-400 mb-2.5 leading-relaxed">
-                      Listener chỉ bắt tin nhắn từ lúc kết nối trở đi. Nếu muốn import toàn bộ lịch sử CŨ → cần có <strong>Zalo PC App</strong> trên máy Windows/Mac (đã đăng nhập tài khoản đó). Chạy script bên dưới trên chính máy đó để đẩy lịch sử cũ lên dashboard (đọc SQLite của Zalo PC App).
+                      Listener chỉ bắt tin nhắn từ lúc kết nối. Để import toàn bộ lịch sử <strong>CŨ</strong> → chạy script bên dưới trên máy có <strong>Zalo PC App</strong> (đã đăng nhập tài khoản đó). Script đọc SQLite của Zalo PC App rồi đẩy lên dashboard.
                     </p>
-                    <p className="text-xs text-amber-700 dark:text-amber-400 mb-2.5">
-                      💡 <strong>Lưu ý:</strong> Chỉ chạy khi đã có ít nhất 1 nhóm Zalo hiển thị trong dashboard (đợi vài tin Zalo mới đến để listener tạo group).
-                    </p>
+                    <div className="text-xs text-amber-700 dark:text-amber-400 mb-2.5 space-y-1">
+                      <p>💡 <strong>Trước khi chạy:</strong></p>
+                      <ul className="list-disc list-inside ml-1 space-y-0.5">
+                        <li>Mở Zalo PC App, đăng nhập rồi đợi sync xong (khoảng 1 phút)</li>
+                        <li>Đợi listener đã forward ít nhất 1 tin → các nhóm hiện trên dashboard (script chỉ sync nhóm đã biết)</li>
+                        <li>Có thể tắt Zalo PC sau khi mở (script đọc DB file, không cần app chạy)</li>
+                      </ul>
+                    </div>
 
                     {/* 1 lệnh duy nhất: tự cài Node + openzca + better-sqlite3 + chạy import */}
                     {pushConfig ? (

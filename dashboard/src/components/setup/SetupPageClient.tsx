@@ -63,7 +63,9 @@ export function SetupPageClient() {
       <div className="min-h-screen bg-[#f2f2f7] dark:bg-zinc-950 flex items-center justify-center p-4" >
         <div className="w-full max-w-md">
           <div className="text-center mb-6">
-            <img src="/logo.png" alt="Zalo Monitor" className="w-16 h-16 mx-auto mb-3 rounded-3xl shadow-lg shadow-blue-500/30" />
+            <div className="w-16 h-16 mx-auto mb-3 rounded-3xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-blue-500/30">
+              ZM
+            </div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-zinc-100">
               Zalo Monitor <sup className="text-[10px] font-semibold text-blue-500 ml-0.5 align-top">beta</sup>
             </h1>
@@ -112,7 +114,9 @@ export function SetupPageClient() {
        <div className="w-full max-w-xl">
         {/* Header */}
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="Zalo Monitor" className="w-16 h-16 mx-auto mb-3 rounded-3xl shadow-lg shadow-blue-500/30" />
+          <div className="w-16 h-16 mx-auto mb-3 rounded-3xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-blue-500/30">
+            ZM
+          </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-zinc-100">
             Zalo Monitor <sup className="text-[10px] font-semibold text-blue-500 ml-0.5 align-top">beta</sup>
           </h1>

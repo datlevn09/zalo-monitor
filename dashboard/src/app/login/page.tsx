@@ -56,7 +56,9 @@ function LoginPageInner() {
   return (
     <div className="max-w-md mx-auto px-4 py-10 md:py-16">
       <div className="text-center mb-6">
-        <img src="/logo.png" alt="Zalo Monitor" className="w-14 h-14 mx-auto mb-3 rounded-2xl shadow-lg shadow-blue-500/30" />
+        <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-lg font-bold shadow-lg shadow-blue-500/30">
+          ZM
+        </div>
         <h1 className="text-xl font-bold text-gray-900 dark:text-zinc-100">
           Zalo Monitor <sup className="text-[10px] font-semibold text-blue-500 ml-0.5 align-top">beta</sup>
         </h1>

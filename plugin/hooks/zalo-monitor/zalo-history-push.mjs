@@ -349,12 +349,18 @@ async function main() {
   let totalGroups = 0
   let openzraAvailable = false
 
-  // Try openzca first
+  // Try openzca first — nhưng CHỈ dùng nếu profile đã login
   logInfo('Checking for openzca CLI...')
   try {
     execSync('openzca --version', { stdio: 'ignore' })
-    openzraAvailable = true
-    logSuccess('openzca CLI detected')
+    const profile = resolveProfile()
+    try {
+      execSync(`openzca --profile ${profile} auth status`, { stdio: 'ignore', timeout: 5000 })
+      openzraAvailable = true
+      logSuccess(`openzca CLI detected (profile: ${profile})`)
+    } catch {
+      logInfo(`openzca có nhưng profile "${profile}" CHƯA login — sẽ dùng SQLite (Zalo PC App)`)
+    }
   } catch {
     logInfo('openzca CLI not found — will use SQLite fallback')
   }
