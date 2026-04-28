@@ -233,7 +233,7 @@ async function pollPendingSends() {
     sendPolling = false
   }
 }
-setInterval(pollPendingSends, 2_000).unref?.()
+setInterval(pollPendingSends, 1_000).unref?.()
 
 // Pending actions poller: dashboard "Kết nối lại" → exec openzca login → push QR về backend
 let actionPolling = false
@@ -316,7 +316,7 @@ async function pollPendingActions() {
     actionPolling = false
   }
 }
-setInterval(pollPendingActions, 2_000).unref?.()
+setInterval(pollPendingActions, 1_000).unref?.()
 
 // Check openzca auth status để biết Zalo đã login chưa (mỗi 30s)
 async function zaloStatusCheck() {
