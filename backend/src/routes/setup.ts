@@ -1140,13 +1140,15 @@ fi
 # Set channels.openzalo.groupPolicy=open để OpenClaw không block group messages
 OC_CONFIG="$OPENCLAW_DIR/openclaw.json"
 if [ -f "$OC_CONFIG" ] && command -v python3 >/dev/null 2>&1; then
-  python3 - "$OC_CONFIG" <<'PYEOF' && echo "  ✅ Cấu hình OpenClaw: nhận tất cả tin nhóm (không cần @mention)"
+  python3 - "$OC_CONFIG" <<'PYEOF' && echo "  ✅ Cấu hình OpenClaw: chỉ ĐỌC tin (cấm agent reply / gửi / react)"
 import json, sys
 p = sys.argv[1]
 with open(p) as f: d = json.load(f)
 oz = d.setdefault('channels', {}).setdefault('openzalo', {})
 oz['groupPolicy'] = 'open'
-oz.setdefault('groups', {})['*'] = {'requireMention': False}
+oz.setdefault('groups', {})['*'] = {'requireMention': False, 'tools': {'deny': ['*']}}
+# CRITICAL: cấm agent gửi tin nhắn / reactions / thay đổi nhóm
+oz['actions'] = {'reactions': False, 'messages': False, 'groups': False, 'pins': False, 'memberInfo': False, 'groupMembers': False}
 with open(p, 'w') as f: json.dump(d, f, indent=2)
 PYEOF
 fi
