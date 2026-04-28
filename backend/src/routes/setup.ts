@@ -582,6 +582,23 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     return { ok: true }
   })
 
+  // POST /api/setup/login-success — hook báo Zalo đã login thành công
+  // Hook chạy `openzca auth status` định kỳ, khi thấy "logged in" thì gọi endpoint này
+  app.post('/login-success', async (req, reply) => {
+    const secret = req.headers['x-webhook-secret'] as string
+    if (!secret) return reply.status(401).send({ error: 'Missing secret' })
+    const tenant = await db.tenant.findFirst({ where: { webhookSecret: secret } })
+    if (!tenant) return reply.status(403).send({ error: 'Invalid secret' })
+    qrStore.delete(tenant.id)
+    hookPings.set(tenant.id, Date.now())
+    // Cập nhật DB để session-health trả 'healthy'
+    db.tenant.update({
+      where: { id: tenant.id },
+      data: { lastHookPingAt: new Date() },
+    }).catch(() => undefined)
+    return { ok: true }
+  })
+
   // GET /api/setup/pending-actions — hook polls for dashboard-triggered commands
   // Returns: { actions: ['login_zalo', ...] } — sau khi trả về thì xóa khỏi store
   app.get('/pending-actions', async (req, reply) => {

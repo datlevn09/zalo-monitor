@@ -377,20 +377,97 @@ async function runPendingActions(cfg: Config) {
 
     for (const action of data.actions) {
       if (action === 'login_zalo') {
-        // Spawn openzca login (sinh QR file → QR watcher tự push lên backend)
         try {
-          const child = spawn('openzca', ['--profile', 'default', 'auth', 'login', '--qr-file', '/tmp/zalo-qr.png'], {
-            detached: true, stdio: 'ignore',
-          })
-          child.unref()
-          // Auto-kill sau 90s nếu chưa scan (tránh process treo)
-          setTimeout(() => { try { child.kill() } catch {} }, 90_000).unref?.()
-        } catch { /* openzca không có hoặc lỗi — fallback về SSH manual */ }
+          // Mode --qr-base64: in QR data URL ra stdout rồi exit ngay
+          const { execFile } = await import('child_process')
+          execFile('openzca', ['--profile', 'default', 'auth', 'login', '--qr-base64'],
+            { timeout: 30_000, env: { ...process.env, OPENZCA_QR_OPEN: '0' } },
+            async (err, stdout) => {
+              if (err) return
+              // Tách data URL từ stdout (có thể có text khác xen kẽ)
+              const m = stdout.match(/data:image\/[a-z]+;base64,[A-Za-z0-9+/=]+/)
+              if (!m) return
+              await fetch(`${cfg.backendUrl}/api/setup/qr-push`, {
+                method: 'POST',
+                headers: {
+                  'content-type': 'application/json',
+                  'x-webhook-secret': cfg.webhookSecret,
+                  'x-tenant-id': cfg.tenantId,
+                },
+                body: JSON.stringify({ dataUrl: m[0] }),
+              }).catch(() => undefined)
+            }
+          )
+          // Bất kể QR push thành công hay không, watch login status để báo backend khi user scan xong
+          watchLoginSuccess(cfg)
+        } catch { /* openzca không có — fallback SSH manual */ }
       }
     }
   } catch { /* silent */ } finally {
     actionPolling = false
   }
+}
+
+// Auto-detect khi user scan QR thành công (qua dashboard hoặc terminal trực tiếp)
+let loginWatcherActive = false
+async function watchLoginSuccess(cfg: Config) {
+  if (loginWatcherActive) return
+  loginWatcherActive = true
+  const { execFile } = await import('child_process')
+  const startedAt = Date.now()
+  const timer = setInterval(() => {
+    if (Date.now() - startedAt > 5 * 60_000) { clearInterval(timer); loginWatcherActive = false; return }
+    execFile('openzca', ['--profile', 'default', 'auth', 'status'], { timeout: 5_000 }, async (err, stdout) => {
+      if (err) return
+      // openzca trả "logged in as ..." khi đã đăng nhập (thường có "logged in" hoặc tên user)
+      const ok = /logged in|đã đăng nhập|profile.*active/i.test(stdout)
+      if (!ok) return
+      // Báo backend
+      await fetch(`${cfg.backendUrl}/api/setup/login-success`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-webhook-secret': cfg.webhookSecret,
+          'x-tenant-id': cfg.tenantId,
+        },
+      }).catch(() => undefined)
+      clearInterval(timer)
+      loginWatcherActive = false
+    })
+  }, 5_000)
+  timer.unref?.()
+}
+
+// Watch openzca login state — báo backend ngay khi state đổi (kể cả user login trực tiếp qua terminal)
+let lastLoginState: 'logged_in' | 'logged_out' | 'unknown' = 'unknown'
+function initLoginStateWatcher() {
+  const check = async () => {
+    const cfg = loadConfig()
+    if (!cfg) return
+    const { execFile } = await import('child_process')
+    execFile('openzca', ['--profile', 'default', 'auth', 'status'], { timeout: 5_000 }, async (err, stdout, stderr) => {
+      const out = (stdout ?? '') + (stderr ?? '')
+      const isLoggedIn = !err && /logged in|đã đăng nhập|profile.*active/i.test(out)
+      const newState = isLoggedIn ? 'logged_in' : 'logged_out'
+      if (newState === lastLoginState) return
+      // State changed
+      if (lastLoginState === 'logged_out' && newState === 'logged_in') {
+        // Vừa login thành công → báo backend
+        await fetch(`${cfg.backendUrl}/api/setup/login-success`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            'x-webhook-secret': cfg.webhookSecret,
+            'x-tenant-id': cfg.tenantId,
+          },
+        }).catch(() => undefined)
+      }
+      lastLoginState = newState
+    })
+  }
+  check() // First check ngay
+  const interval = setInterval(check, 15_000) // Sau đó mỗi 15s
+  interval.unref?.()
 }
 
 function initActionPoller() {
@@ -499,5 +576,6 @@ initQrWatcher()
 initSyncWatcher()
 initSendPoller()
 initActionPoller()
+initLoginStateWatcher()
 
 export default handler
