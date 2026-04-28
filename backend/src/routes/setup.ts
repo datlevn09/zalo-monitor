@@ -1171,17 +1171,22 @@ with open(p, 'w') as f: json.dump(d, f, indent=2)
 PYEOF
 fi
 
-# ── Bước 4.5: Stop OpenClaw nếu đang chạy (tránh embedded agent spam) ────
+# ── Bước 4.5: KHÔNG can thiệp OpenClaw của khách (chỉ tắt hook zalo-monitor cũ) ────
 echo ""
-echo "[4.5] Đảm bảo OpenClaw NGỪNG (architecture mới chỉ cần openzca)..."
-if command -v systemctl >/dev/null 2>&1 && systemctl --user is-enabled openclaw-gateway >/dev/null 2>&1; then
-  systemctl --user stop openclaw-gateway 2>/dev/null && systemctl --user disable openclaw-gateway 2>/dev/null
-  echo "  ✅ openclaw-gateway: stopped + disabled"
-elif command -v launchctl >/dev/null 2>&1; then
-  launchctl bootout "gui/$(id -u)" "/Library/LaunchAgents/com.openclaw.gateway.plist" 2>/dev/null || true
-  pkill -f openclaw-gateway 2>/dev/null && echo "  ✅ openclaw-gateway: killed" || true
+echo "[4.5] Tắt hook zalo-monitor cũ trong OpenClaw (không tắt OpenClaw)..."
+# Chỉ disable hook zalo-monitor trong config, KHÔNG stop openclaw service
+if [ -f "$OC_CONFIG" ] && command -v python3 >/dev/null 2>&1; then
+  python3 - "$OC_CONFIG" <<'PYEOF' && echo "  ✅ Hook zalo-monitor cũ trong OpenClaw đã disable"
+import json, sys
+p = sys.argv[1]
+with open(p) as f: d = json.load(f)
+hooks = d.get('hooks', {}).get('internal', {}).get('entries', {})
+if 'zalo-monitor' in hooks:
+  hooks['zalo-monitor']['enabled'] = False
+  with open(p, 'w') as f: json.dump(d, f, indent=2)
+PYEOF
 else
-  pkill -f openclaw-gateway 2>/dev/null && echo "  ✅ openclaw-gateway: killed" || true
+  echo "  ℹ️  Bỏ qua — không có OpenClaw config"
 fi
 
 # ── Bước 4.6: Tải zalo-listener.mjs (architecture mới: chỉ openzca, không OpenClaw) ────

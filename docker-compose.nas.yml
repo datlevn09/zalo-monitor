@@ -54,6 +54,16 @@ services:
       NODE_ENV: production
       OPENCLAW_CONTAINER: ${OPENCLAW_CONTAINER:-openclaw}
       DOCKER_API_VERSION: "1.43"
+      # SMTP (forgot password / reset password emails)
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      # Google OAuth (login với Google)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
     depends_on:
       postgres: { condition: service_healthy }
       redis:    { condition: service_started }
