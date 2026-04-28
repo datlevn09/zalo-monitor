@@ -896,20 +896,24 @@ Set-Content -Path $envPath -Value $envContent -Encoding UTF8 -NoNewline
 Write-Host "  OK .env: $envPath" -ForegroundColor Green
 
 # Wrapper script load .env roi exec node
+# Note: PS escape \`$ trong @"..."@ heredoc de tranh interpolate variables cua wrapper script
 $wrapperPath = Join-Path $LISTENER_DIR "run-listener.ps1"
-$wrapperContent = @"
-\\$ErrorActionPreference = 'Continue'
-Get-Content '$envPath' | ForEach-Object {
-  if (\\$_ -match '^([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable(\\$matches[1], \\$matches[2], 'Process') }
-}
-& node '$listenerPath'
-"@
-Set-Content -Path $wrapperPath -Value $wrapperContent -Encoding UTF8
+$wrapperLines = @(
+  "\`$ErrorActionPreference = 'Continue'",
+  "Get-Content '$envPath' | ForEach-Object {",
+  "  if (\`$_ -match '^([^=]+)=(.*)\`$') { [Environment]::SetEnvironmentVariable(\`$matches[1], \`$matches[2], 'Process') }",
+  "}",
+  "& node '$listenerPath'"
+)
+Set-Content -Path $wrapperPath -Value ($wrapperLines -join "\`r\`n") -Encoding UTF8
 
 # Tao Scheduled Task chay khi user login (auto restart neu crash)
+# Lay full path powershell.exe (avoid PATH issue trong Scheduled Task context)
+$psExe = (Get-Command powershell.exe).Source
 $taskName = "ZaloMonitorListener"
 schtasks /Delete /TN $taskName /F 2>&1 | Out-Null
-$action = "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File \\"$wrapperPath\\""
+# CMD-style escape: \" inside outer "..." de schtasks /TR nhan duoc cmdline co dau cach
+$action = '"' + $psExe + '" -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $wrapperPath + '"'
 schtasks /Create /TN $taskName /TR $action /SC ONLOGON /RL HIGHEST /F 2>&1 | Out-Null
 schtasks /Run /TN $taskName 2>&1 | Out-Null
 if ($LASTEXITCODE -eq 0) {
