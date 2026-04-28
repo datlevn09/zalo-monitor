@@ -76,9 +76,22 @@ export function registerAuthGuard(app: FastifyInstance) {
     if (m) {
       const boardUserId = decodeURIComponent(m[1])
       if (boardUserId && boardUserId !== payload.userId) {
-        // OWNER tenant luôn được xem mọi board (vì là chủ tenant)
-        if (payload.role !== 'OWNER') {
-          const { db } = await import('./db.js')
+        const { db } = await import('./db.js')
+        if (payload.role === 'OWNER') {
+          // OWNER: boardUserId phải là user thuộc cùng tenant (chống stale localStorage trỏ
+          // sang user lạ → empty filter → tưởng "mất tin"). Chấp nhận mọi user trong tenant.
+          const target = await db.user.findFirst({
+            where: { id: boardUserId, tenantId: payload.tenantId },
+            select: { id: true },
+          })
+          if (!target) {
+            return reply.status(403).send({
+              error: 'Board không tồn tại — quay lại board của bạn',
+              code: 'BOARD_ACCESS_REVOKED',
+            })
+          }
+        } else {
+          // STAFF: phải có BoardAccess record
           const access = await db.boardAccess.findFirst({
             where: { boardUserId, viewerUserId: payload.userId, tenantId: payload.tenantId },
           })
