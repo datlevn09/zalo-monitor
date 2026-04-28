@@ -195,10 +195,18 @@ export const zaloAdminRoutes: FastifyPluginAsync = async (app) => {
       } catch { /* ignore */ }
     }
 
-    // Source of truth: zaloLoggedInTenants — chỉ set khi listener xác nhận openzca logged in
+    // Source of truth: zaloLoggedInTenants (in-memory, ping <2min)
+    // Fallback: lastHookPingAt (DB persist — survives backend restart)
     const { zaloLoggedInTenants } = await import('./setup.js')
     const zaloLoginAt = zaloLoggedInTenants.get(tenantId)
-    const zaloLoggedIn = !!zaloLoginAt && Date.now() - zaloLoginAt < 2 * 60 * 1000  // ping mới <2min
+    let zaloLoggedIn = !!zaloLoginAt && Date.now() - zaloLoginAt < 2 * 60 * 1000
+    // Fallback DB nếu in-memory clear (vd backend restart)
+    if (!zaloLoggedIn) {
+      const t = await db.tenant.findUnique({ where: { id: tenantId }, select: { lastHookPingAt: true } })
+      if (t?.lastHookPingAt && Date.now() - t.lastHookPingAt.getTime() < 5 * 60 * 1000) {
+        zaloLoggedIn = true
+      }
+    }
     return {
       connected: zaloLoggedIn,
       qrPending,
