@@ -53,8 +53,8 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
 
     const raw = req.body as Record<string, any>
 
-    // DEBUG: log raw payload key set (not full content) để diagnose
-    if (process.env.DEBUG_WEBHOOK === '1' || tenantId === 'cmoijmwfp0056sa7x4mu54b0g') {
+    // DEBUG: bật bằng DEBUG_WEBHOOK=1 nếu cần trace payload
+    if (process.env.DEBUG_WEBHOOK === '1') {
       app.log.info({ tenantId, keys: Object.keys(raw), preview: JSON.stringify(raw).slice(0, 500) }, '[zalo-webhook] raw payload')
     }
 
