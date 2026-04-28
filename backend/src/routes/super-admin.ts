@@ -67,38 +67,49 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
       orderBy: { createdAt: 'desc' },
       include: {
         _count: { select: { groups: true, users: true, customers: true } },
+        // Include OWNER user để có email/name
+        users: {
+          where: { role: 'OWNER' },
+          select: { id: true, name: true, email: true },
+          take: 1,
+        },
       },
     })
-    return tenants.map((t) => ({
-      id: t.id,
-      name: t.name,
-      slug: t.slug,
-      industry: t.industry,
-      plan: t.plan,
-      active: t.active,
-      suspendedReason: t.suspendedReason,
-      licenseKey: t.licenseKey,
-      licenseExpiresAt: t.licenseExpiresAt,
-      contactName: t.contactName,
-      contactPhone: t.contactPhone,
-      contactEmail: t.contactEmail,
-      notes: t.notes,
-      setupDone: t.setupDone,
-      createdAt: t.createdAt,
-      maxGroups: t.maxGroups,
-      maxMessagesPerMonth: t.maxMessagesPerMonth,
-      maxBoardViewers: t.maxBoardViewers,
-      maxHistorySyncDepth: t.maxHistorySyncDepth,
-      messagesThisMonth: t.messagesThisMonth,
-      usageResetAt: t.usageResetAt,
-      stats: {
-        groups: t._count.groups,
-        users: t._count.users,
-        customers: t._count.customers,
-      },
-      // Trạng thái tính toán
-      status: computeStatus(t.active, t.licenseExpiresAt, t.setupDone),
-    }))
+    return tenants.map((t) => {
+      const owner = t.users[0]
+      return {
+        id: t.id,
+        name: t.name,
+        slug: t.slug,
+        industry: t.industry,
+        plan: t.plan,
+        active: t.active,
+        suspendedReason: t.suspendedReason,
+        licenseKey: t.licenseKey,
+        licenseExpiresAt: t.licenseExpiresAt,
+        contactName: t.contactName,
+        contactPhone: t.contactPhone,
+        contactEmail: t.contactEmail,
+        notes: t.notes,
+        setupDone: t.setupDone,
+        createdAt: t.createdAt,
+        maxGroups: t.maxGroups,
+        maxMessagesPerMonth: t.maxMessagesPerMonth,
+        maxBoardViewers: t.maxBoardViewers,
+        maxHistorySyncDepth: t.maxHistorySyncDepth,
+        messagesThisMonth: t.messagesThisMonth,
+        usageResetAt: t.usageResetAt,
+        // OWNER user info
+        owner: owner ? { name: owner.name, email: owner.email } : null,
+        stats: {
+          groups: t._count.groups,
+          users: t._count.users,
+          customers: t._count.customers,
+        },
+        // Trạng thái tính toán
+        status: computeStatus(t.active, t.licenseExpiresAt, t.setupDone),
+      }
+    })
   })
 
   // GET /api/super-admin/metrics — tổng quan hệ thống
