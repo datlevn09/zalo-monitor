@@ -154,44 +154,85 @@ export const groupRoutes: FastifyPluginAsync = async (app) => {
     return { ok: true, pinnedGroupIds: user.pinnedGroupIds }
   })
 
-  // POST /api/groups/:id/send — gửi tin nhắn vào nhóm Zalo
+  // POST /api/groups/:id/upload — upload file (ảnh/video/file) → trả URL public
+  app.post('/:id/upload', async (req, reply) => {
+    const tenantId = req.headers['x-tenant-id'] as string
+    if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
+    const auth = req.authUser
+    if (!auth) return reply.status(401).send({ error: 'Unauthorized' })
+
+    const data = await (req as any).file()
+    if (!data) return reply.status(400).send({ error: 'No file' })
+
+    const fs = await import('node:fs')
+    const path = await import('node:path')
+    const crypto = await import('node:crypto')
+    const UPLOAD_DIR = process.env.UPLOAD_DIR || '/app/uploads'
+    const subDir = path.join(UPLOAD_DIR, tenantId)
+    fs.mkdirSync(subDir, { recursive: true })
+
+    const ext = path.extname(data.filename || '') || '.bin'
+    const filename = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`
+    const filepath = path.join(subDir, filename)
+    const buffer = await data.toBuffer()
+    fs.writeFileSync(filepath, buffer)
+
+    const publicUrl = `${process.env.PUBLIC_BACKEND_URL || ''}/uploads/${tenantId}/${filename}`
+    const mime = data.mimetype || 'application/octet-stream'
+    const mediaType = mime.startsWith('image/') ? 'image' : mime.startsWith('video/') ? 'video' : 'file'
+
+    return { ok: true, url: publicUrl, mediaType, filename: data.filename, size: buffer.length, mime }
+  })
+
+  // POST /api/groups/:id/send — gửi tin nhắn (text/image/video/file) vào nhóm Zalo
   app.post('/:id/send', async (req, reply) => {
     const tenantId = req.headers['x-tenant-id'] as string
     const auth = req.authUser
     const { id } = req.params as { id: string }
-    const { text } = req.body as { text?: string }
+    const { text, mediaUrl, mediaType } = req.body as {
+      text?: string
+      mediaUrl?: string
+      mediaType?: 'image' | 'video' | 'file'
+    }
 
-    if (!text?.trim()) return reply.status(400).send({ error: 'text is required' })
+    if (!text?.trim() && !mediaUrl?.trim()) {
+      return reply.status(400).send({ error: 'Cần text hoặc mediaUrl' })
+    }
 
     const group = await db.group.findFirst({ where: { id, tenantId } })
     if (!group) return reply.status(404).send({ error: 'Group not found' })
     if (group.channelType !== 'ZALO') return reply.status(400).send({ error: 'Chỉ hỗ trợ gửi tin cho nhóm Zalo' })
 
-    const trimmed = text.trim()
+    const trimmedText = (text ?? '').trim()
+    const cleanMediaUrl = mediaUrl?.trim() || null
+    const cleanMediaType = (cleanMediaUrl ? (mediaType ?? 'file') : null)
 
-    // Try docker exec directly first
-    try {
-      sendZaloMessage(group.externalId, trimmed)
-      const msg = await db.message.create({
-        data: {
-          groupId: group.id,
-          externalId: `sent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          senderType: 'SELF',
-          senderId: auth?.userId ?? 'bot',
-          senderName: 'Bot',
-          contentType: 'TEXT',
-          content: trimmed,
-          sentAt: new Date(),
-        },
-      })
-      await db.group.update({ where: { id }, data: { lastMessageAt: new Date() } })
-      return { ok: true, queued: false, message: msg }
-    } catch {
-      // Docker exec failed → queue for hook to pick up
-      await db.sendQueue.create({
-        data: { tenantId, groupExternalId: group.externalId, text: trimmed },
-      })
-      return { ok: true, queued: true }
-    }
+    // Listener architecture mới: luôn queue (docker exec đã bị bỏ)
+    await db.sendQueue.create({
+      data: {
+        tenantId,
+        groupExternalId: group.externalId,
+        text: trimmedText,
+        mediaUrl: cleanMediaUrl,
+        mediaType: cleanMediaType,
+      },
+    })
+
+    // Optimistic update DB để UI thấy tin ngay (status pending)
+    const msg = await db.message.create({
+      data: {
+        groupId: group.id,
+        externalId: `sent-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        senderType: 'SELF',
+        senderId: auth?.userId ?? 'bot',
+        senderName: 'Bot',
+        contentType: cleanMediaType === 'image' ? 'IMAGE' : cleanMediaType === 'video' ? 'VIDEO' : cleanMediaType === 'file' ? 'FILE' : 'TEXT',
+        content: trimmedText || cleanMediaUrl || '',
+        attachments: cleanMediaUrl ? [cleanMediaUrl] : undefined,
+        sentAt: new Date(),
+      },
+    })
+    await db.group.update({ where: { id }, data: { lastMessageAt: new Date() } })
+    return { ok: true, queued: true, message: msg }
   })
 }

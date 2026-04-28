@@ -525,6 +525,8 @@ model SendQueue {
   tenantId        String
   groupExternalId String
   text            String
+  mediaUrl        String?  // URL public ảnh/video/file
+  mediaType       String?  // 'image' | 'video' | 'file'
   status          String   @default("pending")
   createdAt       DateTime @default(now())
   tenant          Tenant   @relation(fields: [tenantId], references: [id])

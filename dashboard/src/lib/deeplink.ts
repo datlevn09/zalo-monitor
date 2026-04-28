@@ -9,19 +9,18 @@ export function zaloChatUserLink(opts: {
   phone?: string | null
   zaloId?: string | null
 }): string | null {
-  // Prefer phone (web-friendly)
+  // Mở Zalo native app — tránh chat.zalo.me (Zalo Web)
+  if (opts.zaloId) return `zalo://conversation?id=${opts.zaloId}`
   if (opts.phone) {
     const clean = opts.phone.replace(/[^\d+]/g, '')
-    return `https://zalo.me/${clean}`
+    return `zalo://chat?phone=${clean}`
   }
-  // Zalo ID fallback (opens in mobile app via deep link, web may show profile)
-  if (opts.zaloId) return `https://zalo.me/${opts.zaloId}`
   return null
 }
 
 export function zaloGroupLink(externalId: string): string {
-  // Mở group trong Zalo Web (nếu đã login)
-  return `https://chat.zalo.me/?id=g${externalId}`
+  // Mở Zalo native app (KHÔNG dùng chat.zalo.me — risk user scan QR đăng nhập nhầm)
+  return `zalo://conversation?groupid=${externalId}`
 }
 
 export function telegramChatLink(chatId: string): string | null {

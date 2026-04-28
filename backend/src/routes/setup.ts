@@ -575,10 +575,9 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
       where: { tenantId: tenant.id, status: 'pending' },
       orderBy: { createdAt: 'asc' },
       take: 20,
-      select: { id: true, groupExternalId: true, text: true },
+      select: { id: true, groupExternalId: true, text: true, mediaUrl: true, mediaType: true },
     })
     if (pending.length === 0) return []
-    // Tra cứu Group.isDirect để biết là DM hay group → listener add flag -g cho group
     const groups = await db.group.findMany({
       where: {
         tenantId: tenant.id,

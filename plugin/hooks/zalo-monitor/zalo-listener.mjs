@@ -149,14 +149,26 @@ async function pollPendingSends() {
 
     for (const item of pending) {
       let status = 'failed'
+      const isGroup = !!item.isGroup
+      const groupFlag = isGroup ? '-g' : ''
+      const tid = item.groupExternalId
       try {
-        const safe = String(item.text).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, ' ')
-        // -g = group send (cần cho thread group), --raw = không parse format markers
-        const isGroup = !!item.isGroup // backend cần truyền field này
-        const groupFlag = isGroup ? '-g' : ''
-        execSync(`"${OPENZCA}" --profile ${cfg.profile} msg send ${groupFlag} --raw ${item.groupExternalId} "${safe}"`, { timeout: 10_000 })
+        if (item.mediaUrl) {
+          // Gửi ảnh/video/file qua URL
+          const cmd = item.mediaType === 'image' ? 'image'
+                    : item.mediaType === 'video' ? 'video'
+                    : 'file'
+          const safeUrl = String(item.mediaUrl).replace(/"/g, '\\"')
+          // Nếu có caption text, openzca msg image hỗ trợ --caption
+          const captionFlag = item.text ? `--caption "${String(item.text).replace(/"/g, '\\"')}"` : ''
+          execSync(`"${OPENZCA}" --profile ${cfg.profile} msg ${cmd} ${groupFlag} ${captionFlag} ${tid} "${safeUrl}"`, { timeout: 30_000 })
+          console.log(`   📎 Sent ${item.mediaType} ${item.id} → ${tid}`)
+        } else {
+          const safe = String(item.text).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, ' ')
+          execSync(`"${OPENZCA}" --profile ${cfg.profile} msg send ${groupFlag} --raw ${tid} "${safe}"`, { timeout: 10_000 })
+          console.log(`   ✉️  Sent ${item.id} → ${tid}`)
+        }
         status = 'sent'
-        console.log(`   ✉️  Sent ${item.id} → ${item.groupExternalId}`)
       } catch (err) {
         console.error(`   ❌ Send fail ${item.id}: ${err.message}`)
       }

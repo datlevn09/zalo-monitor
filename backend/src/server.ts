@@ -2,6 +2,10 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
 import websocket from '@fastify/websocket'
+import multipart from '@fastify/multipart'
+import staticPlugin from '@fastify/static'
+import path from 'node:path'
+import fs from 'node:fs'
 import { setupRoutes } from './routes/setup.js'
 import { webhookRoutes } from './routes/webhook.js'
 import { zaloWebhookRoutes } from './routes/webhook-zalo.js'
@@ -41,6 +45,16 @@ const app = Fastify({ logger: true })
 await app.register(cors, { origin: true })
 await app.register(jwt, { secret: process.env.JWT_SECRET ?? 'dev-secret' })
 await app.register(websocket)
+await app.register(multipart, { limits: { fileSize: 100 * 1024 * 1024 } }) // 100MB max
+
+// Serve uploaded files at /uploads/*
+const UPLOAD_DIR = process.env.UPLOAD_DIR || '/app/uploads'
+fs.mkdirSync(UPLOAD_DIR, { recursive: true })
+await app.register(staticPlugin, {
+  root: UPLOAD_DIR,
+  prefix: '/uploads/',
+  decorateReply: false,
+})
 
 // Bắt buộc JWT cho mọi route /api/* (trừ /api/auth, /api/setup, /api/super-admin, /webhook)
 registerAuthGuard(app)

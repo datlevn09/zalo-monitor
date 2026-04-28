@@ -78,6 +78,55 @@ export default function GroupDetailPage() {
   const [aiResult, setAiResult] = useState<AiAnalysis | null>(null)
   const [sendText, setSendText] = useState('')
   const [sending, setSending] = useState(false)
+  const [pendingFile, setPendingFile] = useState<{ url: string; mediaType: 'image' | 'video' | 'file'; filename: string; previewUrl?: string } | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function uploadFile(file: File) {
+    if (!file || uploading) return
+    setUploading(true); setSendError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const token = localStorage.getItem('token')
+      const tenantId = localStorage.getItem('tenantId')
+      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
+      const res = await fetch(`${apiBase}/api/groups/${id}/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'X-Tenant-Id': tenantId ?? '' },
+        body: fd,
+      })
+      if (!res.ok) throw new Error(`Upload fail ${res.status}`)
+      const data = await res.json()
+      setPendingFile({
+        url: data.url,
+        mediaType: data.mediaType,
+        filename: data.filename,
+        previewUrl: data.mediaType === 'image' ? URL.createObjectURL(file) : undefined,
+      })
+    } catch (err: any) {
+      setSendError(`Upload thất bại: ${err.message}`)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  function onPaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const items = e.clipboardData?.items
+    if (!items) return
+    for (const it of Array.from(items)) {
+      if (it.kind === 'file') {
+        const file = it.getAsFile()
+        if (file) { e.preventDefault(); uploadFile(file); return }
+      }
+    }
+  }
+
+  function onDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    const files = e.dataTransfer?.files
+    if (files && files.length > 0) uploadFile(files[0])
+  }
   const [sendError, setSendError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -112,15 +161,21 @@ export default function GroupDetailPage() {
   }
 
   async function handleSend() {
-    if (!sendText.trim() || sending) return
+    const text = sendText.trim()
+    if (!text && !pendingFile) return
+    if (sending) return
     setSending(true)
     setSendError(null)
-    const text = sendText.trim()
-    setSendText('')
+    const payload = {
+      text,
+      mediaUrl: pendingFile?.url,
+      mediaType: pendingFile?.mediaType,
+    }
+    setSendText(''); setPendingFile(null)
     try {
       const res = await api<{ ok: boolean; queued?: boolean; message?: Message }>(`/api/groups/${id}/send`, {
         method: 'POST',
-        body: JSON.stringify({ text }),
+        body: JSON.stringify(payload),
       })
       if (res.message) {
         setMessages(prev => [...prev, res.message!])
@@ -471,15 +526,48 @@ export default function GroupDetailPage() {
       {/* Send input — only for ZALO */}
       {group.channelType === 'ZALO' && (
         <div className="border-t border-gray-200 dark:border-white/10 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl px-4 py-3 sticky bottom-0">
-          <div className="max-w-3xl mx-auto flex items-end gap-2">
+          <div
+            className="max-w-3xl mx-auto"
+            onDragOver={e => { e.preventDefault() }}
+            onDrop={onDrop}
+          >
+            {pendingFile && (
+              <div className="mb-2 flex items-center gap-2 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 rounded-xl p-2">
+                {pendingFile.previewUrl ? (
+                  <img src={pendingFile.previewUrl} alt={pendingFile.filename} className="w-12 h-12 object-cover rounded shrink-0" />
+                ) : (
+                  <span className="text-2xl shrink-0">{pendingFile.mediaType === 'video' ? '🎬' : '📎'}</span>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-900 dark:text-zinc-100 truncate">{pendingFile.filename}</p>
+                  <p className="text-[10px] text-gray-500 dark:text-zinc-400">{pendingFile.mediaType} — sẽ gửi kèm tin nhắn</p>
+                </div>
+                <button onClick={() => setPendingFile(null)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-zinc-400 px-2 text-lg">×</button>
+              </div>
+            )}
+            <input ref={fileInputRef} type="file" className="hidden"
+              accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.zip"
+              onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }}
+            />
+            <div className="flex items-end gap-2">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              title="Đính kèm ảnh/video/file"
+              className="w-10 h-10 rounded-full bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 flex items-center justify-center shrink-0 disabled:opacity-50"
+            >
+              {uploading ? <span className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <span className="text-lg">📎</span>}
+            </button>
             <textarea
               ref={textareaRef}
               value={sendText}
               onChange={handleTextareaChange}
+              onPaste={onPaste}
               onKeyDown={e => {
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
               }}
-              placeholder="Nhập tin nhắn... (Enter gửi, Shift+Enter xuống dòng)"
+              placeholder={pendingFile ? "Caption (tuỳ chọn)..." : "Nhập tin... (Enter gửi · Paste/Drag ảnh để đính kèm)"}
               rows={1}
               style={{ minHeight: '42px', maxHeight: '120px', height: '42px' }}
               className="flex-1 resize-none px-3.5 py-2.5 rounded-2xl border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-zinc-800 text-sm text-gray-900 dark:text-zinc-100 placeholder-gray-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 transition-all overflow-hidden"
@@ -487,7 +575,7 @@ export default function GroupDetailPage() {
             />
             <button
               onClick={handleSend}
-              disabled={sending || !sendText.trim()}
+              disabled={sending || (!sendText.trim() && !pendingFile)}
               className="w-10 h-10 rounded-full bg-blue-500 hover:bg-blue-600 disabled:bg-blue-200 dark:disabled:bg-blue-800/50 text-white flex items-center justify-center shrink-0 transition-colors"
             >
               {sending ? (
@@ -498,6 +586,7 @@ export default function GroupDetailPage() {
                 </svg>
               )}
             </button>
+            </div>
           </div>
           {sendError && (
             <p className="text-xs text-red-500 dark:text-red-400 mt-1.5 max-w-3xl mx-auto">{sendError}</p>
