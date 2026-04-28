@@ -934,12 +934,9 @@ function ZaloQRModal({
           )}
         </div>
 
-        {/* Native mode hint */}
-        {nativeMode && !qrDataUrl && (
-          <div className="w-full bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-lg p-3 text-xs text-amber-800 dark:text-amber-300">
-            <p className="font-medium mb-1">OpenClaw đang chạy trên máy/server khác của bạn (không phải máy này)</p>
-            <p>Vui lòng khởi động lại OpenClaw trên máy/server đó → QR sẽ tự hiện ở đây trong vài giây.</p>
-          </div>
+        {/* Manual fallback: nếu hook không phản hồi, khách copy lệnh chạy thủ công */}
+        {!qrDataUrl && (
+          <ManualLoginFallback />
         )}
 
         {/* Status message */}
@@ -971,6 +968,48 @@ function ComingSoonCard({ config }: { config: any }) {
           Sắp ra mắt
         </span>
       </div>
+    </div>
+  )
+}
+
+function ManualLoginFallback() {
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const cmd = 'openzca --profile default auth login'
+
+  function copyCmd() {
+    navigator.clipboard.writeText(cmd)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <div className="w-full bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-lg p-3 text-xs text-amber-800 dark:text-amber-300 space-y-2">
+      <p className="font-medium">⏱ Đang đợi OpenClaw phản hồi...</p>
+      <p className="text-[11px] opacity-90">
+        Hệ thống đã gửi yêu cầu login Zalo tới OpenClaw — QR sẽ tự hiện trong vài giây.
+        Nếu không thấy QR sau ~15 giây →{' '}
+        <button onClick={() => setShowAdvanced(s => !s)} className="underline font-medium">
+          {showAdvanced ? 'ẩn' : 'chạy thủ công'}
+        </button>
+      </p>
+      {showAdvanced && (
+        <div className="pt-2 border-t border-amber-200 dark:border-amber-500/30 space-y-2">
+          <p>SSH vào server có OpenClaw, paste lệnh:</p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 bg-gray-900 text-green-400 text-[11px] font-mono px-2 py-1.5 rounded overflow-x-auto select-all">
+              {cmd}
+            </code>
+            <button
+              onClick={copyCmd}
+              className="px-2 py-1 text-[11px] font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded shrink-0"
+            >
+              {copied ? '✓' : 'Copy'}
+            </button>
+          </div>
+          <p className="text-[11px] opacity-75">QR sẽ hiện trong terminal — quét bằng Zalo điện thoại.</p>
+        </div>
+      )}
     </div>
   )
 }
