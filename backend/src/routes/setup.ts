@@ -1022,7 +1022,7 @@ ZALO_FOUND=false
 
 if [ -f "$CONFIG_FILE" ] && command -v python3 >/dev/null 2>&1; then
   python3 - "$CONFIG_FILE" "$OPENCLAW_DIR" <<'PYEOF'
-import json, sys, os, glob
+import json, sys, os, glob, re
 
 cfg_file  = sys.argv[1]
 oclaw_dir = sys.argv[2]
@@ -1050,29 +1050,29 @@ if oz:
 
   print('')
   print('  📱 Zalo:')
+  zca_bin = oz.get('zcaBinary') or 'openzca'
   for acc_id, profile_name in profiles_to_check:
-    # Tìm trong ~/.openzca/profiles/<profile>/cache/friends.json
-    friends_file = os.path.expanduser(f'~/.openzca/profiles/{profile_name}/cache/friends.json')
-    name, phone = '', ''
-    if os.path.exists(friends_file):
-      try:
-        friends = json.load(open(friends_file))
-        if isinstance(friends, dict):
-          friends = friends.get('friends', friends.get('data', []))
-        for f in friends:
-          p = f.get('phoneNumber', '')
-          if p:
-            name  = f.get('displayName') or f.get('zaloName') or ''
-            phone = p
-            break
-      except:
-        pass
+    # Ưu tiên: gọi `openzca auth status --json` để lấy session HIỆN TẠI (không cache)
+    name, phone, logged_in = '', '', False
+    try:
+      import subprocess
+      result = subprocess.run(
+        [zca_bin, '--profile', profile_name, 'auth', 'status'],
+        capture_output=True, text=True, timeout=5
+      )
+      out = (result.stdout or '') + (result.stderr or '')
+      # openzca trả output dạng: { profile: 'default', loggedIn: true, userId: '...', displayName: '...' }
+      m_logged = re.search(r"loggedIn:\s*true", out)
+      m_name = re.search(r"displayName:\s*['\"]?([^'\"\n,}]+)", out)
+      if m_logged:
+        logged_in = True
+        if m_name: name = m_name.group(1).strip()
+    except: pass
+
     label = f'profile:{profile_name}'
     if name:  label = name
-    if phone: label += f'  [{phone}]'
-    state = 'đang bật' if enabled else 'tắt'
-    note = ' (cache — session thực tế check trên dashboard)' if name or phone else ''
-    print(f'  {status_icon} {label} — {state}{note}')
+    state = 'đang bật' if (logged_in and enabled) else 'CHƯA login' if not logged_in else 'tắt'
+    print(f'  {status_icon} {label} — {state}')
 
 # ── Telegram ────────────────────────────────────
 tg = channels.get('telegram', {})
@@ -1128,11 +1128,13 @@ fi
 # Set channels.openzalo.groupPolicy=open để OpenClaw không block group messages
 OC_CONFIG="$OPENCLAW_DIR/openclaw.json"
 if [ -f "$OC_CONFIG" ] && command -v python3 >/dev/null 2>&1; then
-  python3 - "$OC_CONFIG" <<'PYEOF' && echo "  ✅ groupPolicy = open (cho phép tất cả nhóm Zalo)"
+  python3 - "$OC_CONFIG" <<'PYEOF' && echo "  ✅ Cấu hình OpenClaw: nhận tất cả tin nhóm (không cần @mention)"
 import json, sys
 p = sys.argv[1]
 with open(p) as f: d = json.load(f)
-d.setdefault('channels', {}).setdefault('openzalo', {})['groupPolicy'] = 'open'
+oz = d.setdefault('channels', {}).setdefault('openzalo', {})
+oz['groupPolicy'] = 'open'
+oz.setdefault('groups', {})['*'] = {'requireMention': False}
 with open(p, 'w') as f: json.dump(d, f, indent=2)
 PYEOF
 fi
