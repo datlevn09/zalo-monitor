@@ -263,9 +263,13 @@ function PlanCard({ tenant, groupCount }: { tenant: TenantInfo; groupCount: numb
   async function triggerSync() {
     setSyncing(true)
     try {
-      await api('/api/zalo/sync-all-history', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ groups: 30, limit: 100 }) })
+      // Queue action sync_history → listener trên máy khách tự exec zalo-history-push.mjs
+      // (không dùng /sync-all-history vì backend container không có openzca CLI)
+      await api('/api/zalo/sync-history-server', { method: 'POST' })
       setSyncDone(true)
-      setTimeout(() => setSyncDone(false), 3000)
+      setTimeout(() => setSyncDone(false), 5000)
+    } catch (e: any) {
+      alert('Không gửi được lệnh sync: ' + (e?.message || 'unknown'))
     } finally { setSyncing(false) }
   }
 

@@ -54,6 +54,18 @@ export async function api<T = any>(path: string, init?: RequestInit): Promise<T>
     }
     throw new Error('Unauthorized')
   }
+  if (res.status === 403) {
+    const body = await res.json().catch(() => ({}))
+    if (body?.code === 'BOARD_ACCESS_REVOKED') {
+      // Quyền xem board bị thu hồi → revert về board của mình
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('zm:boardUserId')
+        alert('Quyền xem board này đã bị thu hồi. Quay lại board của bạn.')
+        window.location.reload()
+      }
+      throw new Error('BOARD_ACCESS_REVOKED')
+    }
+  }
   if (!res.ok) throw new Error(`API ${path} failed: ${res.status}`)
   return res.json()
 }

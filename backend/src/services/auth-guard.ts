@@ -68,6 +68,29 @@ export function registerAuthGuard(app: FastifyInstance) {
     if (!headerTenantId) {
       (req.headers as any)['x-tenant-id'] = payload.tenantId
     }
+
+    // BOARD ACCESS CHECK: nếu request có boardUserId và không phải own → cần BoardAccess
+    // Áp dụng GLOBAL cho tất cả /api/* — tránh user bị xóa share vẫn xem được data
+    const url2 = req.url
+    const m = url2.match(/[?&]boardUserId=([^&]+)/)
+    if (m) {
+      const boardUserId = decodeURIComponent(m[1])
+      if (boardUserId && boardUserId !== payload.userId) {
+        // OWNER tenant luôn được xem mọi board (vì là chủ tenant)
+        if (payload.role !== 'OWNER') {
+          const { db } = await import('./db.js')
+          const access = await db.boardAccess.findFirst({
+            where: { boardUserId, viewerUserId: payload.userId, tenantId: payload.tenantId },
+          })
+          if (!access) {
+            return reply.status(403).send({
+              error: 'Không có quyền xem board này — có thể chủ board đã thu hồi quyền',
+              code: 'BOARD_ACCESS_REVOKED',
+            })
+          }
+        }
+      }
+    }
   })
 }
 
