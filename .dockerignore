@@ -1,0 +1,12 @@
+# Tránh COPY node_modules/ từ host vào image
+# (Dockerfile có `COPY backend/ .` sẽ ghi đè node_modules từ deps stage
+#  nếu host có sẵn — gây ra lỗi version mismatch khó debug)
+**/node_modules
+**/.next
+**/dist
+**/.env
+**/.env.local
+**/.git
+**/.DS_Store
+**/*.log
+**/coverage
