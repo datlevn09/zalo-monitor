@@ -84,7 +84,7 @@ export default function SettingsPage() {
       {/* Channels */}
       <Section
         title="Kênh theo dõi"
-        description="Bật/tắt đọc tin nhắn theo từng kênh. Tắt = tin nhắn sẽ không được lưu vào dashboard."
+        description="Bật/tắt đồng bộ dữ liệu theo từng kênh. Tắt = dữ liệu sẽ không được đồng bộ vào dashboard."
       >
         {CHANNELS.map(ch => {
           const on = enabled.has(ch.key)
@@ -137,7 +137,7 @@ export default function SettingsPage() {
       {privacy && (
         <Section
           title="🔒 Quyền riêng tư của tôi"
-          description="Mỗi người tự quyết có theo dõi DM trên Zalo CÁ NHÂN của mình không. Cài đặt này chỉ áp dụng cho tin nhắn từ Zalo của bạn, không ảnh hưởng người khác."
+          description="Mỗi người tự quyết có đồng bộ DM trên Zalo CÁ NHÂN của mình không. Cài đặt này chỉ áp dụng cho dữ liệu từ Zalo của bạn, không ảnh hưởng người khác."
         >
           <div className="flex items-center gap-3 px-4 py-3.5">
             <div className="w-10 h-10 rounded-2xl bg-amber-500 flex items-center justify-center text-white font-bold shrink-0">

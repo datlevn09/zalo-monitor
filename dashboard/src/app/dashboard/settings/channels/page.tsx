@@ -103,7 +103,7 @@ export default function ChannelsPage() {
           Kênh theo dõi
         </h1>
         <p className="text-gray-500 dark:text-zinc-400 mt-1">
-          Kết nối các kênh liên lạc để theo dõi tin nhắn từ khách hàng
+          Kết nối các kênh liên lạc để đồng bộ dữ liệu khách hàng
         </p>
       </div>
 
@@ -596,7 +596,7 @@ function ZaloChannelCard({
             </div>
           )}
 
-          {/* Advanced: Import lịch sử đầy đủ */}
+          {/* Advanced: Đồng bộ dữ liệu cũ */}
           {!notInstalled && (
             <div className="mt-3 border-t border-gray-100 dark:border-white/5 pt-3">
               <button
@@ -607,7 +607,7 @@ function ZaloChannelCard({
                 className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-200 transition-colors group"
               >
                 <span className="text-base leading-none">📦</span>
-                <span className="font-medium">Import lịch sử đầy đủ</span>
+                <span className="font-medium">Đồng bộ dữ liệu cũ</span>
                 <svg
                   className={`w-3.5 h-3.5 transition-transform ${showHistoryImport ? 'rotate-180' : ''}`}
                   fill="none" stroke="currentColor" viewBox="0 0 24 24"
@@ -624,7 +624,7 @@ function ZaloChannelCard({
                       ✅ Tin nhắn MỚI (real-time)
                     </p>
                     <p className="text-xs text-green-700 dark:text-green-400 leading-relaxed">
-                      Listener (<code className="bg-green-100 dark:bg-green-500/20 px-1 rounded">openzca listen</code>) tự động forward mọi tin Zalo mới về dashboard. Không cần làm gì thêm.
+                      Listener (<code className="bg-green-100 dark:bg-green-500/20 px-1 rounded">openzca listen</code>) tự động đồng bộ dữ liệu mới về dashboard. Không cần làm gì thêm.
                     </p>
                   </div>
 

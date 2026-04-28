@@ -100,7 +100,7 @@ BACKEND_URL=https://api... WEBHOOK_SECRET=xxx TENANT_ID=xxx \\
             </ul>
           </Step>
 
-          <Step n={4} title="Xong — Listener tự forward tin về dashboard">
+          <Step n={4} title="Xong — Listener tự đồng bộ dữ liệu về dashboard">
             <ul className="text-sm text-gray-600 dark:text-zinc-400 space-y-1 list-disc list-inside">
               <li><strong>Chỉ ĐỌC</strong> — listener không bao giờ tự reply</li>
               <li>Bấm <strong>Gửi</strong> trên dashboard → backend queue → listener exec <code className="bg-gray-100 dark:bg-white/10 px-1 rounded">openzca msg send</code></li>

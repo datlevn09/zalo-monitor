@@ -21,7 +21,7 @@ export default function TermsPage() {
               Mô tả dịch vụ
             </h2>
             <p className="text-gray-700 dark:text-zinc-300">
-              Dịch vụ cung cấp dashboard theo dõi tin nhắn Zalo/Telegram/Lark.
+              Dịch vụ cung cấp dashboard đồng bộ dữ liệu từ Zalo/Telegram/Lark.
             </p>
           </section>
 

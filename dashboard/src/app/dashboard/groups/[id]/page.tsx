@@ -14,7 +14,7 @@ type Message = {
   content: string | null
   contentType: string
   sentAt: string
-  deletedAt: string | null
+  deletedAt?: string | null
   attachments?: string[]
   analysis: {
     label: keyof typeof LABEL_CFG
