@@ -578,13 +578,28 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
   })
 
   // GET /api/setup/pending-sends — hook polls for outgoing messages to send
+  // Accept secret từ tenant.webhookSecret HOẶC user.webhookSecret (per-user listener)
   app.get('/pending-sends', async (req, reply) => {
     const secret = req.headers['x-webhook-secret'] as string
+    const headerTenantId = req.headers['x-tenant-id'] as string | undefined
     if (!secret) return reply.status(401).send({ error: 'Missing secret' })
+
+    let tenantId: string | null = null
+    // Try tenant secret first
     const tenant = await db.tenant.findFirst({ where: { webhookSecret: secret } })
-    if (!tenant) return reply.status(403).send({ error: 'Invalid secret' })
+    if (tenant) tenantId = tenant.id
+    // Fallback: per-user secret (install URL có userId=)
+    if (!tenantId) {
+      const user = await db.user.findFirst({
+        where: { webhookSecret: secret, ...(headerTenantId ? { tenantId: headerTenantId } : {}) },
+        select: { tenantId: true },
+      })
+      if (user) tenantId = user.tenantId
+    }
+    if (!tenantId) return reply.status(403).send({ error: 'Invalid secret' })
+
     const pending = await db.sendQueue.findMany({
-      where: { tenantId: tenant.id, status: 'pending' },
+      where: { tenantId, status: 'pending' },
       orderBy: { createdAt: 'asc' },
       take: 20,
       select: { id: true, groupExternalId: true, text: true, mediaUrl: true, mediaType: true },
@@ -592,7 +607,7 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     if (pending.length === 0) return []
     const groups = await db.group.findMany({
       where: {
-        tenantId: tenant.id,
+        tenantId,
         externalId: { in: pending.map(p => p.groupExternalId) },
         channelType: 'ZALO',
       },
@@ -603,13 +618,25 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
   })
 
   // POST /api/setup/ack-send — hook reports send result
+  // Accept secret từ tenant.webhookSecret HOẶC user.webhookSecret
   app.post('/ack-send', async (req, reply) => {
     const secret = req.headers['x-webhook-secret'] as string
+    const headerTenantId = req.headers['x-tenant-id'] as string | undefined
     if (!secret) return reply.status(401).send({ error: 'Missing secret' })
     const { id, status } = req.body as { id: string; status: 'sent' | 'failed' }
+
+    let tenantId: string | null = null
     const tenant = await db.tenant.findFirst({ where: { webhookSecret: secret } })
-    if (!tenant) return reply.status(403).send({ error: 'Invalid secret' })
-    await db.sendQueue.update({ where: { id, tenantId: tenant.id }, data: { status } })
+    if (tenant) tenantId = tenant.id
+    if (!tenantId) {
+      const user = await db.user.findFirst({
+        where: { webhookSecret: secret, ...(headerTenantId ? { tenantId: headerTenantId } : {}) },
+        select: { tenantId: true },
+      })
+      if (user) tenantId = user.tenantId
+    }
+    if (!tenantId) return reply.status(403).send({ error: 'Invalid secret' })
+    await db.sendQueue.update({ where: { id, tenantId }, data: { status } })
     return { ok: true }
   })
 
@@ -799,19 +826,31 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
 
   // GET /api/setup/pending-actions — hook polls for dashboard-triggered commands
   // Returns: { actions: ['login_zalo', ...] } — sau khi trả về thì xóa khỏi store
+  // Accept secret từ tenant.webhookSecret HOẶC user.webhookSecret
   app.get('/pending-actions', async (req, reply) => {
     const secret = req.headers['x-webhook-secret'] as string
+    const headerTenantId = req.headers['x-tenant-id'] as string | undefined
     if (!secret) return reply.status(401).send({ error: 'Missing secret' })
+
+    let tenantId: string | null = null
     const tenant = await db.tenant.findFirst({ where: { webhookSecret: secret } })
-    if (!tenant) return reply.status(403).send({ error: 'Invalid secret' })
+    if (tenant) tenantId = tenant.id
+    if (!tenantId) {
+      const user = await db.user.findFirst({
+        where: { webhookSecret: secret, ...(headerTenantId ? { tenantId: headerTenantId } : {}) },
+        select: { tenantId: true },
+      })
+      if (user) tenantId = user.tenantId
+    }
+    if (!tenantId) return reply.status(403).send({ error: 'Invalid secret' })
+
     // Hook đang poll → cập nhật ping để dashboard biết hook còn sống
-    hookPings.set(tenant.id, Date.now())
-    // Fire-and-forget update DB để session-health (dùng DB) cũng luôn fresh
+    hookPings.set(tenantId, Date.now())
     db.tenant.update({
-      where: { id: tenant.id },
+      where: { id: tenantId },
       data: { lastHookPingAt: new Date() },
     }).catch(() => undefined)
-    const set = pendingActions.get(tenant.id)
+    const set = pendingActions.get(tenantId)
     const actions = set ? Array.from(set) : []
     if (set) set.clear() // consume — hook đã nhận, không gửi lại
     return { actions }

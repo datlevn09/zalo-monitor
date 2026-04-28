@@ -186,7 +186,7 @@ export default function GroupDetailPage() {
         const optimistic: Message = {
           id: `optimistic-${Date.now()}`,
           senderType: 'SELF',
-          senderName: 'Bot',
+          senderName: 'Bạn',
           senderId: 'bot',
           content: text,
           contentType: 'TEXT',
@@ -397,7 +397,7 @@ export default function GroupDetailPage() {
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0 ${
                       isSelf ? 'bg-gradient-to-br from-green-400 to-emerald-500' : 'bg-gradient-to-br from-blue-400 to-purple-500'
                     }`}>
-                      {isSelf ? '🤖' : (msg.senderName?.[0]?.toUpperCase() ?? '?')}
+                      {isSelf ? '👤' : (msg.senderName?.[0]?.toUpperCase() ?? '?')}
                     </div>
                   ) : (
                     <div className="w-8 shrink-0" />
@@ -407,7 +407,7 @@ export default function GroupDetailPage() {
                     {!sameSender && (
                       <div className={`flex items-baseline gap-2 mb-1 ${isSelf ? 'flex-row-reverse' : ''}`}>
                         <p className="text-xs font-semibold text-gray-700 dark:text-zinc-300">
-                          {isSelf ? 'Bot' : (msg.senderName ?? 'Ẩn danh')}
+                          {isSelf ? 'Bạn' : (msg.senderName ?? 'Ẩn danh')}
                         </p>
                         <p className="text-[10px] text-gray-400 dark:text-zinc-500">{formatTime(msg.sentAt)}</p>
                       </div>
