@@ -199,7 +199,8 @@ async function pollPendingSends() {
       let status = 'failed'
       const isGroup = !!item.isGroup
       const groupFlag = isGroup ? '-g' : ''
-      const tid = item.groupExternalId
+      // Strip 'group:' prefix — openzca CLI expect raw numeric ID
+      const tid = String(item.groupExternalId).replace(/^group:/, '')
       try {
         if (item.mediaUrl) {
           // Gửi ảnh/video/file qua URL
@@ -209,11 +210,13 @@ async function pollPendingSends() {
           const safeUrl = String(item.mediaUrl).replace(/"/g, '\\"')
           // Nếu có caption text, openzca msg image hỗ trợ --caption
           const captionFlag = item.text ? `--caption "${String(item.text).replace(/"/g, '\\"')}"` : ''
-          execSync(`"${OPENZCA}" --profile ${cfg.profile} msg ${cmd} ${groupFlag} ${captionFlag} ${tid} "${safeUrl}"`, { timeout: 30_000 })
+          execSync(`"${OPENZCA}" --profile ${cfg.profile} msg ${cmd} ${groupFlag} ${captionFlag} ${tid} "${safeUrl}"`,
+            { timeout: 30_000, shell: IS_WIN ? 'cmd.exe' : undefined })
           console.log(`   📎 Sent ${item.mediaType} ${item.id} → ${tid}`)
         } else {
           const safe = String(item.text).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, ' ')
-          execSync(`"${OPENZCA}" --profile ${cfg.profile} msg send ${groupFlag} --raw ${tid} "${safe}"`, { timeout: 10_000 })
+          execSync(`"${OPENZCA}" --profile ${cfg.profile} msg send ${groupFlag} --raw ${tid} "${safe}"`,
+            { timeout: 10_000, shell: IS_WIN ? 'cmd.exe' : undefined })
           console.log(`   ✉️  Sent ${item.id} → ${tid}`)
         }
         status = 'sent'
@@ -319,7 +322,8 @@ setInterval(pollPendingActions, 5_000).unref?.()
 async function zaloStatusCheck() {
   try {
     const { execSync } = await import('node:child_process')
-    const out = execSync(`"${OPENZCA}" --profile ${cfg.profile} auth status 2>&1`, { timeout: 5_000, encoding: 'utf-8' })
+    const out = execSync(`"${OPENZCA}" --profile ${cfg.profile} auth status 2>&1`,
+      { timeout: 5_000, encoding: 'utf-8', shell: IS_WIN ? 'cmd.exe' : undefined })
     const isLoggedIn = /loggedIn:\s*true|displayName/i.test(out)
     await fetch(`${cfg.backendUrl}/api/setup/zalo-status`, {
       method: 'POST',
@@ -370,7 +374,7 @@ async function syncGroupList() {
   try {
     const { execSync } = await import('node:child_process')
     const raw = execSync(`"${OPENZCA}" --profile ${cfg.profile} group list --json`, {
-      timeout: 30_000, encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024,
+      timeout: 30_000, encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024, shell: IS_WIN ? 'cmd.exe' : undefined,
     })
     const list = JSON.parse(raw)
     if (!Array.isArray(list) || list.length === 0) return
