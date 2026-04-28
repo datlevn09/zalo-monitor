@@ -640,43 +640,21 @@ function ZaloChannelCard({
                       💡 <strong>Lưu ý:</strong> Chỉ chạy khi đã có ít nhất 1 nhóm Zalo hiển thị trong dashboard (đợi vài tin Zalo mới đến để listener tạo group).
                     </p>
 
-                    {/* Step 1: Tải script */}
+                    {/* 1 lệnh duy nhất: tự cài Node + openzca + better-sqlite3 + chạy import */}
                     <p className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide mb-1.5">
-                      Bước 1 — Tải script
-                    </p>
-                    <div className="flex items-center gap-2 mb-3">
-                      <code className="flex-1 block bg-gray-900 dark:bg-black/40 text-green-400 text-[11px] font-mono rounded px-2.5 py-1.5 overflow-x-auto whitespace-nowrap">
-                        {pushConfig
-                          ? `curl -O ${pushConfig.backendUrl}/api/setup/hook-files/zalo-history-push.mjs`
-                          : 'curl -O <BACKEND_URL>/api/setup/hook-files/zalo-history-push.mjs'}
-                      </code>
-                      <button
-                        onClick={() => pushConfig && copyToClipboard(
-                          `curl -O ${pushConfig.backendUrl}/api/setup/hook-files/zalo-history-push.mjs`,
-                          'download'
-                        )}
-                        disabled={!pushConfig}
-                        className="shrink-0 px-2 py-1.5 text-[11px] font-medium text-gray-600 dark:text-zinc-300 bg-gray-200 dark:bg-white/10 hover:bg-gray-300 dark:hover:bg-white/20 rounded transition-colors disabled:opacity-40"
-                      >
-                        {copiedKey === 'download' ? '✓' : 'Copy'}
-                      </button>
-                    </div>
-
-                    {/* Step 2: Chạy */}
-                    <p className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide mb-1.5">
-                      Bước 2 — Chạy import
+                      Chạy 1 lệnh duy nhất
                     </p>
                     {pushConfig ? (
                       <div className="relative">
                         <pre className="bg-gray-900 dark:bg-black/40 text-green-400 text-[11px] font-mono rounded px-2.5 py-2 overflow-x-auto leading-relaxed whitespace-pre">
-{`BACKEND_URL=${pushConfig.backendUrl} \\
-WEBHOOK_SECRET=${pushConfig.webhookSecret} \\
-TENANT_ID=${pushConfig.tenantId} \\
-node zalo-history-push.mjs`}
+{`curl -fsSL ${pushConfig.backendUrl}/api/setup/hook-files/zalo-history-import.sh | \\
+  BACKEND_URL=${pushConfig.backendUrl} \\
+  WEBHOOK_SECRET=${pushConfig.webhookSecret} \\
+  TENANT_ID=${pushConfig.tenantId} bash`}
                         </pre>
                         <button
                           onClick={() => copyToClipboard(
-                            `BACKEND_URL=${pushConfig.backendUrl} WEBHOOK_SECRET=${pushConfig.webhookSecret} TENANT_ID=${pushConfig.tenantId} node zalo-history-push.mjs`,
+                            `curl -fsSL ${pushConfig.backendUrl}/api/setup/hook-files/zalo-history-import.sh | BACKEND_URL=${pushConfig.backendUrl} WEBHOOK_SECRET=${pushConfig.webhookSecret} TENANT_ID=${pushConfig.tenantId} bash`,
                             'run'
                           )}
                           className="absolute top-2 right-2 px-2 py-1 text-[10px] font-medium text-gray-400 dark:text-zinc-400 bg-gray-700/50 hover:bg-gray-700 rounded transition-colors"
@@ -693,35 +671,12 @@ node zalo-history-push.mjs`}
 
                     {!pushConfig?.isOwner && pushConfig && (
                       <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1.5">
-                        ⚠️ Chỉ Owner mới xem được Webhook Secret. Hỏi Owner để lấy lệnh đầy đủ.
+                        ⚠️ Chỉ Owner mới xem được lệnh đầy đủ.
                       </p>
                     )}
 
-                    {/* Note */}
                     <p className="text-[11px] text-gray-400 dark:text-zinc-500 mt-2.5 leading-relaxed">
-                      Yêu cầu Node.js 18+. Chạy 1 lần trên máy nhân viên — không ảnh hưởng sync bình thường.
-                      Nếu không có openzca, cài thêm:{' '}
-                      <code className="bg-gray-200 dark:bg-white/10 px-1 rounded">npm i -g better-sqlite3</code>
-                    </p>
-                  </div>
-
-                  {/* Windows path note */}
-                  <div className="rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 p-3">
-                    <p className="text-xs font-semibold text-blue-800 dark:text-blue-300 mb-1.5">
-                      📂 SQLite mặc định của Zalo PC App
-                    </p>
-                    <div className="space-y-1">
-                      <div className="flex items-start gap-2">
-                        <span className="text-[11px] font-medium text-blue-600 dark:text-blue-400 shrink-0 w-14">Windows:</span>
-                        <code className="text-[11px] font-mono text-blue-700 dark:text-blue-300 break-all">%APPDATA%\ZaloPC\data\&lt;uid&gt;\messages.db</code>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <span className="text-[11px] font-medium text-blue-600 dark:text-blue-400 shrink-0 w-14">Mac:</span>
-                        <code className="text-[11px] font-mono text-blue-700 dark:text-blue-300 break-all">~/Library/Application Support/ZaloPC/data/&lt;uid&gt;/messages.db</code>
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-blue-600 dark:text-blue-400 mt-1.5">
-                      Nếu path khác: <code className="bg-blue-100 dark:bg-white/10 px-1 rounded">ZALO_SQLITE_PATH=/path/to/messages.db node zalo-history-push.mjs</code>
+                      Script tự cài Node.js + openzca nếu máy chưa có. Chạy 1 lần trên máy có Zalo PC App.
                     </p>
                   </div>
                 </div>

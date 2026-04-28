@@ -258,7 +258,7 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     const { file } = req.params as { file: string }
     const path = await import('path')
     const fs = await import('fs')
-    const allowlist = new Set(['HOOK.md', 'handler.ts', 'zalo-history-push.mjs', 'zalo-listener.mjs'])
+    const allowlist = new Set(['HOOK.md', 'handler.ts', 'zalo-history-push.mjs', 'zalo-listener.mjs', 'zalo-history-import.sh'])
     if (!allowlist.has(file)) return reply.status(404).send({ error: 'Not found' })
 
     // Thử nhiều vị trí có thể chứa plugin hook (dev / docker / prod)
