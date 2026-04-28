@@ -13,13 +13,23 @@ import { aiQueue } from '../services/queue.js'
 
 export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
   app.post('/', async (req, reply) => {
-    const secret = req.headers['x-webhook-secret']
-    if (secret !== process.env.WEBHOOK_SECRET) {
-      return reply.status(401).send({ error: 'Unauthorized' })
-    }
-
+    const secret = req.headers['x-webhook-secret'] as string
     const tenantId = req.headers['x-tenant-id'] as string
+    if (!secret) return reply.status(401).send({ error: 'Missing secret' })
     if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
+
+    // Validate secret: tenant-level OR per-user
+    const tenantAuth = await db.tenant.findFirst({
+      where: { id: tenantId },
+      select: { webhookSecret: true },
+    })
+    if (!tenantAuth) return reply.status(404).send({ error: 'Tenant not found' })
+    let secretValid = secret === tenantAuth.webhookSecret
+    if (!secretValid) {
+      const u = await db.user.findFirst({ where: { tenantId, webhookSecret: secret }, select: { id: true } })
+      secretValid = !!u
+    }
+    if (!secretValid) return reply.status(401).send({ error: 'Invalid secret' })
 
     // Có message từ Zalo nghĩa là login đã thành công → clear QR + cập nhật hook ping
     const { clearQrFromStore, hookPings } = await import('./setup.js')

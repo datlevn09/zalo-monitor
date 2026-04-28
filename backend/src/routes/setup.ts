@@ -250,7 +250,7 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     const { file } = req.params as { file: string }
     const path = await import('path')
     const fs = await import('fs')
-    const allowlist = new Set(['HOOK.md', 'handler.ts', 'zalo-history-push.mjs'])
+    const allowlist = new Set(['HOOK.md', 'handler.ts', 'zalo-history-push.mjs', 'zalo-listener.mjs'])
     if (!allowlist.has(file)) return reply.status(404).send({ error: 'Not found' })
 
     // Thử nhiều vị trí có thể chứa plugin hook (dev / docker / prod)
@@ -580,6 +580,24 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     const tenant = await db.tenant.findFirst({ where: { webhookSecret: secret } })
     if (!tenant) return reply.status(403).send({ error: 'Invalid secret' })
     await db.sendQueue.update({ where: { id, tenantId: tenant.id }, data: { status } })
+    return { ok: true }
+  })
+
+  // POST /api/setup/listener-ping — zalo-listener.mjs ping mỗi 5p để báo còn sống
+  app.post('/listener-ping', async (req, reply) => {
+    const secret = req.headers['x-webhook-secret'] as string
+    const tenantId = req.headers['x-tenant-id'] as string
+    if (!secret || !tenantId) return reply.status(400).send({ error: 'Missing headers' })
+    const tenant = await db.tenant.findFirst({ where: { id: tenantId } })
+    if (!tenant) return reply.status(404).send({ error: 'Not found' })
+    let ok = secret === tenant.webhookSecret
+    if (!ok) {
+      const u = await db.user.findFirst({ where: { tenantId, webhookSecret: secret } })
+      ok = !!u
+    }
+    if (!ok) return reply.status(401).send({ error: 'Invalid' })
+    hookPings.set(tenantId, Date.now())
+    db.tenant.update({ where: { id: tenantId }, data: { lastHookPingAt: new Date() } }).catch(() => undefined)
     return { ok: true }
   })
 
@@ -1153,50 +1171,68 @@ with open(p, 'w') as f: json.dump(d, f, indent=2)
 PYEOF
 fi
 
-# ── Khởi động / restart OpenClaw gateway (SAU KHI hook files đã có) ────
+# ── Bước 4.5: Stop OpenClaw nếu đang chạy (tránh embedded agent spam) ────
 echo ""
-echo "[4.5] Kiểm tra OpenClaw gateway..."
-GATEWAY_RUNNING=false
-if curl -sf "http://localhost:18789/__openclaw__/canvas/" >/dev/null 2>&1 || \
-   pgrep -f "openclaw" >/dev/null 2>&1; then
-  GATEWAY_RUNNING=true
+echo "[4.5] Đảm bảo OpenClaw NGỪNG (architecture mới chỉ cần openzca)..."
+if command -v systemctl >/dev/null 2>&1 && systemctl --user is-enabled openclaw-gateway >/dev/null 2>&1; then
+  systemctl --user stop openclaw-gateway 2>/dev/null && systemctl --user disable openclaw-gateway 2>/dev/null
+  echo "  ✅ openclaw-gateway: stopped + disabled"
+elif command -v launchctl >/dev/null 2>&1; then
+  launchctl bootout "gui/$(id -u)" "/Library/LaunchAgents/com.openclaw.gateway.plist" 2>/dev/null || true
+  pkill -f openclaw-gateway 2>/dev/null && echo "  ✅ openclaw-gateway: killed" || true
+else
+  pkill -f openclaw-gateway 2>/dev/null && echo "  ✅ openclaw-gateway: killed" || true
 fi
 
-if command -v openclaw >/dev/null 2>&1; then
-  if [ "$GATEWAY_RUNNING" = "true" ]; then
-    echo "  ℹ️  Gateway đang chạy — restart để load hook mới..."
-    # Thử platform-specific restart
-    if command -v systemctl >/dev/null 2>&1 && systemctl --user is-active openclaw >/dev/null 2>&1; then
-      systemctl --user restart openclaw && echo "  ✅ Gateway restarted (systemd)" || true
-    elif command -v launchctl >/dev/null 2>&1; then
-      launchctl kickstart -k "gui/$(id -u)/com.openclaw.gateway" 2>/dev/null \
-        && echo "  ✅ Gateway restarted (launchd)" \
-        || { pkill -HUP openclaw 2>/dev/null && echo "  ✅ Gateway reload (SIGHUP)"; } \
-        || true
-    else
-      pkill -HUP openclaw 2>/dev/null && echo "  ✅ Gateway reload (SIGHUP)" || true
-    fi
+# ── Bước 4.6: Tải zalo-listener.mjs (architecture mới: chỉ openzca, không OpenClaw) ────
+echo "[4.6] Tải zalo-listener.mjs..."
+LISTENER_DIR="$HOME/.zalo-monitor"
+mkdir -p "$LISTENER_DIR"
+curl -fsSL --connect-timeout 10 "$BACKEND_URL/api/setup/hook-files/zalo-listener.mjs" -o "$LISTENER_DIR/zalo-listener.mjs" \\
+  && echo "  ✅ zalo-listener.mjs" \\
+  || { echo "  ❌ Tải zalo-listener.mjs thất bại"; exit 1; }
+chmod +x "$LISTENER_DIR/zalo-listener.mjs"
+
+# Ghi env file riêng cho listener service
+cat > "$LISTENER_DIR/.env" <<EOF
+BACKEND_URL=$BACKEND_URL
+WEBHOOK_SECRET=$SECRET
+TENANT_ID=$TENANT_ID
+EOF
+chmod 600 "$LISTENER_DIR/.env"
+
+# ── Bước 4.7: Tạo systemd user service zalo-monitor-listener ────
+NODE_BIN="$(command -v node || echo /usr/bin/node)"
+if command -v systemctl >/dev/null 2>&1; then
+  SVC_DIR="$HOME/.config/systemd/user"
+  mkdir -p "$SVC_DIR"
+  cat > "$SVC_DIR/zalo-monitor-listener.service" <<EOF
+[Unit]
+Description=Zalo Monitor Listener (openzca → backend webhook)
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=$LISTENER_DIR/.env
+ExecStart=$NODE_BIN $LISTENER_DIR/zalo-listener.mjs
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+EOF
+  systemctl --user daemon-reload
+  systemctl --user enable --now zalo-monitor-listener.service 2>&1 | tail -3
+  if systemctl --user is-active zalo-monitor-listener >/dev/null 2>&1; then
+    echo "  ✅ Service zalo-monitor-listener đang chạy"
   else
-    echo "  🚀 Khởi động OpenClaw daemon..."
-    echo "     (Lệnh: openclaw onboard --install-daemon)"
-    if timeout 60 openclaw onboard --install-daemon 2>/dev/null; then
-      echo "  ✅ OpenClaw daemon đã chạy — hook được load tự động"
-    else
-      echo "  ⚠️  Không tự khởi động được. Chạy thủ công:"
-      echo ""
-      echo "     openclaw onboard --install-daemon"
-      echo ""
-      echo "  📖 Hướng dẫn: https://docs.openclaw.ai/start/getting-started"
-      echo ""
-    fi
+    echo "  ⚠️  Service chưa active. Check log: journalctl --user -u zalo-monitor-listener -n 30"
   fi
 else
-  echo "  ⚠️  Lệnh openclaw không tìm thấy trong PATH. Chạy thủ công:"
-  echo ""
-  echo "     openclaw onboard --install-daemon"
-  echo ""
-  echo "  📖 Hướng dẫn: https://docs.openclaw.ai/start/getting-started"
-  echo ""
+  echo "  ℹ️  systemd không có. Chạy thủ công:"
+  echo "     BACKEND_URL=$BACKEND_URL WEBHOOK_SECRET=$SECRET TENANT_ID=$TENANT_ID node $LISTENER_DIR/zalo-listener.mjs"
 fi
 
 # ── Bước 5/5: Test kết nối ──────────────────────
