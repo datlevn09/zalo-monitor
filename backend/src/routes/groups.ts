@@ -102,6 +102,28 @@ export const groupRoutes: FastifyPluginAsync = async (app) => {
     })
   })
 
+  // POST /api/groups/bulk-monitor — bật/tắt monitor cho tất cả nhóm Zalo cùng lúc
+  // Body: { enabled: true | false, channelType?: 'ZALO' | 'TELEGRAM' | ... }
+  app.post('/bulk-monitor', async (req, reply) => {
+    const tenantId = req.headers['x-tenant-id'] as string
+    if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
+    const auth = req.authUser
+    if (!auth || (auth.role !== 'OWNER' && auth.role !== 'MANAGER')) {
+      return reply.status(403).send({ error: 'Cần quyền OWNER hoặc MANAGER' })
+    }
+    const body = req.body as { enabled?: boolean; channelType?: string }
+    if (typeof body.enabled !== 'boolean') return reply.status(400).send({ error: 'enabled (boolean) bắt buộc' })
+
+    const result = await db.group.updateMany({
+      where: {
+        tenantId,
+        ...(body.channelType ? { channelType: body.channelType as any } : {}),
+      },
+      data: { monitorEnabled: body.enabled },
+    })
+    return { ok: true, updated: result.count }
+  })
+
   // GET /api/groups/pins — get current user's pinned group IDs
   app.get('/pins', async (req, reply) => {
     const userId = req.authUser?.userId

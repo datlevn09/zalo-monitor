@@ -167,6 +167,31 @@ export default function GroupsPage() {
         ))}
       </div>
 
+      {/* Bulk monitor toggle */}
+      <div className="mb-4 flex gap-2 flex-wrap items-center">
+        <span className="text-xs text-gray-500 dark:text-zinc-400">Bật/tắt đồng bộ hàng loạt:</span>
+        <button
+          onClick={async () => {
+            if (!confirm('Bật đồng bộ TẤT CẢ nhóm Zalo?')) return
+            await api('/api/groups/bulk-monitor', { method: 'POST', body: JSON.stringify({ enabled: true, channelType: 'ZALO' }) })
+            window.location.reload()
+          }}
+          className="px-3 py-1.5 text-xs font-medium bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-500/30 rounded-full"
+        >
+          ✅ Bật tất cả
+        </button>
+        <button
+          onClick={async () => {
+            if (!confirm('Tắt đồng bộ TẤT CẢ nhóm Zalo?')) return
+            await api('/api/groups/bulk-monitor', { method: 'POST', body: JSON.stringify({ enabled: false, channelType: 'ZALO' }) })
+            window.location.reload()
+          }}
+          className="px-3 py-1.5 text-xs font-medium bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-500/30 rounded-full"
+        >
+          ⛔ Tắt tất cả
+        </button>
+      </div>
+
       {/* Groups list - iOS settings style */}
       <div className="bg-white dark:bg-zinc-900 dark:ring-1 dark:ring-white/5 rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
         {loading && (
