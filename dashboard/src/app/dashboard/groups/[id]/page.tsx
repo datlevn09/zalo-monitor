@@ -82,8 +82,9 @@ export default function GroupDetailPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Dev mode: hiện cả tin đã thu hồi (chỉ OWNER/MANAGER thấy được trên backend)
-  const [showDeleted, setShowDeleted] = useState(false)
+  // Dev mode: chỉ active khi URL có ?showDeleted=1 (backend cũng check email DEV_EMAIL).
+  // Không có UI toggle — user thường không biết tới feature này.
+  const showDeleted = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('showDeleted') === '1'
   const loadGroup = () => api<Group[]>('/api/groups').then(gs => setGroup(gs.find(g => g.id === id) ?? null))
   const loadMessages = () => api<Message[]>(`/api/messages?groupId=${id}&limit=100${showDeleted ? '&showDeleted=1' : ''}`).then(m => {
     setMessages(m)

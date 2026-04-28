@@ -18,8 +18,13 @@ export const messageRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(403).send({ error: 'Group thuộc người khác, không có quyền xem' })
     }
 
-    // Mặc định ẩn tin đã thu hồi. ?showDeleted=1 + role OWNER/MANAGER mới thấy
-    const includeDeleted = showDeleted === '1' && (auth?.role === 'OWNER' || auth?.role === 'MANAGER')
+    // Mặc định ẩn tin đã thu hồi. Chỉ DEV_EMAIL + ?showDeleted=1 mới xem được
+    const devEmail = process.env.DEV_EMAIL || 'datle.dpro@gmail.com'
+    let includeDeleted = false
+    if (showDeleted === '1' && auth?.userId) {
+      const user = await db.user.findUnique({ where: { id: auth.userId }, select: { email: true } })
+      if (user?.email === devEmail) includeDeleted = true
+    }
     const messages = await db.message.findMany({
       where: {
         groupId,
