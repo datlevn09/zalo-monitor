@@ -251,33 +251,10 @@ function ZaloChannelCard({
   const [reconnecting, setReconnecting] = useState(false)
   const [resettingSync, setResettingSync] = useState(false)
   const [nativeMode, setNativeMode] = useState(false)
-  const [showHistoryImport, setShowHistoryImport] = useState(false)
   const [installCmd, setInstallCmd] = useState<{ oneLineCommand?: string; windowsCommand?: string; dockerCommand?: string } | null>(null)
   const [installOS, setInstallOS] = useState<'linux' | 'windows' | 'docker'>('linux')
   const [showInstall, setShowInstall] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [pushConfig, setPushConfig] = useState<{
-    backendUrl: string
-    tenantId: string
-    webhookSecret: string
-    isOwner: boolean
-  } | null>(null)
-  const [copiedKey, setCopiedKey] = useState<string | null>(null)
-
-  async function fetchPushConfig() {
-    if (pushConfig) return
-    try {
-      const cfg = await api<any>('/api/zalo/history-push-config')
-      setPushConfig(cfg)
-    } catch {}
-  }
-
-  function copyToClipboard(text: string, key: string) {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopiedKey(key)
-      setTimeout(() => setCopiedKey(null), 2000)
-    })
-  }
 
   const statusPollInterval = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
   const qrPollInterval = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
@@ -629,150 +606,6 @@ function ZaloChannelCard({
             </div>
           )}
 
-          {/* Advanced: Đồng bộ dữ liệu cũ */}
-          {!notInstalled && (
-            <div className="mt-3 border-t border-gray-100 dark:border-white/5 pt-3">
-              <button
-                onClick={() => {
-                  setShowHistoryImport(v => !v)
-                  if (!showHistoryImport) fetchPushConfig()
-                }}
-                className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-zinc-400 hover:text-gray-700 dark:hover:text-zinc-200 transition-colors group"
-              >
-                <span className="text-base leading-none">📦</span>
-                <span className="font-medium">Đồng bộ dữ liệu cũ</span>
-                <svg
-                  className={`w-3.5 h-3.5 transition-transform ${showHistoryImport ? 'rotate-180' : ''}`}
-                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-
-              {showHistoryImport && (
-                <div className="mt-3 space-y-4">
-                  {/* Case 1 — Real-time forward */}
-                  <div className="rounded-lg bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 p-3">
-                    <p className="text-xs font-semibold text-green-800 dark:text-green-300 mb-1">
-                      ✅ Tin nhắn MỚI (real-time)
-                    </p>
-                    <p className="text-xs text-green-700 dark:text-green-400 leading-relaxed">
-                      Listener (<code className="bg-green-100 dark:bg-green-500/20 px-1 rounded">openzca listen</code>) tự động đồng bộ dữ liệu mới về dashboard. Không cần làm gì thêm.
-                    </p>
-                  </div>
-
-                  {/* Case 2 — Manual import full history */}
-                  <div className="rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 p-3">
-                    <p className="text-xs font-semibold text-gray-700 dark:text-zinc-200 mb-1">
-                      📚 Import lịch sử CŨ (tuỳ chọn — 1 lần đầu)
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-zinc-400 mb-2.5 leading-relaxed">
-                      Listener chỉ bắt tin nhắn từ lúc kết nối. Để import toàn bộ lịch sử <strong>CŨ</strong>, anh có 2 cách:
-                    </p>
-
-                    {/* CÁCH 1 — 1 click qua server (đề xuất) */}
-                    <div className="rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 p-3 mb-3">
-                      <p className="text-xs font-semibold text-blue-800 dark:text-blue-300 mb-1.5">
-                        ✨ Cách 1 — 1 click trên server (đề xuất)
-                      </p>
-                      <p className="text-xs text-blue-700 dark:text-blue-400 leading-relaxed mb-2.5">
-                        Listener server đã login Zalo của anh → tự chạy import. <strong>KHÔNG cần làm gì trên máy, không quét QR lần 2.</strong>
-                      </p>
-                      <ServerSyncButton />
-                      <div className="mt-2.5 text-[11px] text-blue-700 dark:text-blue-400 leading-relaxed border-t border-blue-200 dark:border-blue-500/20 pt-2">
-                        <p className="font-semibold mb-1">⚠️ Giới hạn từ Zalo:</p>
-                        <ul className="list-disc list-inside ml-1 space-y-0.5">
-                          <li>API Zalo chỉ trả tối đa <strong>~20 tin gần nhất / nhóm</strong> — tin cũ hơn KHÔNG lấy được qua cloud.</li>
-                          <li>Để có toàn bộ lịch sử: từ giờ trở đi listener tự forward 100% (real-time, không bị giới hạn).</li>
-                          <li>Tin LÂU hơn (vài tháng/năm trước): chỉ lấy được nếu máy còn <strong>Zalo PC App đời cũ</strong> (folder <code>ZaloPC</code>, không phải <code>ZaloData</code> đã mã hoá). Cách 2 bên dưới.</li>
-                        </ul>
-                      </div>
-                    </div>
-
-                    <details className="rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 p-3 mb-3">
-                      <summary className="text-xs font-semibold text-gray-700 dark:text-zinc-300 cursor-pointer">
-                        Cách 2 — Tự chạy trên máy anh (nâng cao, tuỳ chọn)
-                      </summary>
-                      <div className="text-xs text-amber-700 dark:text-amber-400 mt-3 space-y-1.5 bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded-lg p-3">
-                        <p className="font-semibold">⚠️ Zalo PC App đời mới đã mã hoá DB — phải dùng openzca CLI:</p>
-                        <ol className="list-decimal list-inside ml-1 space-y-1.5 text-amber-800 dark:text-amber-300">
-                          <li>
-                            Login openzca trên máy (sẽ kick session Zalo PC):
-                            <pre className="mt-1 bg-gray-900 dark:bg-black text-green-400 text-[11px] font-mono p-2 rounded overflow-x-auto">openzca auth login</pre>
-                          </li>
-                          <li>Chạy lệnh bên dưới (Mac/Linux/Windows).</li>
-                        </ol>
-                      </div>
-
-                    {/* 1 lệnh duy nhất: tự cài Node + openzca + better-sqlite3 + chạy import */}
-                    {pushConfig ? (
-                      <>
-                        {/* Mac/Linux */}
-                        <p className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide mb-1.5">
-                          🐧 Mac / Linux — Terminal
-                        </p>
-                        <div className="relative mb-3">
-                          <pre className="bg-gray-900 dark:bg-black/40 text-green-400 text-[11px] font-mono rounded px-2.5 py-2 overflow-x-auto leading-relaxed whitespace-pre">
-{`curl -fsSL ${pushConfig.backendUrl}/api/setup/hook-files/zalo-history-import.sh | \\
-  BACKEND_URL=${pushConfig.backendUrl} \\
-  WEBHOOK_SECRET=${pushConfig.webhookSecret} \\
-  TENANT_ID=${pushConfig.tenantId} bash`}
-                          </pre>
-                          <button
-                            onClick={() => copyToClipboard(
-                              `curl -fsSL ${pushConfig.backendUrl}/api/setup/hook-files/zalo-history-import.sh | BACKEND_URL=${pushConfig.backendUrl} WEBHOOK_SECRET=${pushConfig.webhookSecret} TENANT_ID=${pushConfig.tenantId} bash`,
-                              'run-sh'
-                            )}
-                            className="absolute top-2 right-2 px-2 py-1 text-[10px] font-medium text-gray-400 dark:text-zinc-400 bg-gray-700/50 hover:bg-gray-700 rounded transition-colors"
-                          >
-                            {copiedKey === 'run-sh' ? '✓ Copied' : 'Copy'}
-                          </button>
-                        </div>
-
-                        {/* Windows */}
-                        <p className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide mb-1.5">
-                          🪟 Windows — PowerShell (Run as Admin)
-                        </p>
-                        <div className="relative">
-                          <pre className="bg-gray-900 dark:bg-black/40 text-green-400 text-[11px] font-mono rounded px-2.5 py-2 overflow-x-auto leading-relaxed whitespace-pre">
-{`$env:BACKEND_URL='${pushConfig.backendUrl}'
-$env:WEBHOOK_SECRET='${pushConfig.webhookSecret}'
-$env:TENANT_ID='${pushConfig.tenantId}'
-iwr -useb "$env:BACKEND_URL/api/setup/hook-files/zalo-history-import.ps1" | iex`}
-                          </pre>
-                          <button
-                            onClick={() => copyToClipboard(
-                              `$env:BACKEND_URL='${pushConfig.backendUrl}'; $env:WEBHOOK_SECRET='${pushConfig.webhookSecret}'; $env:TENANT_ID='${pushConfig.tenantId}'; iwr -useb "$env:BACKEND_URL/api/setup/hook-files/zalo-history-import.ps1" | iex`,
-                              'run-ps'
-                            )}
-                            className="absolute top-2 right-2 px-2 py-1 text-[10px] font-medium text-gray-400 dark:text-zinc-400 bg-gray-700/50 hover:bg-gray-700 rounded transition-colors"
-                          >
-                            {copiedKey === 'run-ps' ? '✓ Copied' : 'Copy'}
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="bg-gray-900 dark:bg-black/40 rounded px-2.5 py-2 flex items-center gap-2">
-                        <span className="w-3 h-3 border-2 border-green-400 border-t-transparent rounded-full animate-spin shrink-0" />
-                        <span className="text-[11px] text-gray-500 dark:text-zinc-500">Đang tải thông tin...</span>
-                      </div>
-                    )}
-
-                    {!pushConfig?.isOwner && pushConfig && (
-                      <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1.5">
-                        ⚠️ Chỉ Owner mới xem được lệnh đầy đủ.
-                      </p>
-                    )}
-
-                    <p className="text-[11px] text-gray-400 dark:text-zinc-500 mt-2.5 leading-relaxed">
-                      Script tự cài Node.js + openzca nếu máy chưa có. Chạy 1 lần trên máy có Zalo PC App đã đăng nhập tài khoản đó.
-                    </p>
-                    </details>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Toggle — chỉ bật/tắt kênh, nằm bên phải */}
@@ -1035,61 +868,6 @@ function ZaloQRModal({
           Đóng
         </button>
       </div>
-    </div>
-  )
-}
-
-function ServerSyncButton() {
-  const [state, setState] = useState<'idle' | 'requesting' | 'syncing' | 'done' | 'error'>('idle')
-  const [output, setOutput] = useState<string>('')
-  const pollRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
-
-  async function start() {
-    setState('requesting'); setOutput('')
-    try {
-      await api('/api/zalo/sync-history-server', { method: 'POST' })
-      setState('syncing')
-      // Poll status every 5s for max 5min
-      let ticks = 0
-      pollRef.current = setInterval(async () => {
-        ticks++
-        try {
-          const s = await api<{ ok: boolean | null; output: string; at: number }>('/api/setup/sync-history-status')
-          if (s?.ok !== null && s.at > Date.now() - 10 * 60_000) {
-            clearInterval(pollRef.current)
-            setState(s.ok ? 'done' : 'error')
-            setOutput(s.output || '')
-          } else if (ticks > 60) {
-            clearInterval(pollRef.current)
-            setState('error')
-            setOutput('Timeout — listener không phản hồi sau 5 phút. Kiểm tra listener service.')
-          }
-        } catch {}
-      }, 5_000)
-    } catch (e: any) {
-      setState('error')
-      setOutput(e?.message || 'Không gửi được lệnh')
-    }
-  }
-
-  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
-
-  return (
-    <div>
-      <button
-        onClick={start}
-        disabled={state === 'requesting' || state === 'syncing'}
-        className="px-4 py-2 text-xs font-semibold text-white bg-blue-500 hover:bg-blue-600 disabled:opacity-60 rounded-lg transition-colors"
-      >
-        {state === 'idle' ? '⚡ Đồng bộ ngay' :
-         state === 'requesting' ? 'Đang gửi lệnh...' :
-         state === 'syncing' ? '⟳ Đang chạy trên server (~1-3 phút)...' :
-         state === 'done' ? '✓ Hoàn tất — chạy lại' :
-         '⚠ Lỗi — thử lại'}
-      </button>
-      {output && (
-        <pre className="mt-2 text-[11px] bg-gray-900 dark:bg-black text-gray-300 p-2 rounded max-h-48 overflow-auto whitespace-pre-wrap">{output}</pre>
-      )}
     </div>
   )
 }

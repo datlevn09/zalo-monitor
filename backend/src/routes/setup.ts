@@ -628,7 +628,17 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     if (!ok) return reply.status(401).send({ error: 'Invalid' })
     const { loggedIn } = req.body as { loggedIn?: boolean }
     if (loggedIn) {
+      const wasLoggedIn = zaloLoggedInTenants.has(tenantId)
       zaloLoggedInTenants.set(tenantId, Date.now())
+      // Vừa từ chưa login → đang login → auto trigger sync history 1 lần
+      // (listener sẽ chạy zalo-history-push.mjs lấy 20 tin gần nhất / nhóm)
+      if (!wasLoggedIn) {
+        // Chỉ trigger nếu chưa từng sync trong 24h gần đây (avoid loop)
+        const last = syncHistoryStatus.get(tenantId)
+        if (!last || Date.now() - last.at > 24 * 60 * 60_000) {
+          queueAction(tenantId, 'sync_history')
+        }
+      }
     } else {
       zaloLoggedInTenants.delete(tenantId)
       qrStore.delete(tenantId) // chưa login → clear QR cũ
