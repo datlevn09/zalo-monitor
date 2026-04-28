@@ -18,10 +18,10 @@ export default function PrivacyPage() {
 
           <section className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-zinc-100 mb-3">
-              Thông tin chúng tôi thu thập
+              Dữ liệu được đồng bộ
             </h2>
             <p className="text-gray-700 dark:text-zinc-300">
-              Chúng tôi thu thập: tên doanh nghiệp, email, tin nhắn từ các kênh chat được kết nối (Zalo, Telegram, Lark).
+              Dịch vụ đồng bộ: tên doanh nghiệp, email, dữ liệu hội thoại từ các kênh chat đã kết nối (Zalo, Telegram, Lark).
             </p>
           </section>
 

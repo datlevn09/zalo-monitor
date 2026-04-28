@@ -166,7 +166,7 @@ function ZaloDisconnectedBanner({ hoursSincePing, onDismiss }: { hoursSincePing:
   return (
     <div className="bg-red-500 text-white shrink-0 px-4 py-2 flex items-center gap-2">
       <span className="text-sm font-medium flex-1 min-w-0">
-        🔴 Zalo bị đăng xuất{hoursSincePing ? ` (${hoursSincePing} tiếng trước)` : ''} — tin nhắn không được thu thập
+        🔴 Zalo chưa kết nối — Đăng nhập để đồng bộ
       </span>
       <Link
         href="/dashboard/settings/channels"
