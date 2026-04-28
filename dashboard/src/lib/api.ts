@@ -30,7 +30,14 @@ export function setTenantId(id: string) {
 export async function api<T = any>(path: string, init?: RequestInit): Promise<T> {
   const token = getToken()
   const tenantId = getTenantId()
-  const res = await fetch(`${API}${path}`, {
+  // Auto inject boardUserId vào query string (nếu user đã chọn board cụ thể)
+  // Backend dùng để filter groups/messages/analytics theo board owner.
+  const boardUserId = typeof window !== 'undefined' ? localStorage.getItem('zm:boardUserId') : null
+  let finalPath = path
+  if (boardUserId && !path.includes('boardUserId=')) {
+    finalPath = path + (path.includes('?') ? '&' : '?') + `boardUserId=${encodeURIComponent(boardUserId)}`
+  }
+  const res = await fetch(`${API}${finalPath}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',

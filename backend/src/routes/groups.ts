@@ -18,15 +18,18 @@ export const groupRoutes: FastifyPluginAsync = async (app) => {
     const pinned = (req.query as any)?.pinned === 'true'
     const boardUserId = (req.query as any)?.boardUserId as string | undefined
 
-    // Board scope: viewing someone else's board
-    if (boardUserId && boardUserId !== auth?.userId) {
-      // Must have BoardAccess to view this board
-      const hasAccess = await db.boardAccess.findFirst({
-        where: { boardUserId, viewerUserId: auth?.userId ?? '', tenantId },
-      })
-      if (!hasAccess) return reply.status(403).send({ error: 'Không có quyền xem board này' })
-
-      // Return groups owned by the board user
+    // Board scope: user chọn 1 board cụ thể (của mình hoặc của người khác)
+    if (boardUserId) {
+      const isOwnBoard = boardUserId === auth?.userId
+      // Nếu xem board người khác → cần BoardAccess
+      if (!isOwnBoard) {
+        const hasAccess = await db.boardAccess.findFirst({
+          where: { boardUserId, viewerUserId: auth?.userId ?? '', tenantId },
+        })
+        if (!hasAccess) return reply.status(403).send({ error: 'Không có quyền xem board này' })
+      }
+      // Trả groups thuộc về board user đó (ownerUserId === boardUserId)
+      // Bao gồm cả "Board của tôi" — STRICT: chỉ groups ownerUserId = me
       const groups = await db.group.findMany({
         where: { tenantId, ownerUserId: boardUserId },
         orderBy: { lastMessageAt: 'desc' },
