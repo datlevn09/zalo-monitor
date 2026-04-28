@@ -18,6 +18,51 @@ function isValidDate(d: Date): boolean {
   return !isNaN(d.getTime()) && d.getFullYear() > 1971
 }
 
+/**
+ * Mask số điện thoại VN: 0xxxxxxxxx → 0xxx***xxx (giữ 3 đầu + 3 cuối)
+ */
+const PHONE_RE = /(?<![\d])(0\d{2,3})\d{2,4}(\d{3})(?![\d])/g
+export function maskPhone(text: string | null | undefined): string {
+  if (!text) return ''
+  return String(text).replace(PHONE_RE, (_, a, b) => `${a}***${b}`)
+}
+
+/**
+ * Chuyển content "raw" từ backend (có thể là JSON string, "[media attached: ...]", hoặc text)
+ * thành text user-friendly để hiển thị trong list/search.
+ */
+export function prettifyContent(content: string | null | undefined, contentType?: string | null): string {
+  if (!content) {
+    if (contentType === 'IMAGE') return '🖼️ [hình ảnh]'
+    if (contentType === 'VIDEO') return '🎬 [video]'
+    if (contentType === 'FILE')  return '📎 [file]'
+    if (contentType === 'VOICE') return '🎙️ [tin nhắn thoại]'
+    if (contentType === 'STICKER') return '😊 [sticker]'
+    return ''
+  }
+  // [media attached: <path> (mime) | <url>] — strip wrapper
+  if (content.startsWith('[media attached:')) {
+    const tail = content.split(']').slice(1).join(']').trim()
+    const icon = contentType === 'VIDEO' ? '🎬' : contentType === 'FILE' ? '📎' : '🖼️'
+    const text = tail ? `${icon} ${tail}` : `${icon} [${(contentType || 'media').toLowerCase()}]`
+    return maskPhone(text)
+  }
+  // JSON từ link share — extract title/desc
+  if (content.startsWith('{') && content.endsWith('}')) {
+    try {
+      const obj = JSON.parse(content)
+      const title = obj.title || obj.name || obj.fileName
+      const desc = obj.description || obj.desc
+      const url = obj.href || obj.url
+      const parts = [title, desc].filter(Boolean)
+      if (parts.length) return maskPhone(`🔗 ${parts.join(' — ')}`)
+      if (url) return `🔗 ${url}`
+      return '🔗 [đường dẫn]'
+    } catch {}
+  }
+  return maskPhone(content)
+}
+
 export function formatRelative(dateStr: string | Date | null): string {
   if (!dateStr) return '—'
   const d = typeof dateStr === 'string' ? new Date(dateStr) : dateStr

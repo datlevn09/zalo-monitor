@@ -31,8 +31,28 @@ type LabelDist = Array<{ label: string; count: number }>
 type ChannelBreak = Array<{ channel: string; total: number; positive: number; negative: number; opportunity: number }>
 type SlowReply = Array<{ id: string; name: string; avgLagSec: number | null; openMessages: number }>
 
+// Plan-gated time ranges
+type Range = 7 | 30 | 90 | 365 | 'custom'
+const RANGE_PLAN: Record<Range, { label: string; minPlan: string }> = {
+  7:        { label: '7 ngày',   minPlan: 'free' },
+  30:       { label: '30 ngày',  minPlan: 'free' },
+  90:       { label: 'Quý',      minPlan: 'pro' },
+  365:      { label: 'Năm',      minPlan: 'business' },
+  'custom': { label: 'Tùy chỉnh', minPlan: 'business' },
+}
+const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, business: 2, unlimited: 3 }
+
+function isUnlocked(rangePlan: string, userPlan: string): boolean {
+  return (PLAN_RANK[userPlan] ?? 0) >= (PLAN_RANK[rangePlan] ?? 0)
+}
+
+type FilterType = 'all' | 'group' | 'dm'
+
 export default function AnalyticsPage() {
-  const [range, setRange] = useState<7 | 30>(7)
+  const [range, setRange] = useState<Range>(7)
+  const [customDays, setCustomDays] = useState(60)
+  const [filter, setFilter] = useState<FilterType>('all')
+  const [plan, setPlan] = useState<string>('free')
   const [health, setHealth] = useState<GroupHealth | null>(null)
   const [senders, setSenders] = useState<Sender[]>([])
   const [heatmap, setHeatmap] = useState<HeatmapData | null>(null)
@@ -42,18 +62,27 @@ export default function AnalyticsPage() {
   const [channels, setChannels] = useState<ChannelBreak>([])
   const [slow, setSlow] = useState<SlowReply>([])
 
+  // Effective days for API
+  const days = range === 'custom' ? customDays : range
+
+  // Fetch tenant plan once
   useEffect(() => {
+    api<{ plan: string }>('/api/tenants/current').then(t => setPlan(t.plan || 'free')).catch(() => undefined)
+  }, [])
+
+  useEffect(() => {
+    const q = `days=${days}&filter=${filter}`
     Promise.all([
-      api<GroupHealth>(`/api/analytics/group-health?days=${range}`).then(setHealth),
-      api<Sender[]>(`/api/analytics/top-senders?days=${range}`).then(setSenders),
-      api<HeatmapData>(`/api/analytics/heatmap?days=${range}`).then(setHeatmap),
-      api<SentimentPoint[]>(`/api/analytics/sentiment-trend?days=${Math.max(range, 14)}`).then(setTrend),
-      api<WeekCompare>(`/api/analytics/weekly-compare`).then(setWeek),
-      api<LabelDist>(`/api/analytics/label-distribution?days=${range}`).then(setLabels),
-      api<ChannelBreak>(`/api/analytics/channel-breakdown?days=${range}`).then(setChannels),
-      api<SlowReply>(`/api/analytics/slow-reply?days=${range}`).then(setSlow),
+      api<GroupHealth>(`/api/analytics/group-health?${q}`).then(setHealth),
+      api<Sender[]>(`/api/analytics/top-senders?${q}`).then(setSenders),
+      api<HeatmapData>(`/api/analytics/heatmap?${q}`).then(setHeatmap),
+      api<SentimentPoint[]>(`/api/analytics/sentiment-trend?days=${Math.max(days, 14)}&filter=${filter}`).then(setTrend),
+      api<WeekCompare>(`/api/analytics/weekly-compare?filter=${filter}`).then(setWeek),
+      api<LabelDist>(`/api/analytics/label-distribution?${q}`).then(setLabels),
+      api<ChannelBreak>(`/api/analytics/channel-breakdown?${q}`).then(setChannels),
+      api<SlowReply>(`/api/analytics/slow-reply?${q}`).then(setSlow),
     ]).catch(() => undefined)
-  }, [range])
+  }, [days, filter])
 
   // Derive donut data
   const labelColors: Record<string, string> = {
@@ -85,23 +114,68 @@ export default function AnalyticsPage() {
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="mb-6 md:mb-8 flex items-center justify-between flex-wrap gap-3">
+      <div className="mb-6 md:mb-8 flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-zinc-100 tracking-tight">Phân tích</h1>
-          <p className="text-gray-500 dark:text-zinc-400 mt-1 text-sm">Hiểu sâu về hoạt động các nhóm chat</p>
+          <p className="text-gray-500 dark:text-zinc-400 mt-1 text-sm">Hiểu sâu về hoạt động các nhóm và DM</p>
         </div>
-        <div className="bg-gray-100 dark:bg-white/10 p-1 rounded-xl flex gap-0.5">
-          {([7, 30] as const).map(r => (
-            <button
-              key={r}
-              onClick={() => setRange(r)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                range === r ? 'bg-white dark:bg-white/15 text-gray-900 dark:text-zinc-100 shadow-sm' : 'text-gray-600 dark:text-zinc-400'
-              }`}
-            >
-              {r} ngày
-            </button>
-          ))}
+
+        <div className="flex flex-col gap-2 items-end">
+          {/* Filter: tất cả / nhóm / DM */}
+          <div className="bg-gray-100 dark:bg-white/10 p-1 rounded-xl flex gap-0.5">
+            {([
+              ['all',   'Tất cả'],
+              ['group', '👥 Nhóm'],
+              ['dm',    '💬 Cá nhân'],
+            ] as const).map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => setFilter(k)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  filter === k ? 'bg-white dark:bg-white/15 text-gray-900 dark:text-zinc-100 shadow-sm' : 'text-gray-600 dark:text-zinc-400'
+                }`}
+              >{label}</button>
+            ))}
+          </div>
+
+          {/* Time range — plan-gated */}
+          <div className="bg-gray-100 dark:bg-white/10 p-1 rounded-xl flex gap-0.5 flex-wrap">
+            {(Object.entries(RANGE_PLAN) as Array<[string, { label: string; minPlan: string }]>).map(([k, cfg]) => {
+              const r = (k === 'custom' ? 'custom' : Number(k)) as Range
+              const unlocked = isUnlocked(cfg.minPlan, plan)
+              const active = range === r
+              return (
+                <button
+                  key={k}
+                  onClick={() => unlocked && setRange(r)}
+                  disabled={!unlocked}
+                  title={unlocked ? '' : `Chỉ gói ${cfg.minPlan} trở lên`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+                    active ? 'bg-white dark:bg-white/15 text-gray-900 dark:text-zinc-100 shadow-sm'
+                    : unlocked ? 'text-gray-600 dark:text-zinc-400'
+                    : 'text-gray-400 dark:text-zinc-600 cursor-not-allowed'
+                  }`}
+                >
+                  {cfg.label}
+                  {!unlocked && <span className="text-[10px]">🔒</span>}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Custom range picker */}
+          {range === 'custom' && (
+            <div className="flex items-center gap-2 text-xs">
+              <label className="text-gray-500 dark:text-zinc-400">Số ngày:</label>
+              <input
+                type="number"
+                min={1} max={3650}
+                value={customDays}
+                onChange={e => setCustomDays(Math.max(1, Number(e.target.value) || 1))}
+                className="w-20 px-2 py-1 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10 rounded-md text-gray-900 dark:text-zinc-100 tabular-nums"
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -118,7 +192,7 @@ export default function AnalyticsPage() {
       {/* Row 1: Volume trend + Label distribution */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         <Card className="lg:col-span-2">
-          <CardHeader title="📈 Xu hướng hoạt động" subtitle={`Tin nhắn ${range} ngày qua`} />
+          <CardHeader title="📈 Xu hướng hoạt động" subtitle={`Tin nhắn ${days} ngày qua`} />
           <GradientAreaChart data={volumeData} color="#007AFF" label="Tin nhắn" height={240} />
         </Card>
 
@@ -134,7 +208,7 @@ export default function AnalyticsPage() {
       {/* Row 2: Group health matrix 2x2 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <Card accent="emerald">
-          <CardHeader title="💚 Top nhóm tích cực" subtitle="% phản hồi tích cực cao nhất" badge="Good" badgeTint="bg-green-50 text-green-700" />
+          <CardHeader title="💚 Top tích cực" subtitle="% phản hồi tích cực cao nhất" badge="Good" badgeTint="bg-green-50 text-green-700" />
           <TopList
             items={(health?.topPositive ?? []).map(g => ({
               id: g.id, name: g.name,
@@ -148,7 +222,7 @@ export default function AnalyticsPage() {
         </Card>
 
         <Card accent="red">
-          <CardHeader title="🔴 Top nhóm cảnh báo" subtitle="Tỷ lệ khiếu nại + rủi ro" badge="Attention" badgeTint="bg-red-50 text-red-700" />
+          <CardHeader title="🔴 Top cảnh báo" subtitle="Tỷ lệ khiếu nại + rủi ro" badge="Attention" badgeTint="bg-red-50 text-red-700" />
           <TopList
             items={(health?.topNegative ?? []).map(g => ({
               id: g.id, name: g.name,
@@ -162,7 +236,7 @@ export default function AnalyticsPage() {
         </Card>
 
         <Card accent="green">
-          <CardHeader title="💰 Top nhóm cơ hội" subtitle="Lead đang quan tâm" badge="Sales" badgeTint="bg-green-50 text-green-700" />
+          <CardHeader title="💰 Top cơ hội" subtitle="Lead đang quan tâm" badge="Sales" badgeTint="bg-green-50 text-green-700" />
           <TopList
             items={(health?.topOpportunity ?? []).map(g => ({
               id: g.id, name: g.name,
@@ -175,7 +249,7 @@ export default function AnalyticsPage() {
         </Card>
 
         <Card accent="orange">
-          <CardHeader title="🚨 Top nhóm khiếu nại" subtitle="Cần xử lý ưu tiên" badge="Urgent" badgeTint="bg-orange-50 text-orange-700" />
+          <CardHeader title="🚨 Top khiếu nại" subtitle="Cần xử lý ưu tiên" badge="Urgent" badgeTint="bg-orange-50 text-orange-700" />
           <TopList
             items={(health?.topComplaint ?? []).map(g => ({
               id: g.id, name: g.name,
@@ -244,7 +318,7 @@ export default function AnalyticsPage() {
       {/* Row 6: Top senders + Channel breakdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <Card>
-          <CardHeader title="🏆 Top active users" subtitle={`${range} ngày qua`} />
+          <CardHeader title="🏆 Top active users" subtitle={`${days} ngày qua`} />
           <TopSenders items={senders.slice(0, 10)} />
         </Card>
 

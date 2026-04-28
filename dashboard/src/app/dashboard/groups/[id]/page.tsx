@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import { api, connectWebSocket } from '@/lib/api'
 import { LABEL_CFG, PRIORITY_CFG, formatTime, formatDateTime } from '@/lib/format'
 import { channelDeepLink } from '@/lib/deeplink'
+import { Lightbox } from '@/components/Lightbox'
 
 type Message = {
   id: string
@@ -80,6 +81,7 @@ export default function GroupDetailPage() {
   const [sending, setSending] = useState(false)
   const [pendingFile, setPendingFile] = useState<{ url: string; mediaType: 'image' | 'video' | 'file'; filename: string; previewUrl?: string } | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [lightbox, setLightbox] = useState<{ url: string; type: 'image' | 'video' } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   async function uploadFile(file: File) {
@@ -421,14 +423,18 @@ export default function GroupDetailPage() {
 
                       {msg.contentType === 'IMAGE' ? (
                         mediaUrl ? (
-                          <a href={mediaUrl} target="_blank" rel="noopener noreferrer">
+                          <button
+                            type="button"
+                            onClick={() => setLightbox({ url: mediaUrl, type: 'image' })}
+                            className="block focus:outline-none"
+                          >
                             <img
                               src={mediaUrl}
                               alt="ảnh"
-                              className="max-w-[220px] max-h-[220px] rounded-xl object-cover"
+                              className="max-w-[220px] max-h-[220px] rounded-xl object-cover hover:opacity-90 cursor-zoom-in transition-opacity"
                               onError={e => { (e.target as HTMLImageElement).parentElement!.innerHTML = '<p class="text-sm italic text-gray-400 p-1">[hình ảnh không tải được]</p>' }}
                             />
-                          </a>
+                          </button>
                         ) : (
                           <p className={`text-sm italic ${isSelf ? 'text-blue-100' : 'text-gray-400 dark:text-zinc-500'}`}>🖼️ [hình ảnh]</p>
                         )
@@ -450,24 +456,28 @@ export default function GroupDetailPage() {
                         )
                       ) : msg.contentType === 'VIDEO' ? (
                         mediaUrl ? (
-                          <div className="space-y-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setLightbox({ url: mediaUrl, type: 'video' })}
+                            className="relative block focus:outline-none group/vid"
+                          >
                             <video
                               src={mediaUrl}
-                              controls
                               playsInline
-                              className="max-w-[260px] max-h-[200px] rounded-xl bg-black"
+                              muted
+                              preload="metadata"
+                              className="max-w-[260px] max-h-[200px] rounded-xl bg-black cursor-pointer"
                               onError={e => {
                                 const el = e.target as HTMLVideoElement
                                 el.style.display = 'none'
-                                const fallback = el.nextElementSibling as HTMLElement | null
-                                if (fallback) fallback.style.display = 'flex'
                               }}
                             />
-                            <a href={mediaUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'none' }}
-                              className={`items-center gap-2 text-sm hover:underline ${isSelf ? 'text-blue-100' : 'text-blue-600 dark:text-blue-400'}`}>
-                              <span>🎬</span><span>Tải video về xem</span>
-                            </a>
-                          </div>
+                            <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                              <span className="w-12 h-12 rounded-full bg-black/60 backdrop-blur flex items-center justify-center group-hover/vid:bg-black/80 transition-colors">
+                                <span className="text-white text-xl pl-1">▶</span>
+                              </span>
+                            </span>
+                          </button>
                         ) : (
                           <a href={`zalo://conversation?groupid=${group.externalId}`}
                             className={`flex items-center gap-2 text-sm ${isSelf ? 'text-blue-100' : 'text-gray-600 dark:text-zinc-300'}`}>
@@ -592,6 +602,10 @@ export default function GroupDetailPage() {
             <p className="text-xs text-red-500 dark:text-red-400 mt-1.5 max-w-3xl mx-auto">{sendError}</p>
           )}
         </div>
+      )}
+
+      {lightbox && (
+        <Lightbox url={lightbox.url} type={lightbox.type} onClose={() => setLightbox(null)} />
       )}
     </div>
   )

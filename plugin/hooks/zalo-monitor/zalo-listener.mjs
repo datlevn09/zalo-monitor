@@ -282,6 +282,32 @@ healthPing()
 setInterval(zaloStatusCheck, 30_000).unref?.()
 zaloStatusCheck()
 
+// Sync danh sách group thật từ openzca → backend (mỗi 10 phút)
+// Backend dùng để: rename DB record + flip isDirect=false cho records mistakenly DM
+async function syncGroupList() {
+  try {
+    const { execSync } = await import('node:child_process')
+    const raw = execSync(`"${OPENZCA}" --profile ${cfg.profile} group list --json`, {
+      timeout: 30_000, encoding: 'utf-8', maxBuffer: 50 * 1024 * 1024,
+    })
+    const list = JSON.parse(raw)
+    if (!Array.isArray(list) || list.length === 0) return
+    const payload = list.map(g => ({ groupId: String(g.groupId), name: String(g.name || '').slice(0, 200) }))
+    await fetch(`${cfg.backendUrl}/api/setup/sync-zalo-groups`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-webhook-secret': cfg.secret,
+        'x-tenant-id': cfg.tenantId,
+      },
+      body: JSON.stringify({ groups: payload }),
+    }).catch(() => undefined)
+  } catch { /* silent */ }
+}
+setInterval(syncGroupList, 10 * 60_000).unref?.()
+// Lần đầu sau 60s (đợi listener login xong)
+setTimeout(syncGroupList, 60_000)
+
 startListener()
 
 process.on('SIGTERM', () => { console.log('🛑 SIGTERM — shutting down'); process.exit(0) })

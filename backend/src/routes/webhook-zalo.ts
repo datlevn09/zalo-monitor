@@ -39,7 +39,7 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
     // Tenant check — Zalo có enabled không?
     const tenant = await db.tenant.findUnique({
       where: { id: tenantId },
-      select: { enabledChannels: true },
+      select: { enabledChannels: true, monitorDMs: true, allowedDMIds: true },
     })
     if (!tenant?.enabledChannels.includes('ZALO')) {
       return reply.status(200).send({ ok: true, skipped: 'zalo_disabled' })
@@ -99,6 +99,12 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
     // GIỮ prefix 'group:' trong externalId để KHÔNG collision giữa DM "123" và group "group:123"
     const fullExternalId = isGroup ? `group:${numericId}` : numericId
     const senderType: 'SELF' | 'CONTACT' = raw.isSelf || raw.senderType === 'SELF' ? 'SELF' : 'CONTACT'
+
+    // ── Filter DM: nếu tenant tắt monitorDMs và không trong allowedDMIds → skip
+    // (DM 1-1 mặc định KHÔNG monitor để tránh nhiễu / lưu tin riêng tư)
+    if (!isGroup && !tenant.monitorDMs && !tenant.allowedDMIds.includes(numericId)) {
+      return reply.status(200).send({ ok: true, skipped: 'dm_monitor_off' })
+    }
 
     // Identify which user owns the OpenClaw (try to find by webhook secret)
     let userId: string | undefined

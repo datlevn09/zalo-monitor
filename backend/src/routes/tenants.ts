@@ -56,6 +56,30 @@ export const tenantRoutes: FastifyPluginAsync = async (app) => {
         ...(body.allowedDMIds !== undefined ? { allowedDMIds: body.allowedDMIds } : {}),
       },
     })
+
+    // Side-effect: khi monitorDMs đổi → cascade vào group.monitorEnabled cho mọi DM
+    // (đảm bảo board/analytics/customer/alert đều ẩn DM nếu master tắt)
+    if (body.monitorDMs !== undefined) {
+      if (body.monitorDMs === false) {
+        // Tắt tất cả DM trừ những id trong allowedDMIds
+        const allowed = body.allowedDMIds ?? updated.allowedDMIds
+        await db.group.updateMany({
+          where: {
+            tenantId,
+            isDirect: true,
+            externalId: { notIn: allowed },
+          },
+          data: { monitorEnabled: false },
+        })
+      } else {
+        // Bật tất cả DM
+        await db.group.updateMany({
+          where: { tenantId, isDirect: true },
+          data: { monitorEnabled: true },
+        })
+      }
+    }
+
     return updated
   })
 }

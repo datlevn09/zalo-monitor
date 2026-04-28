@@ -69,6 +69,12 @@ TMP_DIR="$(mktemp -d)"
 cd "$TMP_DIR"
 curl -fsSL "$BACKEND_URL/api/setup/hook-files/zalo-history-push.mjs" -o zalo-history-push.mjs
 
+# Install better-sqlite3 LOCAL trong tmp dir để Node có thể import được
+# (global package không reach được qua ESM import)
+npm init -y >/dev/null 2>&1
+npm install better-sqlite3 --no-audit --no-fund >/dev/null 2>&1 || \
+  echo "  ⚠️  Không cài được better-sqlite3, fallback openzca"
+
 BACKEND_URL="$BACKEND_URL" WEBHOOK_SECRET="$WEBHOOK_SECRET" TENANT_ID="$TENANT_ID" PROFILE="${PROFILE:-}" \
   node zalo-history-push.mjs
 

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { api } from '@/lib/api'
-import { LABEL_CFG, formatRelative } from '@/lib/format'
+import { LABEL_CFG, formatRelative, prettifyContent } from '@/lib/format'
 
 type SearchResult = {
   messages: Array<{
@@ -99,7 +99,7 @@ export default function SearchPage() {
                   <span className="text-xs text-gray-400 dark:text-zinc-500 ml-auto">{formatRelative(m.sentAt)}</span>
                 </div>
                 <p className="text-sm text-gray-900 dark:text-zinc-100 line-clamp-2" dangerouslySetInnerHTML={{
-                  __html: highlight(m.content ?? '', q),
+                  __html: highlight(prettifyContent(m.content, (m as any).contentType), q),
                 }} />
                 {cfg && (
                   <span className={`inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold ${cfg.color} border`}>

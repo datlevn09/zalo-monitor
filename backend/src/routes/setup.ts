@@ -512,6 +512,15 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     const group = await db.group.findFirst({ where: { id: body.groupId, tenantId } })
     if (!group) return reply.status(404).send({ error: 'Group not found' })
 
+    // Skip nếu group là DM và tenant tắt monitorDMs (trừ allowlist)
+    if (group.isDirect && !tenant.monitorDMs && !tenant.allowedDMIds.includes(group.externalId.replace(/^group:/, ''))) {
+      return reply.status(200).send({ ok: true, imported: 0, skipped: 'dm_monitor_off' })
+    }
+    // Skip nếu group đã tắt monitorEnabled
+    if (!group.monitorEnabled) {
+      return reply.status(200).send({ ok: true, imported: 0, skipped: 'group_monitor_off' })
+    }
+
     let imported = 0
     for (const m of body.messages) {
       const msgId = m.msgId ?? m.cliMsgId
@@ -622,6 +631,96 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
       qrStore.delete(tenantId) // chưa login → clear QR cũ
     }
     return { ok: true }
+  })
+
+  // POST /api/setup/sync-zalo-groups — listener push danh sách group thật (openzca group list)
+  // Backend dùng để: (1) rename group có name fallback "Nhóm xxxxx" → tên thật,
+  //                  (2) flip records mistakenly DM (isDirect=true) → group (isDirect=false)
+  //                  (3) merge duplicate (DM record + Group record cùng numericId)
+  app.post('/sync-zalo-groups', async (req, reply) => {
+    const secret = req.headers['x-webhook-secret'] as string
+    const tenantId = req.headers['x-tenant-id'] as string
+    if (!secret || !tenantId) return reply.status(400).send({ error: 'Missing headers' })
+    const tenant = await db.tenant.findFirst({ where: { id: tenantId } })
+    if (!tenant) return reply.status(404).send({ error: 'Not found' })
+    let ok = secret === tenant.webhookSecret
+    if (!ok) {
+      const u = await db.user.findFirst({ where: { tenantId, webhookSecret: secret } })
+      ok = !!u
+    }
+    if (!ok) return reply.status(401).send({ error: 'Invalid' })
+
+    const body = req.body as { groups?: Array<{ groupId: string; name: string }> }
+    if (!Array.isArray(body?.groups) || body.groups.length === 0) {
+      return reply.status(400).send({ error: 'No groups' })
+    }
+
+    let renamed = 0, flipped = 0, merged = 0
+    for (const g of body.groups) {
+      const numericId = String(g.groupId).replace(/^group:/, '')
+      const fullExternalId = `group:${numericId}`
+      const realName = (g.name || '').trim().slice(0, 200)
+      if (!numericId) continue
+
+      // Tìm cả 2 records: với prefix và không prefix
+      const groupRec = await db.group.findUnique({
+        where: { tenantId_externalId_channelType: { tenantId, externalId: fullExternalId, channelType: 'ZALO' } },
+        select: { id: true, name: true },
+      })
+      const dmRec = await db.group.findUnique({
+        where: { tenantId_externalId_channelType: { tenantId, externalId: numericId, channelType: 'ZALO' } },
+        select: { id: true, name: true, isDirect: true },
+      })
+
+      if (groupRec && dmRec) {
+        // Duplicate: merge dmRec → groupRec
+        await db.message.updateMany({
+          where: { groupId: dmRec.id },
+          data: { groupId: groupRec.id },
+        }).catch(async () => {
+          // Skip collision: msgs có cùng externalId — delete duplicate dm msgs
+          const dups = await db.message.findMany({
+            where: { groupId: dmRec.id },
+            select: { id: true, externalId: true },
+          })
+          for (const m of dups) {
+            const collision = await db.message.findFirst({
+              where: { groupId: groupRec.id, externalId: m.externalId },
+              select: { id: true },
+            })
+            if (collision) await db.message.delete({ where: { id: m.id } })
+            else await db.message.update({ where: { id: m.id }, data: { groupId: groupRec.id } })
+          }
+        })
+        await db.alert.updateMany({ where: { groupId: dmRec.id }, data: { groupId: groupRec.id } }).catch(() => undefined)
+        await db.groupMonitor.deleteMany({ where: { groupId: dmRec.id } }).catch(() => undefined)
+        await db.groupPermission.deleteMany({ where: { groupId: dmRec.id } }).catch(() => undefined)
+        await db.group.delete({ where: { id: dmRec.id } })
+        merged++
+        // Update name nếu cần
+        if (realName && groupRec.name !== realName && /^Nhóm [0-9a-z]{4,8}$/.test(groupRec.name)) {
+          await db.group.update({ where: { id: groupRec.id }, data: { name: realName } })
+          renamed++
+        }
+      } else if (dmRec && !groupRec) {
+        // Chỉ có DM record → flip thành group
+        await db.group.update({
+          where: { id: dmRec.id },
+          data: {
+            isDirect: false,
+            externalId: fullExternalId,
+            name: realName || `Nhóm ${numericId.slice(-6)}`,
+          },
+        })
+        flipped++
+      } else if (groupRec && realName && /^Nhóm [0-9a-z]{4,8}$/.test(groupRec.name)) {
+        // Group record có name fallback → rename
+        await db.group.update({ where: { id: groupRec.id }, data: { name: realName } })
+        renamed++
+      }
+    }
+
+    return { ok: true, total: body.groups.length, renamed, flipped, merged }
   })
 
   // POST /api/setup/listener-ping — zalo-listener.mjs ping mỗi 5p để báo còn sống

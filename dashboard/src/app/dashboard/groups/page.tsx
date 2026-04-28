@@ -15,6 +15,7 @@ type Group = {
   avatarUrl: string | null
   botEnabled: boolean
   monitorEnabled: boolean
+  isDirect?: boolean
   lastMessageAt: string | null
   isActive: boolean
   _count: { messages: number; alerts: number }
@@ -32,6 +33,13 @@ export default function GroupsPage() {
   const [pinnedGroupIds, setPinnedGroupIds] = useState<string[]>([])
   const [selectedPins, setSelectedPins] = useState<string[]>([])
   const [savingPins, setSavingPins] = useState(false)
+  const [chatType, setChatType] = useState<'all' | 'group' | 'dm'>('all')
+  const [monitorDMs, setMonitorDMs] = useState(true)
+
+  useEffect(() => {
+    // Lấy tenant.monitorDMs để show empty state đúng nếu user tắt DM
+    api<{ monitorDMs: boolean }>('/api/tenants/current').then(t => setMonitorDMs(t.monitorDMs ?? false)).catch(() => undefined)
+  }, [])
 
   useEffect(() => {
     const loadData = async () => {
@@ -102,6 +110,8 @@ export default function GroupsPage() {
 
   const filtered = groups.filter(g => {
     if (search && !g.name.toLowerCase().includes(search.toLowerCase())) return false
+    if (chatType === 'group' && g.isDirect) return false
+    if (chatType === 'dm' && !g.isDirect) return false
     if (category === 'Tất cả') return true
     if (category === 'Chưa phân loại') return !g.category
     return g.category === category
@@ -111,7 +121,7 @@ export default function GroupsPage() {
     <div className="p-4 md:p-6 lg:p-8 max-w-6xl mx-auto w-full">
       <div className="mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-zinc-100 tracking-tight">Nhóm chat</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-zinc-100 tracking-tight">Chat</h1>
           <p className="text-gray-500 dark:text-zinc-400 mt-1 text-sm">
             {pinnedGroupIds.length > 0
               ? `Hiển thị ${groups.length}/${allGroups.length} nhóm • `
@@ -148,6 +158,23 @@ export default function GroupsPage() {
           placeholder="Tìm kiếm nhóm..."
           className="w-full pl-11 pr-4 py-3 bg-white dark:bg-zinc-900 dark:ring-1 dark:ring-white/5 rounded-2xl text-sm border-0 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
         />
+      </div>
+
+      {/* Chat type filter */}
+      <div className="mb-3 bg-gray-100 dark:bg-white/10 p-1 rounded-xl flex gap-0.5 w-fit">
+        {([
+          ['all',   'Tất cả'],
+          ['group', '👥 Nhóm'],
+          ['dm',    '💬 Cá nhân'],
+        ] as const).map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setChatType(k)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              chatType === k ? 'bg-white dark:bg-white/15 text-gray-900 dark:text-zinc-100 shadow-sm' : 'text-gray-600 dark:text-zinc-400'
+            }`}
+          >{label}</button>
+        ))}
       </div>
 
       {/* Category filter - iOS segmented style, scrollable on mobile */}
@@ -202,11 +229,29 @@ export default function GroupsPage() {
 
         {!loading && filtered.length === 0 && (
           <div className="p-10 text-center">
-            <div className="text-5xl mb-3">💬</div>
-            <p className="text-gray-600 dark:text-zinc-400 font-medium">Chưa có nhóm nào</p>
-            <p className="text-sm text-gray-400 dark:text-zinc-500 mt-1">
-              Nhóm sẽ tự xuất hiện khi listener forward tin nhắn mới về
-            </p>
+            {chatType === 'dm' && !monitorDMs ? (
+              <>
+                <div className="text-5xl mb-3">🔒</div>
+                <p className="text-gray-600 dark:text-zinc-400 font-medium">Tin nhắn cá nhân (DM) đang tắt</p>
+                <p className="text-sm text-gray-400 dark:text-zinc-500 mt-1 max-w-sm mx-auto">
+                  Bật <strong>Quản lý tin nhắn bán hàng 1-1 (DM)</strong> trong Cài đặt → Quyền riêng tư để xem tin nhắn DM tại đây.
+                </p>
+                <Link
+                  href="/dashboard/settings"
+                  className="inline-flex mt-4 px-4 py-2 text-xs font-medium text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
+                >
+                  Mở Cài đặt
+                </Link>
+              </>
+            ) : (
+              <>
+                <div className="text-5xl mb-3">💬</div>
+                <p className="text-gray-600 dark:text-zinc-400 font-medium">Chưa có {chatType === 'dm' ? 'tin nhắn 1-1' : chatType === 'group' ? 'nhóm chat' : 'tin nhắn'} nào</p>
+                <p className="text-sm text-gray-400 dark:text-zinc-500 mt-1">
+                  Sẽ tự xuất hiện khi listener forward tin nhắn mới về
+                </p>
+              </>
+            )}
           </div>
         )}
 

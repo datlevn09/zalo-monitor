@@ -38,7 +38,7 @@ export function Step4Done({ setup }: { setup: SetupState }) {
           <li>✅ Nhóm Zalo sẽ tự xuất hiện khi có tin nhắn mới</li>
           <li>✅ AI phân tích mỗi tin nhắn tự động</li>
           <li>✅ Cảnh báo được gửi theo kênh đã cài đặt</li>
-          <li className="text-blue-600">→ Vào <strong>Nhóm chat</strong> để phân loại các nhóm của bạn</li>
+          <li className="text-blue-600">→ Vào <strong>Chat</strong> để phân loại các nhóm của bạn</li>
         </ul>
       </div>
 

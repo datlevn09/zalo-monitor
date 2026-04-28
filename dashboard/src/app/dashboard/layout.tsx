@@ -19,7 +19,7 @@ const NAV = [
   { href: '/dashboard/customers', label: 'Khách hàng', icon: IconUsers,    tint: 'bg-pink-500' },
   { href: '/dashboard/pipeline',     label: 'Pipeline',   icon: IconKanban,    tint: 'bg-teal-500' },
   { href: '/dashboard/appointments', label: 'Lịch hẹn',  icon: IconCalendar,  tint: 'bg-orange-500' },
-  { href: '/dashboard/groups',    label: 'Nhóm chat',  icon: IconChat,     tint: 'bg-green-500' },
+  { href: '/dashboard/groups',    label: 'Chat',  icon: IconChat,     tint: 'bg-green-500' },
   { href: '/dashboard/alerts',    label: 'Cảnh báo',   icon: IconBell,     tint: 'bg-red-500' },
   { href: '/dashboard/rules',     label: 'Cấu hình AI', icon: IconWand,     tint: 'bg-fuchsia-500' },
   { href: '/dashboard/export',    label: 'Xuất dữ liệu',icon: IconExport,   tint: 'bg-slate-500' },

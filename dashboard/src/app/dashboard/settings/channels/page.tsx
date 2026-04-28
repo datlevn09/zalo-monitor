@@ -252,7 +252,8 @@ function ZaloChannelCard({
   const [resettingSync, setResettingSync] = useState(false)
   const [nativeMode, setNativeMode] = useState(false)
   const [showHistoryImport, setShowHistoryImport] = useState(false)
-  const [installCmd, setInstallCmd] = useState<string | null>(null)
+  const [installCmd, setInstallCmd] = useState<{ oneLineCommand?: string; windowsCommand?: string; dockerCommand?: string } | null>(null)
+  const [installOS, setInstallOS] = useState<'linux' | 'windows' | 'docker'>('linux')
   const [showInstall, setShowInstall] = useState(false)
   const [copied, setCopied] = useState(false)
   const [pushConfig, setPushConfig] = useState<{
@@ -285,8 +286,8 @@ function ZaloChannelCard({
 
   // Fetch install command 1 lần lúc mount
   useEffect(() => {
-    api<{ oneLineCommand: string }>('/api/auth/my-install-command')
-      .then(d => setInstallCmd(d.oneLineCommand))
+    api<{ oneLineCommand: string; windowsCommand?: string; dockerCommand?: string }>('/api/auth/my-install-command')
+      .then(d => setInstallCmd(d))
       .catch(() => undefined)
   }, [])
 
@@ -511,13 +512,22 @@ function ZaloChannelCard({
                 </a>
               </>
             ) : (
-              <button
-                onClick={handleReconnect}
-                disabled={disabled || reconnecting}
-                className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-zinc-300 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {reconnecting ? 'Đang khởi động...' : status.connected ? 'Đổi tài khoản' : 'Kết nối lại'}
-              </button>
+              <>
+                <button
+                  onClick={handleReconnect}
+                  disabled={disabled || reconnecting}
+                  className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-zinc-300 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {reconnecting ? 'Đang khởi động...' : status.connected ? 'Đổi tài khoản' : 'Kết nối lại'}
+                </button>
+                <button
+                  onClick={() => setShowInstall(s => !s)}
+                  className="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"
+                  title="Lấy lệnh cài lại / cập nhật listener trên server"
+                >
+                  {showInstall ? 'Ẩn lệnh' : '🔄 Lệnh cập nhật'}
+                </button>
+              </>
             )}
             {sessionHealth && !notInstalled && (
               <button
@@ -544,29 +554,52 @@ function ZaloChannelCard({
             )}
           </div>
 
-          {/* Install command — chỉ hiện khi notInstalled + user bấm "Lấy lệnh" */}
-          {notInstalled && showInstall && (
+          {/* Install command — hiện khi user bấm "Lấy lệnh" (cả notInstalled lẫn installed để cập nhật) */}
+          {showInstall && installCmd && (
             <div className="mt-3 bg-gray-50 dark:bg-white/5 rounded-xl p-3 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-xs font-medium text-gray-700 dark:text-zinc-300">Chạy lệnh sau trên server đã cài listener:</p>
-                <button
-                  onClick={() => {
-                    if (!installCmd) return
-                    navigator.clipboard.writeText(installCmd)
-                    setCopied(true)
-                    setTimeout(() => setCopied(false), 2000)
-                  }}
-                  disabled={!installCmd}
-                  className="px-2.5 py-1 text-[11px] font-semibold text-white bg-blue-500 hover:bg-blue-600 disabled:opacity-50 rounded-md transition-colors shrink-0"
-                >
-                  {copied ? '✓ Đã copy' : 'Copy'}
-                </button>
+              <p className="text-xs font-medium text-gray-700 dark:text-zinc-300">Cài đặt / Cập nhật listener — chạy trên server có Zalo:</p>
+
+              {/* OS tabs */}
+              <div className="flex gap-1.5 text-[11px]">
+                {([
+                  ['linux',   '🐧 Mac/Linux'],
+                  ['windows', '🪟 Windows'],
+                  ['docker',  '🐳 Docker'],
+                ] as const).map(([k, label]) => (
+                  <button
+                    key={k}
+                    onClick={() => setInstallOS(k)}
+                    className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
+                      installOS === k
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-white dark:bg-white/10 text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/15'
+                    }`}
+                  >{label}</button>
+                ))}
               </div>
-              <pre className="bg-gray-900 dark:bg-black text-green-400 text-[11px] font-mono p-3 rounded-lg overflow-x-auto whitespace-pre-wrap break-all select-all">
-                {installCmd ?? 'Đang tải...'}
-              </pre>
+
+              {(() => {
+                const cmd = installOS === 'windows'
+                  ? (installCmd.windowsCommand ?? '')
+                  : installOS === 'docker'
+                  ? (installCmd.dockerCommand ?? '')
+                  : (installCmd.oneLineCommand ?? '')
+                return (
+                  <div className="relative">
+                    <pre className="bg-gray-900 dark:bg-black text-green-400 text-[11px] font-mono p-3 rounded-lg overflow-x-auto whitespace-pre-wrap break-all select-all pr-16">
+                      {cmd || 'Đang tải...'}
+                    </pre>
+                    <button
+                      onClick={() => { if (cmd) { navigator.clipboard.writeText(cmd); setCopied(true); setTimeout(() => setCopied(false), 2000) } }}
+                      disabled={!cmd}
+                      className="absolute top-2 right-2 px-2 py-1 text-[10px] font-semibold text-white bg-blue-500 hover:bg-blue-600 disabled:opacity-50 rounded-md"
+                    >{copied ? '✓' : 'Copy'}</button>
+                  </div>
+                )
+              })()}
+
               <p className="text-[11px] text-gray-500 dark:text-zinc-400">
-                💡 Script tự cài Node + openzca + listener service. Sau đó QR sẽ hiện ngay tại đây.
+                💡 Lệnh idempotent — chạy lần đầu để <strong>cài</strong>, chạy lại bất cứ lúc nào để <strong>cập nhật</strong> listener về phiên bản mới nhất. Sau đó QR sẽ hiện ngay tại đây.
               </p>
             </div>
           )}

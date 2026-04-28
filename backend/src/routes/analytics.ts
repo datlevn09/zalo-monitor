@@ -15,11 +15,24 @@ function requireTenant(req: any, reply: any): string | null {
   return tenantId
 }
 
+// Filter SQL fragment: WHERE g.isDirect = true / false / both
+function filterClause(filter: string): string {
+  if (filter === 'group') return 'AND g."isDirect" = false'
+  if (filter === 'dm') return 'AND g."isDirect" = true'
+  return ''
+}
+
 export const analyticsRoutes: FastifyPluginAsync = async (app) => {
-  // GET /api/analytics/group-health?days=7
+  // GET /api/analytics/group-health?days=7&filter=all|group|dm
   app.get('/group-health', async (req, reply) => {
     const tenantId = requireTenant(req, reply); if (!tenantId) return
-    const days = Math.min(Number((req.query as any)?.days ?? 7), 30)
+    // Plan-gated max: free 30, pro 90, business 365, unlimited 3650
+    const reqDays = Number((req.query as any)?.days ?? 7)
+    const t = await db.tenant.findUnique({ where: { id: tenantId }, select: { plan: true } })
+    const planMax: Record<string, number> = { free: 30, pro: 90, business: 365, unlimited: 3650 }
+    const days = Math.min(reqDays, planMax[t?.plan ?? 'free'] ?? 30)
+    const filter = String((req.query as any)?.filter ?? 'all')
+    const filterSql = filterClause(filter)
     const since = new Date(Date.now() - days * 24 * 3600 * 1000)
 
     // Query: per group, count by label
@@ -42,7 +55,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
       FROM groups g
       LEFT JOIN messages m ON m."groupId" = g.id AND m."createdAt" >= $2 AND m."senderType"='CONTACT'
       LEFT JOIN message_analyses a ON a."messageId" = m.id
-      WHERE g."tenantId" = $1 AND g."monitorEnabled" = true
+      WHERE g."tenantId" = $1 AND g."monitorEnabled" = true ${filterSql}
       GROUP BY g.id, g.name, g."memberCount", g."lastMessageAt"
     `, tenantId, since)
 

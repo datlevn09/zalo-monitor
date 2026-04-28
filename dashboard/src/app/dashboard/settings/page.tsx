@@ -144,9 +144,9 @@ export default function SettingsPage() {
               💬
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Theo dõi tin nhắn 1-1 (DM) của tôi</p>
+              <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Quản lý tin nhắn bán hàng 1-1 (DM)</p>
               <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                Chỉ bật nếu bạn bán hàng qua Zalo cá nhân. Chat với vợ/bạn/gia đình cũng sẽ bị lưu.
+                Đừng mất thời gian lội từng group chat. Bật để gom tất cả tin nhắn Zalo / Telegram / Lark từ khách hàng cá nhân về 1 nơi quản lý.
               </p>
             </div>
             <button

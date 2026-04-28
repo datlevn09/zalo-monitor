@@ -12,15 +12,15 @@ export default function LandingPage() {
   const { content: remoteContent } = useRemoteContent()
 
   // Default values
-  const defaultBadge = 'Theo dõi nhóm Zalo theo thời gian thực'
-  const defaultHeadline = 'Quản lý khách hàng'
-  const defaultHeadlineAccent = 'thông minh hơn'
-  const defaultSubheadline = 'Theo dõi tin nhắn Zalo, phân tích hội thoại bằng AI, và chăm sóc khách hàng từ một nơi duy nhất.'
+  const defaultBadge = 'Zalo · Telegram · Lark — gom về 1 nơi'
+  const defaultHeadline = 'Quản lý tin nhắn'
+  const defaultHeadlineAccent = 'bán hàng'
+  const defaultSubheadline = 'Đừng mất thời gian lội từng group chat. Giờ đây tất cả tin nhắn Zalo, Telegram, Lark đổ về 1 nơi — AI tự phân loại cơ hội, khiếu nại, rủi ro để anh xử lý đúng người, đúng lúc.'
   const defaultFeatures = [
     {
       icon: '💬',
-      title: 'Theo dõi nhóm Zalo',
-      desc: 'Nhận tin nhắn từ hàng chục nhóm Zalo vào một bảng điều khiển duy nhất.',
+      title: 'Gom tin từ mọi nhóm',
+      desc: 'Hàng chục nhóm Zalo / Telegram / Lark vào một bảng điều khiển — không sót tin khách.',
     },
     {
       icon: '🤖',
@@ -53,8 +53,8 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto px-4 md:px-6 h-14 flex items-center justify-between gap-4">
           {/* Logo */}
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-sm font-bold shadow-sm shadow-blue-500/30">
-              Z
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white text-[10px] font-bold shadow-sm shadow-blue-500/30">
+              ZM
             </div>
             <span className="font-semibold text-gray-900 dark:text-zinc-100 text-sm md:text-base">
               Zalo Monitor

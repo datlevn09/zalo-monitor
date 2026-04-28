@@ -190,7 +190,8 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
     return {
       oneLineCommand: `curl -fsSL "${backendUrl}/api/setup/inject.sh?${qs}" | bash`,
-      dockerCommand:  `docker exec openclaw bash -c 'curl -fsSL "${backendUrl}/api/setup/inject.sh?${qs}" | bash'`,
+      windowsCommand: `iwr -useb "${backendUrl}/api/setup/inject.ps1?${qs}" | iex`,
+      dockerCommand:  `docker run -d --name zalo-monitor-listener --restart unless-stopped --network host -v zalo-monitor-data:/root/.zalo-monitor node:22-alpine sh -c "apk add --no-cache curl bash && curl -fsSL '${backendUrl}/api/setup/inject.sh?${qs}' | bash"`,
     }
   })
 
