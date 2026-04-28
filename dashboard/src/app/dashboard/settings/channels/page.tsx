@@ -480,7 +480,7 @@ function ZaloChannelCard({
                   {showInstall ? 'Ẩn lệnh cài' : '📋 Lấy lệnh cài đặt'}
                 </button>
                 <a
-                  href="/docs/install-zalo"
+                  href="/docs/install"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"

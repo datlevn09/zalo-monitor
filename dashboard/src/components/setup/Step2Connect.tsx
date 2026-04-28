@@ -17,7 +17,13 @@ export function Step2Connect({ setup, onDone }: { setup: SetupState; onDone: () 
   const [commands, setCommands] = useState({ oneLineCommand: '', dockerCommand: '', windowsCommand: '' })
   const [mode, setMode] = useState<Mode>(() => {
     if (typeof window === 'undefined') return 'host'
-    return (localStorage.getItem('zm:mode') as Mode) ?? 'host'
+    // Ưu tiên user chọn (localStorage). Nếu chưa chọn → auto detect từ user-agent.
+    const saved = localStorage.getItem('zm:mode') as Mode | null
+    if (saved) return saved
+    const ua = navigator.userAgent.toLowerCase()
+    if (ua.includes('windows') || ua.includes('win64') || ua.includes('win32')) return 'windows'
+    // Mac/Linux/iOS dùng host (curl bash)
+    return 'host'
   })
   const [admin, setAdmin] = useState<Admin | null>(null)
   const [showHelp, setShowHelp] = useState(false)
@@ -70,19 +76,35 @@ ${commands.dockerCommand || commands.oneLineCommand}`
       </div>
 
       {/* Mode selector - iOS segmented */}
-      <div className="bg-gray-100 dark:bg-white/10 p-1 rounded-xl grid grid-cols-3 gap-0.5">
-        <button type="button" onClick={() => setMode('docker')}
-          className={`py-2 rounded-lg text-sm font-medium transition-all ${mode === 'docker' ? 'bg-white dark:bg-white/15 text-gray-900 dark:text-white shadow-sm' : 'text-gray-600 dark:text-zinc-400'}`}>
-          🐳 Docker
-        </button>
-        <button type="button" onClick={() => setMode('host')}
-          className={`py-2 rounded-lg text-sm font-medium transition-all ${mode === 'host' ? 'bg-white dark:bg-white/15 text-gray-900 dark:text-white shadow-sm' : 'text-gray-600 dark:text-zinc-400'}`}>
-          🐧 Linux/Mac
-        </button>
-        <button type="button" onClick={() => setMode('windows')}
-          className={`py-2 rounded-lg text-sm font-medium transition-all ${mode === 'windows' ? 'bg-white dark:bg-white/15 text-gray-900 dark:text-white shadow-sm' : 'text-gray-600 dark:text-zinc-400'}`}>
-          🪟 Windows
-        </button>
+      <div>
+        <p className="text-[11px] text-gray-500 dark:text-zinc-400 mb-1.5">Chọn loại máy anh sẽ chạy listener:</p>
+        <div className="bg-gray-100 dark:bg-white/10 p-1 rounded-xl grid grid-cols-3 gap-0.5">
+          <button type="button" onClick={() => setMode('windows')}
+            className={`py-2 rounded-lg text-sm font-medium transition-all ${mode === 'windows' ? 'bg-white dark:bg-white/15 text-gray-900 dark:text-white shadow-sm' : 'text-gray-600 dark:text-zinc-400'}`}>
+            🪟 Windows
+          </button>
+          <button type="button" onClick={() => setMode('host')}
+            className={`py-2 rounded-lg text-sm font-medium transition-all ${mode === 'host' ? 'bg-white dark:bg-white/15 text-gray-900 dark:text-white shadow-sm' : 'text-gray-600 dark:text-zinc-400'}`}>
+            🐧 Mac/Linux
+          </button>
+          <button type="button" onClick={() => setMode('docker')}
+            className={`py-2 rounded-lg text-sm font-medium transition-all ${mode === 'docker' ? 'bg-white dark:bg-white/15 text-gray-900 dark:text-white shadow-sm' : 'text-gray-600 dark:text-zinc-400'}`}>
+            🐳 Docker
+          </button>
+        </div>
+        {/* Auto-detect hint */}
+        {typeof navigator !== 'undefined' && (() => {
+          const ua = navigator.userAgent.toLowerCase()
+          const detected: Mode = ua.includes('windows') ? 'windows' : ua.includes('mac') || ua.includes('linux') ? 'host' : 'host'
+          if (detected !== mode) {
+            return (
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1.5">
+                💡 Trình duyệt của anh đang chạy trên <strong>{detected === 'windows' ? 'Windows' : 'Mac/Linux'}</strong> — chọn tab tương ứng nếu listener cũng chạy trên máy này.
+              </p>
+            )
+          }
+          return null
+        })()}
       </div>
 
       {/* Command box */}
