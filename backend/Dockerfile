@@ -4,7 +4,8 @@ RUN apk add --no-cache openssl
 
 FROM base AS deps
 COPY backend/package.json backend/package-lock.json ./
-RUN npm install
+# npm ci: install đúng theo lock, xoá extraneous (an toàn cho production)
+RUN npm ci
 
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
