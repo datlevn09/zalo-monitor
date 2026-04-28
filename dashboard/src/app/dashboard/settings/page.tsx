@@ -187,6 +187,9 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* AI Provider config */}
+      <AiConfigSection />
+
       {/* Đổi mật khẩu */}
       <ChangePasswordSection />
 
@@ -230,6 +233,185 @@ const PASSWORD_RULES = [
   { label: 'Chứa số (0-9)',         test: (p: string) => /[0-9]/.test(p) },
   { label: 'Chứa ký tự đặc biệt',  test: (p: string) => /[!@#$%^&*()\-_=+\[\]{}|;':",.<>?/\\`~]/.test(p) },
 ]
+
+function AiConfigSection() {
+  const [provider, setProvider] = useState<string>('')
+  const [apiKey, setApiKey] = useState('')
+  const [model, setModel] = useState('')
+  const [hasKey, setHasKey] = useState(false)
+  const [keyPreview, setKeyPreview] = useState<string | null>(null)
+  const [systemFallback, setSystemFallback] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [savedOk, setSavedOk] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    api<{ provider: string | null; model: string | null; hasKey: boolean; keyPreview: string | null; systemFallback: boolean }>('/api/ai/config')
+      .then((d) => {
+        setProvider(d.provider ?? '')
+        setModel(d.model ?? '')
+        setHasKey(d.hasKey)
+        setKeyPreview(d.keyPreview)
+        setSystemFallback(d.systemFallback)
+      }).catch(() => undefined)
+  }, [])
+
+  // Default model theo provider
+  const defaultModel: Record<string, string> = {
+    anthropic: 'claude-haiku-4-5-20251001',
+    openai: 'gpt-4o-mini',
+    google: 'gemini-1.5-flash',
+  }
+
+  async function save() {
+    setSaving(true); setError(null)
+    try {
+      await api('/api/ai/config', {
+        method: 'PUT',
+        body: JSON.stringify({
+          provider: provider || null,
+          // chỉ gửi apiKey nếu user nhập mới (không gửi rỗng để tránh xoá)
+          ...(apiKey ? { apiKey } : {}),
+          model: model || defaultModel[provider] || null,
+        }),
+      })
+      setSavedOk(true)
+      setApiKey('')
+      // Reload state
+      const d = await api<any>('/api/ai/config')
+      setHasKey(d.hasKey); setKeyPreview(d.keyPreview)
+      setTimeout(() => setSavedOk(false), 2000)
+    } catch (e: any) {
+      setError(e?.message || 'Lưu thất bại')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function clearKey() {
+    if (!confirm('Xoá API key đang lưu? AI Chat sẽ fallback về key hệ thống (nếu có).')) return
+    setSaving(true)
+    try {
+      await api('/api/ai/config', {
+        method: 'PUT',
+        body: JSON.stringify({ provider: null, apiKey: null, model: null }),
+      })
+      setProvider(''); setApiKey(''); setModel('')
+      setHasKey(false); setKeyPreview(null)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Section
+      title="🤖 AI Provider — API key của riêng anh"
+      description="Anh tự dùng API key của mình để chạy AI Chat + phân loại tin (anh trả tiền cho provider, không qua hệ thống). Không cấu hình → dùng key chung của hệ thống nếu có."
+    >
+      <div className="px-4 py-3.5 space-y-3">
+        {/* Trạng thái hiện tại */}
+        {hasKey ? (
+          <div className="flex items-center justify-between gap-2 px-3 py-2 bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/30 rounded-lg">
+            <div className="text-xs text-green-800 dark:text-green-300">
+              ✓ Đang dùng <strong className="capitalize">{provider}</strong>
+              <span className="ml-2 font-mono text-green-600 dark:text-green-400">{keyPreview}</span>
+            </div>
+            <button onClick={clearKey} disabled={saving} className="text-[11px] text-red-600 dark:text-red-400 hover:underline">
+              Xoá key
+            </button>
+          </div>
+        ) : systemFallback ? (
+          <div className="px-3 py-2 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 rounded-lg text-xs text-blue-700 dark:text-blue-300">
+            ℹ️ Đang dùng key chung của hệ thống (Claude Haiku). Nhập key dưới đây để dùng provider/account của riêng anh.
+          </div>
+        ) : (
+          <div className="px-3 py-2 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-lg text-xs text-amber-700 dark:text-amber-300">
+            ⚠️ Chưa cấu hình AI — AI Chat sẽ không hoạt động. Nhập key bên dưới.
+          </div>
+        )}
+
+        {/* Provider selector */}
+        <div>
+          <label className="block text-xs font-medium text-gray-700 dark:text-zinc-300 mb-1.5">Nhà cung cấp</label>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { v: 'anthropic', label: 'Anthropic', sub: 'Claude' },
+              { v: 'openai', label: 'OpenAI', sub: 'GPT-4o' },
+              { v: 'google', label: 'Google', sub: 'Gemini' },
+            ].map((p) => (
+              <button
+                key={p.v}
+                onClick={() => { setProvider(p.v); if (!model) setModel(defaultModel[p.v]) }}
+                className={`px-3 py-2.5 rounded-xl border text-left transition-all ${
+                  provider === p.v
+                    ? 'bg-blue-50 dark:bg-blue-500/15 border-blue-400 dark:border-blue-500/50 text-blue-700 dark:text-blue-300'
+                    : 'bg-white dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 hover:bg-gray-50 dark:hover:bg-white/10'
+                }`}
+              >
+                <p className="text-sm font-semibold">{p.label}</p>
+                <p className="text-[10px] opacity-70">{p.sub}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* API Key input */}
+        {provider && (
+          <>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-zinc-300 mb-1.5">
+                API Key {hasKey && <span className="text-gray-400 font-normal">(để trống nếu giữ key cũ)</span>}
+              </label>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder={
+                  provider === 'anthropic' ? 'sk-ant-api03-...' :
+                  provider === 'openai' ? 'sk-proj-...' :
+                  'AIzaSy...'
+                }
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="mt-1 text-[11px] text-gray-500 dark:text-zinc-400">
+                {provider === 'anthropic' && (<>Lấy key tại <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">console.anthropic.com</a></>)}
+                {provider === 'openai' && (<>Lấy key tại <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">platform.openai.com</a></>)}
+                {provider === 'google' && (<>Lấy key tại <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">aistudio.google.com</a></>)}
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-zinc-300 mb-1.5">Model (tùy chọn)</label>
+              <input
+                type="text"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder={defaultModel[provider]}
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="mt-1 text-[11px] text-gray-500 dark:text-zinc-400">Để trống dùng mặc định: <code>{defaultModel[provider]}</code></p>
+            </div>
+          </>
+        )}
+
+        {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+
+        <div className="flex items-center gap-2 pt-1">
+          <button
+            onClick={save}
+            disabled={saving || !provider || (!hasKey && !apiKey)}
+            className="px-4 py-2 text-xs font-semibold text-white bg-blue-500 hover:bg-blue-600 disabled:opacity-50 rounded-lg transition-colors"
+          >
+            {saving ? 'Đang lưu...' : savedOk ? '✓ Đã lưu' : 'Lưu cấu hình'}
+          </button>
+          <span className="text-[11px] text-gray-500 dark:text-zinc-400">
+            Key được lưu mã hoá per-tenant. Chi phí AI do anh trả trực tiếp cho provider.
+          </span>
+        </div>
+      </div>
+    </Section>
+  )
+}
 
 function ChangePasswordSection() {
   const [open, setOpen] = useState(false)
