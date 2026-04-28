@@ -420,7 +420,7 @@ async function watchLoginSuccess(cfg: Config) {
     execFile('openzca', ['--profile', 'default', 'auth', 'status'], { timeout: 5_000 }, async (err, stdout) => {
       if (err) return
       // openzca trả "logged in as ..." khi đã đăng nhập (thường có "logged in" hoặc tên user)
-      const ok = /logged in|đã đăng nhập|profile.*active/i.test(stdout)
+      const ok = /logged ?in:?\s*true|đã đăng nhập|profile.*active/i.test(stdout)
       if (!ok) return
       // Báo backend
       await fetch(`${cfg.backendUrl}/api/setup/login-success`, {
@@ -447,7 +447,7 @@ function initLoginStateWatcher() {
     const { execFile } = await import('child_process')
     execFile('openzca', ['--profile', 'default', 'auth', 'status'], { timeout: 5_000 }, async (err, stdout, stderr) => {
       const out = (stdout ?? '') + (stderr ?? '')
-      const isLoggedIn = !err && /logged in|đã đăng nhập|profile.*active/i.test(out)
+      const isLoggedIn = !err && /logged ?in:?\s*true|đã đăng nhập|profile.*active/i.test(out)
       const newState = isLoggedIn ? 'logged_in' : 'logged_out'
       if (newState === lastLoginState) return
       // State changed
