@@ -907,102 +907,112 @@ $wrapperLines = @(
 )
 Set-Content -Path $wrapperPath -Value ($wrapperLines -join "\`r\`n") -Encoding UTF8
 
-# Tao Scheduled Task chay khi user login (auto restart neu crash)
-# Lay full path powershell.exe (avoid PATH issue trong Scheduled Task context)
+# [5/5] Login Zalo (TRUOC khi start service de tranh conflict)
+Write-Host "[5/5] Dang nhap Zalo de quet QR..." -ForegroundColor Yellow
+$openzcaExe = (Get-Command openzca -ErrorAction SilentlyContinue).Source
+if (-not $openzcaExe) {
+  $npmPrefix = (npm config get prefix 2>$null)
+  if ($npmPrefix) { $openzcaExe = Join-Path $npmPrefix 'openzca.cmd' }
+}
+
+if ($openzcaExe -and (Test-Path $openzcaExe)) {
+  # Check if already logged in
+  $statusOut = & cmd /c "\`"$openzcaExe\`" --profile zalo-monitor auth status" 2>&1 | Out-String
+  if ($statusOut -match 'loggedIn:\s*true') {
+    Write-Host "  OK Profile 'zalo-monitor' da login truoc do" -ForegroundColor Green
+  } else {
+    $qrPath = Join-Path $LISTENER_DIR "qr.png"
+    $qrLog  = Join-Path $LISTENER_DIR "qr-login.log"
+    Remove-Item $qrPath, $qrLog -ErrorAction SilentlyContinue
+
+    # Spawn openzca login -> redirect output to log file (KHONG dung Start-Job vi unreliable)
+    $loginArgs = @('--profile', 'zalo-monitor', 'auth', 'login', '--qr-base64', '--qr-path', $qrPath)
+    $proc = Start-Process -FilePath $openzcaExe -ArgumentList $loginArgs -RedirectStandardOutput $qrLog -RedirectStandardError ($qrLog + '.err') -WindowStyle Hidden -PassThru
+
+    # Cho file QR / log xuat hien (max 30s)
+    $waited = 0
+    while ($waited -lt 30) {
+      Start-Sleep -Seconds 1; $waited++
+      if ((Test-Path $qrPath) -or (Test-Path $qrLog)) { break }
+    }
+
+    # 1) Open file QR bang Photos viewer (Windows tu nhan)
+    if (Test-Path $qrPath) {
+      Start-Process $qrPath -ErrorAction SilentlyContinue
+      Write-Host "  [+] Cua so QR da mo - quet bang Zalo dien thoai" -ForegroundColor Green
+    }
+
+    # 2) Push QR data URL len web UI
+    if (Test-Path $qrLog) {
+      Start-Sleep -Seconds 2  # cho openzca write xong
+      $logContent = Get-Content $qrLog -Raw -ErrorAction SilentlyContinue
+      if ($logContent -match '(data:image/[a-z]+;base64,[A-Za-z0-9+/=]+)') {
+        $qrDataUrl = $matches[1]
+        try {
+          $h = @{"Content-Type"="application/json"; "X-Tenant-Id"=$TENANT_ID; "X-Webhook-Secret"=$SECRET}
+          $b = @{ dataUrl = $qrDataUrl } | ConvertTo-Json
+          Invoke-WebRequest -Uri "$BACKEND_URL/api/setup/qr-push" -Method POST -Headers $h -Body $b -UseBasicParsing -TimeoutSec 10 | Out-Null
+          Write-Host "  [+] QR cung hien tren dashboard: $DASHBOARD_URL/dashboard/settings/channels" -ForegroundColor Green
+        } catch {
+          Write-Host "  WARN Khong push duoc QR len dashboard" -ForegroundColor Yellow
+        }
+      }
+    }
+
+    Write-Host ""
+    Write-Host "  ==> Quet QR o BAT KY noi nao (Photos hoac Web Dashboard)" -ForegroundColor Cyan
+    Write-Host "      Mo Zalo dien thoai -> Cai dat -> Thiet bi da dang nhap -> Them thiet bi" -ForegroundColor White
+    Write-Host ""
+
+    # Cho login complete: poll auth status moi 3s, max 90s
+    $loginOk = $false
+    for ($i = 0; $i -lt 30; $i++) {
+      Start-Sleep -Seconds 3
+      $st = & cmd /c "\`"$openzcaExe\`" --profile zalo-monitor auth status" 2>&1 | Out-String
+      if ($st -match 'loggedIn:\s*true') { $loginOk = $true; break }
+      Write-Host "  ... cho quet QR ($([int]($i*3))s/90s)" -ForegroundColor DarkGray
+    }
+
+    # Cleanup
+    if ($proc -and -not $proc.HasExited) { $proc | Stop-Process -Force -ErrorAction SilentlyContinue }
+    Remove-Item $qrPath, $qrLog, "($qrLog + '.err')" -ErrorAction SilentlyContinue
+
+    if ($loginOk) {
+      Write-Host "  OK Da quet QR thanh cong - Zalo da dang nhap" -ForegroundColor Green
+    } else {
+      Write-Host "  WARN Het 90s ma chua quet. Bo qua - service van chay, anh co the quet sau qua dashboard." -ForegroundColor Yellow
+    }
+  }
+} else {
+  Write-Host "  WARN openzca khong tim thay. Skip login." -ForegroundColor Yellow
+}
+
+# [6/6] Tao Scheduled Task de service tu chay
+Write-Host "[6/6] Tao Scheduled Task..." -ForegroundColor Yellow
 $psExe = (Get-Command powershell.exe).Source
 $taskName = "ZaloMonitorListener"
-# Tat ErrorActionPreference cho khoi schtasks (fail OK neu task chua ton tai)
 $prevEAP = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
 & cmd /c "schtasks /Delete /TN $taskName /F" 2>&1 | Out-Null
-# CMD-style escape: \" inside outer "..." de schtasks /TR nhan duoc cmdline co dau cach
 $action = '"' + $psExe + '" -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $wrapperPath + '"'
 & cmd /c "schtasks /Create /TN $taskName /TR \`"$action\`" /SC ONLOGON /RL HIGHEST /F" 2>&1 | Out-Null
 $createExit = $LASTEXITCODE
 & cmd /c "schtasks /Run /TN $taskName" 2>&1 | Out-Null
 $ErrorActionPreference = $prevEAP
-if ($LASTEXITCODE -eq 0) {
-  Write-Host "  OK Scheduled Task '$taskName' da chay (auto-start khi logon)" -ForegroundColor Green
-} else {
-  Write-Host "  WARN Khong tao duoc Scheduled Task. Chay thu cong:" -ForegroundColor Yellow
-  Write-Host "    powershell -File '$wrapperPath'" -ForegroundColor White
-}
 
-# [5/5] Test ket noi
-Write-Host "[5/5] Kiem tra ket noi toi backend..." -ForegroundColor Yellow
+# Test ket noi
 try {
-  $headers = @{"Content-Type"="application/json";"X-Tenant-Id"=$TENANT_ID;"X-Webhook-Secret"=$SECRET}
-  $resp = Invoke-WebRequest -Uri "$BACKEND_URL/api/setup/hook-test" -Method POST -Headers $headers -Body '{}' -UseBasicParsing -TimeoutSec 10
-  if ($resp.StatusCode -eq 200) {
-    Write-Host ""
-    Write-Host "========================================" -ForegroundColor Green
-    Write-Host "  OK Listener da cai va ket noi voi dashboard" -ForegroundColor Green
-    Write-Host "========================================" -ForegroundColor Green
-    Write-Host ""
-
-    # ── Auto-login Zalo: hien QR ca file (mo Photos) lan push len web UI ──
-    Write-Host "[*] Dang chuan bi QR de quet..." -ForegroundColor Yellow
-    $openzcaExe = (Get-Command openzca -ErrorAction SilentlyContinue).Source
-    if ($openzcaExe) {
-      $qrPath = Join-Path $LISTENER_DIR "qr.png"
-      Remove-Item $qrPath -ErrorAction SilentlyContinue
-
-      # Spawn job: openzca login --qr-base64 (parse stdout) + --qr-path (save file)
-      $loginJob = Start-Job -ScriptBlock {
-        param($exe, $path)
-        $env:OPENZCA_QR_OPEN = '0'
-        & $exe --profile zalo-monitor auth login --qr-base64 --qr-path $path 2>&1
-      } -ArgumentList $openzcaExe, $qrPath
-
-      # Cho file QR xuat hien (max 15s)
-      $waitedFor = 0
-      while (-not (Test-Path $qrPath) -and $waitedFor -lt 15) {
-        Start-Sleep -Seconds 1; $waitedFor++
-      }
-
-      # 1) Mo file QR bang Photos / Default viewer (KHONG block)
-      if (Test-Path $qrPath) {
-        Start-Process $qrPath -ErrorAction SilentlyContinue
-        Write-Host "  [+] Cua so QR da mo - quet bang Zalo dien thoai (Them thiet bi)" -ForegroundColor Green
-      }
-
-      # 2) Dong thoi push QR data URL len backend de hien tren web UI
-      $jobOutput = Receive-Job -Job $loginJob -Keep 2>&1
-      $qrMatch = ($jobOutput | Select-String -Pattern 'data:image/[a-z]+;base64,[A-Za-z0-9+/=]+' | Select-Object -First 1).Matches.Value
-      if ($qrMatch) {
-        try {
-          $headers2 = @{"Content-Type"="application/json"; "X-Tenant-Id"=$TENANT_ID; "X-Webhook-Secret"=$SECRET}
-          $body2 = @{ dataUrl = $qrMatch } | ConvertTo-Json
-          Invoke-WebRequest -Uri "$BACKEND_URL/api/setup/qr-push" -Method POST -Headers $headers2 -Body $body2 -UseBasicParsing -TimeoutSec 10 | Out-Null
-          Write-Host "  [+] QR cung da hien tren dashboard: $DASHBOARD_URL/dashboard/settings/channels" -ForegroundColor Green
-        } catch {}
-      }
-
-      Write-Host ""
-      Write-Host "  ==> Quet QR o BAT KY noi nao (cua so Photos hoac Web Dashboard)." -ForegroundColor Cyan
-      Write-Host "      Sau khi quet, listener tu nhan tin nhan trong vai giay." -ForegroundColor White
-      Write-Host ""
-
-      # Wait login complete (max 90s) then cleanup QR file
-      Wait-Job -Job $loginJob -Timeout 90 | Out-Null
-      Remove-Job -Job $loginJob -Force -ErrorAction SilentlyContinue
-      Remove-Item $qrPath -ErrorAction SilentlyContinue
-    } else {
-      Write-Host "  -> Mo dashboard: $DASHBOARD_URL/dashboard/settings/channels" -ForegroundColor White
-      Write-Host "  -> Bam nut [Ket noi lai] de hien QR" -ForegroundColor White
-    }
-  }
+  $h = @{"Content-Type"="application/json";"X-Tenant-Id"=$TENANT_ID;"X-Webhook-Secret"=$SECRET}
+  Invoke-WebRequest -Uri "$BACKEND_URL/api/setup/hook-test" -Method POST -Headers $h -Body '{}' -UseBasicParsing -TimeoutSec 10 | Out-Null
+  Write-Host ""
+  Write-Host "========================================" -ForegroundColor Green
+  Write-Host "  OK Hoan tat - Listener dang chay ngam" -ForegroundColor Green
+  Write-Host "  Mo dashboard: $DASHBOARD_URL/dashboard" -ForegroundColor White
+  Write-Host "========================================" -ForegroundColor Green
 } catch {
-  $status = $_.Exception.Response.StatusCode.value__
   Write-Host ""
   Write-Host "========================================" -ForegroundColor Red
-  if ($status -eq 401) {
-    Write-Host "  X That bai: Secret khong hop le (HTTP 401)" -ForegroundColor Red
-    Write-Host "    -> Lay lenh cai moi nhat tu dashboard roi chay lai." -ForegroundColor White
-  } else {
-    Write-Host "  X That bai: Khong ket noi duoc toi backend" -ForegroundColor Red
-    Write-Host "    -> Kiem tra firewall, domain, va backend co dang chay khong." -ForegroundColor White
-  }
+  Write-Host "  X That bai: Khong ket noi duoc toi backend" -ForegroundColor Red
   Write-Host "  $DASHBOARD_URL/dashboard/settings/channels" -ForegroundColor Cyan
   Write-Host "========================================" -ForegroundColor Red
   exit 1
