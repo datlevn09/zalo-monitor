@@ -908,16 +908,35 @@ $wrapperLines = @(
 Set-Content -Path $wrapperPath -Value ($wrapperLines -join "\`r\`n") -Encoding UTF8
 
 # [5/5] Login Zalo (TRUOC khi start service de tranh conflict)
-Write-Host "[5/5] Dang nhap Zalo de quet QR..." -ForegroundColor Yellow
-$openzcaExe = (Get-Command openzca -ErrorAction SilentlyContinue).Source
-if (-not $openzcaExe) {
-  $npmPrefix = (npm config get prefix 2>$null)
-  if ($npmPrefix) { $openzcaExe = Join-Path $npmPrefix 'openzca.cmd' }
+Write-Host "[5/5] Dang nhap Zalo (quet QR)..." -ForegroundColor Yellow
+
+# QUAN TRONG: phai dung openzca.cmd tren Windows. File 'openzca' (khong ext)
+# la PowerShell wrapper - Start-Process se mo Notepad thay vi chay.
+$openzcaExe = $null
+$npmPrefix = (npm config get prefix 2>$null)
+$cmdCandidates = @()
+if ($npmPrefix) {
+  $cmdCandidates += (Join-Path $npmPrefix 'openzca.cmd')
+  $cmdCandidates += (Join-Path $npmPrefix 'openzca.ps1')
+}
+$cmdCandidates += (Get-Command openzca.cmd -ErrorAction SilentlyContinue).Source
+$cmdCandidates += "$env:APPDATA\npm\openzca.cmd"
+foreach ($c in $cmdCandidates) {
+  if ($c -and (Test-Path $c)) { $openzcaExe = $c; break }
 }
 
 if ($openzcaExe -and (Test-Path $openzcaExe)) {
-  # Check if already logged in
-  $statusOut = & cmd /c "\`"$openzcaExe\`" --profile zalo-monitor auth status" 2>&1 | Out-String
+  Write-Host "  openzca: $openzcaExe" -ForegroundColor DarkGray
+
+  # Check da login chua: dung Start-Process voi timeout, tranh hang
+  $statusLog = Join-Path $LISTENER_DIR "status.log"
+  Remove-Item $statusLog -ErrorAction SilentlyContinue
+  $stProc = Start-Process -FilePath $openzcaExe -ArgumentList @('--profile','zalo-monitor','auth','status') -RedirectStandardOutput $statusLog -RedirectStandardError "NUL" -WindowStyle Hidden -PassThru
+  $stProc | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
+  if (-not $stProc.HasExited) { $stProc | Stop-Process -Force -ErrorAction SilentlyContinue }
+  $statusOut = if (Test-Path $statusLog) { Get-Content $statusLog -Raw } else { "" }
+  Remove-Item $statusLog -ErrorAction SilentlyContinue
+
   if ($statusOut -match 'loggedIn:\s*true') {
     Write-Host "  OK Profile 'zalo-monitor' da login truoc do" -ForegroundColor Green
   } else {
@@ -964,14 +983,19 @@ if ($openzcaExe -and (Test-Path $openzcaExe)) {
     Write-Host "      Mo Zalo dien thoai -> Cai dat -> Thiet bi da dang nhap -> Them thiet bi" -ForegroundColor White
     Write-Host ""
 
-    # Cho login complete: poll auth status moi 3s, max 90s
+    # Cho user quet QR (max 60s) - check process state thay vi spawn lai openzca
+    Write-Host -NoNewline "  Cho quet QR"
     $loginOk = $false
-    for ($i = 0; $i -lt 30; $i++) {
+    for ($i = 0; $i -lt 20; $i++) {
       Start-Sleep -Seconds 3
-      $st = & cmd /c "\`"$openzcaExe\`" --profile zalo-monitor auth status" 2>&1 | Out-String
-      if ($st -match 'loggedIn:\s*true') { $loginOk = $true; break }
-      Write-Host "  ... cho quet QR ($([int]($i*3))s/90s)" -ForegroundColor DarkGray
+      Write-Host -NoNewline "."
+      # openzca login process exit khi user quet xong (login complete) hoac timeout
+      if ($proc.HasExited) {
+        $loginOk = ($proc.ExitCode -eq 0)
+        break
+      }
     }
+    Write-Host ""
 
     # Cleanup
     if ($proc -and -not $proc.HasExited) { $proc | Stop-Process -Force -ErrorAction SilentlyContinue }
