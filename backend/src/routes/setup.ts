@@ -944,38 +944,38 @@ if ($openzcaExe -and (Test-Path $openzcaExe)) {
     $qrLog  = Join-Path $LISTENER_DIR "qr-login.log"
     Remove-Item $qrPath, $qrLog -ErrorAction SilentlyContinue
 
-    # Spawn openzca login -> redirect output to log file (KHONG dung Start-Job vi unreliable)
-    $loginArgs = @('--profile', 'zalo-monitor', 'auth', 'login', '--qr-base64', '--qr-path', $qrPath)
+    # QUAN TRONG: KHONG dung --qr-base64 vi flag nay exit ngay sau khi emit QR -
+    # credentials KHONG persist vao profile khi user quet xong. Dung --qr-path only
+    # (process se cho user quet roi luu credentials moi exit).
+    $loginArgs = @('--profile', 'zalo-monitor', 'auth', 'login', '--qr-path', $qrPath)
     $proc = Start-Process -FilePath $openzcaExe -ArgumentList $loginArgs -RedirectStandardOutput $qrLog -RedirectStandardError ($qrLog + '.err') -WindowStyle Hidden -PassThru
 
-    # Cho file QR / log xuat hien (max 30s)
+    # Cho file QR sinh ra (max 30s)
     $waited = 0
     while ($waited -lt 30) {
       Start-Sleep -Seconds 1; $waited++
-      if ((Test-Path $qrPath) -or (Test-Path $qrLog)) { break }
+      if (Test-Path $qrPath) { break }
     }
 
     # 1) Open file QR bang Photos viewer (Windows tu nhan)
     if (Test-Path $qrPath) {
       Start-Process $qrPath -ErrorAction SilentlyContinue
       Write-Host "  [+] Cua so QR da mo - quet bang Zalo dien thoai" -ForegroundColor Green
-    }
 
-    # 2) Push QR data URL len web UI
-    if (Test-Path $qrLog) {
-      Start-Sleep -Seconds 2  # cho openzca write xong
-      $logContent = Get-Content $qrLog -Raw -ErrorAction SilentlyContinue
-      if ($logContent -match '(data:image/[a-z]+;base64,[A-Za-z0-9+/=]+)') {
-        $qrDataUrl = $matches[1]
-        try {
-          $h = @{"Content-Type"="application/json"; "X-Tenant-Id"=$TENANT_ID; "X-Webhook-Secret"=$SECRET}
-          $b = @{ dataUrl = $qrDataUrl } | ConvertTo-Json
-          Invoke-WebRequest -Uri "$BACKEND_URL/api/setup/qr-push" -Method POST -Headers $h -Body $b -UseBasicParsing -TimeoutSec 10 | Out-Null
-          Write-Host "  [+] QR cung hien tren dashboard: $DASHBOARD_URL/dashboard/settings/channels" -ForegroundColor Green
-        } catch {
-          Write-Host "  WARN Khong push duoc QR len dashboard" -ForegroundColor Yellow
-        }
+      # 2) Doc file PNG -> base64 -> push len web UI (de ca 2 cho cung hien QR)
+      try {
+        $bytes = [System.IO.File]::ReadAllBytes($qrPath)
+        $b64 = [System.Convert]::ToBase64String($bytes)
+        $qrDataUrl = "data:image/png;base64,$b64"
+        $h = @{"Content-Type"="application/json"; "X-Tenant-Id"=$TENANT_ID; "X-Webhook-Secret"=$SECRET}
+        $b = @{ dataUrl = $qrDataUrl } | ConvertTo-Json
+        Invoke-WebRequest -Uri "$BACKEND_URL/api/setup/qr-push" -Method POST -Headers $h -Body $b -UseBasicParsing -TimeoutSec 10 | Out-Null
+        Write-Host "  [+] QR cung hien tren dashboard" -ForegroundColor Green
+      } catch {
+        Write-Host "  WARN Khong push duoc QR len dashboard ($_)" -ForegroundColor Yellow
       }
+    } else {
+      Write-Host "  WARN Khong sinh duoc file QR. Co the openzca crash." -ForegroundColor Yellow
     }
 
     Write-Host ""

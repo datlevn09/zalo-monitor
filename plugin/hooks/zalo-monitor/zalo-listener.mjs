@@ -37,16 +37,39 @@ if (!cfg.backendUrl || !cfg.secret || !cfg.tenantId) {
   process.exit(1)
 }
 
-// Tìm openzca binary
+// Tìm openzca binary — KHÁC giữa Windows (openzca.cmd) và POSIX (openzca)
 function findOpenzcaBin() {
   if (process.env.OPENZCA_BIN && fs.existsSync(process.env.OPENZCA_BIN)) return process.env.OPENZCA_BIN
-  for (const p of [
-    path.join(os.homedir(), '.npm-global/bin/openzca'),
-    '/usr/local/bin/openzca',
-    '/usr/bin/openzca',
-  ]) {
+
+  const isWin = process.platform === 'win32'
+  const candidates = []
+
+  if (isWin) {
+    // Windows: ưu tiên .cmd (raw 'openzca' file là PS wrapper, spawn ENOENT)
+    const appdata = process.env.APPDATA
+    if (appdata) {
+      candidates.push(path.join(appdata, 'npm', 'openzca.cmd'))
+      candidates.push(path.join(appdata, 'npm', 'openzca.exe'))
+    }
+    // PATH-based fallback (resolve qua execSync npm prefix)
+    try {
+      const { execSync } = require('node:child_process')
+      const prefix = execSync('npm config get prefix', { encoding: 'utf-8', timeout: 5000 }).trim()
+      if (prefix) {
+        candidates.push(path.join(prefix, 'openzca.cmd'))
+        candidates.push(path.join(prefix, 'openzca.exe'))
+      }
+    } catch { /* ignore */ }
+  } else {
+    candidates.push(path.join(os.homedir(), '.npm-global/bin/openzca'))
+    candidates.push('/usr/local/bin/openzca')
+    candidates.push('/usr/bin/openzca')
+  }
+
+  for (const p of candidates) {
     if (fs.existsSync(p)) return p
   }
+  // Fallback: dùng raw name + shell:true cho spawn Windows tự resolve PATHEXT
   return 'openzca'
 }
 
@@ -83,12 +106,22 @@ async function postMessage(payload) {
   }
 }
 
+// Windows .cmd cần shell:true để Node spawn được (batch file).
+// .cmd path có dấu cách → cần wrap trong quote khi shell:true.
+const IS_WIN = process.platform === 'win32'
+const SPAWN_OPTS_BASE = IS_WIN ? { shell: true, windowsHide: true } : {}
+
+function quoteWin(p) {
+  return IS_WIN && p.includes(' ') ? `"${p}"` : p
+}
+
 function startListener() {
   restartCount += 1
   console.log(`▶️  Spawn openzca listen (restart #${restartCount})`)
 
-  const proc = spawn(OPENZCA, ['--profile', cfg.profile, 'listen', '--raw', '--keep-alive'], {
+  const proc = spawn(quoteWin(OPENZCA), ['--profile', cfg.profile, 'listen', '--raw', '--keep-alive'], {
     stdio: ['ignore', 'pipe', 'inherit'],
+    ...SPAWN_OPTS_BASE,
   })
 
   let buf = ''
@@ -207,8 +240,8 @@ async function pollPendingActions() {
     for (const action of actions) {
       if (action === 'login_zalo') {
         console.log(`▶️ Action 'login_zalo' — exec openzca auth login --qr-base64`)
-        execFile(OPENZCA, ['--profile', cfg.profile, 'auth', 'login', '--qr-base64'],
-          { timeout: 90_000, env: { ...process.env, OPENZCA_QR_OPEN: '0' } },
+        execFile(quoteWin(OPENZCA), ['--profile', cfg.profile, 'auth', 'login', '--qr-base64'],
+          { timeout: 90_000, env: { ...process.env, OPENZCA_QR_OPEN: '0' }, ...SPAWN_OPTS_BASE },
           async (err, stdout) => {
             if (err) { console.error(`❌ openzca login: ${err.message}`); return }
             const m = (stdout || '').match(/data:image\/[a-z]+;base64,[A-Za-z0-9+/=]+/)
