@@ -104,7 +104,7 @@ export const groupRoutes: FastifyPluginAsync = async (app) => {
 
   // GET /api/groups/pins — get current user's pinned group IDs
   app.get('/pins', async (req, reply) => {
-    const userId = (req as any).user?.userId
+    const userId = req.authUser?.userId
     if (!userId) return reply.status(401).send({ error: 'Unauthorized' })
 
     const user = await db.user.findUnique({
@@ -116,7 +116,7 @@ export const groupRoutes: FastifyPluginAsync = async (app) => {
 
   // PUT /api/groups/pins — update user's pinned groups
   app.put('/pins', async (req, reply) => {
-    const userId = (req as any).user?.userId
+    const userId = req.authUser?.userId
     if (!userId) return reply.status(401).send({ error: 'Unauthorized' })
 
     const { groupIds } = req.body as { groupIds: string[] }
