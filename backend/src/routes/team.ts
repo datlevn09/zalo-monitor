@@ -43,10 +43,16 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
     if (existing) return reply.status(409).send({ error: 'Email đã tồn tại trong doanh nghiệp này' })
 
     const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { name: true } })
-    const inviteToken = randomBytes(32).toString('hex')
-    const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 ngày
 
-    // Random password — user sẽ set lại qua link, giá trị này không dùng được để login
+    // Email đã có account ở tenant KHÁC — copy passwordHash, KHÔNG cần đặt lại pass
+    const existingAnywhere = await db.user.findFirst({
+      where: { email: body.email },
+      select: { passwordHash: true, name: true }
+    })
+    const isReturningUser = !!existingAnywhere
+
+    const inviteToken = isReturningUser ? null : randomBytes(32).toString('hex')
+    const expires = isReturningUser ? null : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     const tempPass = randomBytes(16).toString('hex')
 
     const user = await db.user.create({
@@ -54,7 +60,8 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
         tenantId,
         name: body.name,
         email: body.email,
-        passwordHash: hashPassword(tempPass),
+        // Re-use passwordHash nếu user đã có account khác → login bằng pass cũ
+        passwordHash: existingAnywhere?.passwordHash ?? hashPassword(tempPass),
         role: body.role ?? 'STAFF',
         resetToken: inviteToken,
         resetTokenExpires: expires,
@@ -74,12 +81,43 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const base = process.env.DASHBOARD_URL ?? 'http://localhost:3000'
-    const inviteLink = `${base}/reset-password?token=${inviteToken}&invite=1`
+    const loginLink = `${base}/login`
+    const inviteLink = isReturningUser ? loginLink : `${base}/reset-password?token=${inviteToken}&invite=1`
 
-    await sendMail({
-      to: body.email,
-      subject: `[${tenant?.name ?? 'Zalo Monitor'}] Bạn được mời tham gia dashboard`,
-      text: `Xin chào ${body.name},
+    if (isReturningUser) {
+      // User đã có tài khoản → email thông báo, dùng mật khẩu cũ
+      await sendMail({
+        to: body.email,
+        subject: `[${tenant?.name ?? 'Zalo Monitor'}] Bạn được thêm vào team`,
+        text: `Xin chào ${body.name},
+
+Bạn vừa được thêm vào dashboard Zalo Monitor của ${tenant?.name ?? 'doanh nghiệp'} với vai trò ${body.role ?? 'STAFF'}.
+
+Đăng nhập bằng EMAIL và MẬT KHẨU HIỆN TẠI của bạn:
+
+${loginLink}
+
+Sau khi login, chọn doanh nghiệp "${tenant?.name ?? ''}" trong menu chuyển đổi để xem dashboard.
+
+— Zalo Monitor`,
+        html: `<p>Xin chào <b>${body.name}</b>,</p>
+<p>Bạn vừa được thêm vào dashboard <b>${tenant?.name ?? 'Zalo Monitor'}</b> với vai trò <code>${body.role ?? 'STAFF'}</code>.</p>
+<p style="background:#dbeafe;padding:10px 14px;border-radius:8px;color:#1e40af;">
+  ✓ Bạn đã có tài khoản — chỉ cần <b>đăng nhập bằng mật khẩu hiện tại</b>.
+</p>
+<p>
+  <a href="${loginLink}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:white;border-radius:12px;text-decoration:none;font-weight:600;">
+    Đăng nhập
+  </a>
+</p>
+<p style="color:#6b7280;font-size:12px;">Sau khi đăng nhập, chọn doanh nghiệp <b>${tenant?.name ?? ''}</b> trong menu chuyển đổi để xem dashboard.</p>`,
+      }).catch(err => req.log.error(err, 'Failed to send invite email'))
+    } else {
+      // User mới → cần đặt mật khẩu lần đầu
+      await sendMail({
+        to: body.email,
+        subject: `[${tenant?.name ?? 'Zalo Monitor'}] Bạn được mời tham gia dashboard`,
+        text: `Xin chào ${body.name},
 
 Bạn được mời tham gia dashboard Zalo Monitor của ${tenant?.name ?? 'doanh nghiệp'} với vai trò ${body.role ?? 'STAFF'}.
 
@@ -90,7 +128,7 @@ ${inviteLink}
 Link hết hạn sau 7 ngày.
 
 — Zalo Monitor`,
-      html: `<p>Xin chào <b>${body.name}</b>,</p>
+        html: `<p>Xin chào <b>${body.name}</b>,</p>
 <p>Bạn được mời tham gia dashboard <b>${tenant?.name ?? 'Zalo Monitor'}</b> với vai trò <code>${body.role ?? 'STAFF'}</code>.</p>
 <p>
   <a href="${inviteLink}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:white;border-radius:12px;text-decoration:none;font-weight:600;">
@@ -98,9 +136,10 @@ Link hết hạn sau 7 ngày.
   </a>
 </p>
 <p style="color:#6b7280;font-size:12px;">Link hết hạn sau 7 ngày.</p>`,
-    }).catch(err => req.log.error(err, 'Failed to send invite email'))
+      }).catch(err => req.log.error(err, 'Failed to send invite email'))
+    }
 
-    return { id: user.id, email: user.email, role: user.role, invited: true }
+    return { id: user.id, email: user.email, role: user.role, invited: true, returningUser: isReturningUser }
   })
 
   app.patch('/:id', async (req, reply) => {
