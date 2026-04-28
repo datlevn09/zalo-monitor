@@ -69,7 +69,7 @@ TMP_DIR="$(mktemp -d)"
 cd "$TMP_DIR"
 curl -fsSL "$BACKEND_URL/api/setup/hook-files/zalo-history-push.mjs" -o zalo-history-push.mjs
 
-BACKEND_URL="$BACKEND_URL" WEBHOOK_SECRET="$WEBHOOK_SECRET" TENANT_ID="$TENANT_ID" \
+BACKEND_URL="$BACKEND_URL" WEBHOOK_SECRET="$WEBHOOK_SECRET" TENANT_ID="$TENANT_ID" PROFILE="${PROFILE:-}" \
   node zalo-history-push.mjs
 
 cd - >/dev/null

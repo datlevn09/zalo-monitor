@@ -58,8 +58,9 @@ function LoginPageInner() {
       <div className="text-center mb-6">
         <img src="/logo.png" alt="Zalo Monitor" className="w-14 h-14 mx-auto mb-3 rounded-2xl shadow-lg shadow-blue-500/30" />
         <h1 className="text-xl font-bold text-gray-900 dark:text-zinc-100">
-          Đăng nhập <sup className="text-[10px] font-semibold text-blue-500 ml-0.5 align-top">Zalo Monitor beta</sup>
+          Zalo Monitor <sup className="text-[10px] font-semibold text-blue-500 ml-0.5 align-top">beta</sup>
         </h1>
+        <p className="text-sm text-gray-500 dark:text-zinc-400 mt-0.5">Đăng nhập</p>
         <p className="text-sm text-gray-500 dark:text-zinc-400 mt-0.5">Vào dashboard doanh nghiệp của bạn</p>
       </div>
 

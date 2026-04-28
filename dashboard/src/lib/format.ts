@@ -13,9 +13,15 @@ export const PRIORITY_CFG = {
   CRITICAL: { color: 'text-red-700 dark:text-red-400', label: 'Khẩn cấp', dot: 'bg-red-500' },
 } as const
 
+// Coi như "không có timestamp" nếu null/undefined hoặc là epoch 0 (1970)
+function isValidDate(d: Date): boolean {
+  return !isNaN(d.getTime()) && d.getFullYear() > 1971
+}
+
 export function formatRelative(dateStr: string | Date | null): string {
   if (!dateStr) return '—'
   const d = typeof dateStr === 'string' ? new Date(dateStr) : dateStr
+  if (!isValidDate(d)) return '—'
   const diff = Date.now() - d.getTime()
   const min = Math.floor(diff / 60_000)
   if (min < 1) return 'vừa xong'
@@ -30,11 +36,13 @@ export function formatRelative(dateStr: string | Date | null): string {
 export function formatTime(dateStr: string | Date | null): string {
   if (!dateStr) return '—'
   const d = typeof dateStr === 'string' ? new Date(dateStr) : dateStr
+  if (!isValidDate(d)) return '—'
   return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
 }
 
 export function formatDateTime(dateStr: string | Date | null): string {
   if (!dateStr) return '—'
   const d = typeof dateStr === 'string' ? new Date(dateStr) : dateStr
+  if (!isValidDate(d)) return '—'
   return d.toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
 }

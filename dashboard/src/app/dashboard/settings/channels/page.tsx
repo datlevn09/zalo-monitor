@@ -641,27 +641,52 @@ function ZaloChannelCard({
                     </p>
 
                     {/* 1 lệnh duy nhất: tự cài Node + openzca + better-sqlite3 + chạy import */}
-                    <p className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide mb-1.5">
-                      Chạy 1 lệnh duy nhất
-                    </p>
                     {pushConfig ? (
-                      <div className="relative">
-                        <pre className="bg-gray-900 dark:bg-black/40 text-green-400 text-[11px] font-mono rounded px-2.5 py-2 overflow-x-auto leading-relaxed whitespace-pre">
+                      <>
+                        {/* Mac/Linux */}
+                        <p className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide mb-1.5">
+                          🐧 Mac / Linux — Terminal
+                        </p>
+                        <div className="relative mb-3">
+                          <pre className="bg-gray-900 dark:bg-black/40 text-green-400 text-[11px] font-mono rounded px-2.5 py-2 overflow-x-auto leading-relaxed whitespace-pre">
 {`curl -fsSL ${pushConfig.backendUrl}/api/setup/hook-files/zalo-history-import.sh | \\
   BACKEND_URL=${pushConfig.backendUrl} \\
   WEBHOOK_SECRET=${pushConfig.webhookSecret} \\
   TENANT_ID=${pushConfig.tenantId} bash`}
-                        </pre>
-                        <button
-                          onClick={() => copyToClipboard(
-                            `curl -fsSL ${pushConfig.backendUrl}/api/setup/hook-files/zalo-history-import.sh | BACKEND_URL=${pushConfig.backendUrl} WEBHOOK_SECRET=${pushConfig.webhookSecret} TENANT_ID=${pushConfig.tenantId} bash`,
-                            'run'
-                          )}
-                          className="absolute top-2 right-2 px-2 py-1 text-[10px] font-medium text-gray-400 dark:text-zinc-400 bg-gray-700/50 hover:bg-gray-700 rounded transition-colors"
-                        >
-                          {copiedKey === 'run' ? '✓ Copied' : 'Copy'}
-                        </button>
-                      </div>
+                          </pre>
+                          <button
+                            onClick={() => copyToClipboard(
+                              `curl -fsSL ${pushConfig.backendUrl}/api/setup/hook-files/zalo-history-import.sh | BACKEND_URL=${pushConfig.backendUrl} WEBHOOK_SECRET=${pushConfig.webhookSecret} TENANT_ID=${pushConfig.tenantId} bash`,
+                              'run-sh'
+                            )}
+                            className="absolute top-2 right-2 px-2 py-1 text-[10px] font-medium text-gray-400 dark:text-zinc-400 bg-gray-700/50 hover:bg-gray-700 rounded transition-colors"
+                          >
+                            {copiedKey === 'run-sh' ? '✓ Copied' : 'Copy'}
+                          </button>
+                        </div>
+
+                        {/* Windows */}
+                        <p className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide mb-1.5">
+                          🪟 Windows — PowerShell (Run as Admin)
+                        </p>
+                        <div className="relative">
+                          <pre className="bg-gray-900 dark:bg-black/40 text-green-400 text-[11px] font-mono rounded px-2.5 py-2 overflow-x-auto leading-relaxed whitespace-pre">
+{`$env:BACKEND_URL='${pushConfig.backendUrl}'
+$env:WEBHOOK_SECRET='${pushConfig.webhookSecret}'
+$env:TENANT_ID='${pushConfig.tenantId}'
+iwr -useb "$env:BACKEND_URL/api/setup/hook-files/zalo-history-import.ps1" | iex`}
+                          </pre>
+                          <button
+                            onClick={() => copyToClipboard(
+                              `$env:BACKEND_URL='${pushConfig.backendUrl}'; $env:WEBHOOK_SECRET='${pushConfig.webhookSecret}'; $env:TENANT_ID='${pushConfig.tenantId}'; iwr -useb "$env:BACKEND_URL/api/setup/hook-files/zalo-history-import.ps1" | iex`,
+                              'run-ps'
+                            )}
+                            className="absolute top-2 right-2 px-2 py-1 text-[10px] font-medium text-gray-400 dark:text-zinc-400 bg-gray-700/50 hover:bg-gray-700 rounded transition-colors"
+                          >
+                            {copiedKey === 'run-ps' ? '✓ Copied' : 'Copy'}
+                          </button>
+                        </div>
+                      </>
                     ) : (
                       <div className="bg-gray-900 dark:bg-black/40 rounded px-2.5 py-2 flex items-center gap-2">
                         <span className="w-3 h-3 border-2 border-green-400 border-t-transparent rounded-full animate-spin shrink-0" />
@@ -676,7 +701,7 @@ function ZaloChannelCard({
                     )}
 
                     <p className="text-[11px] text-gray-400 dark:text-zinc-500 mt-2.5 leading-relaxed">
-                      Script tự cài Node.js + openzca nếu máy chưa có. Chạy 1 lần trên máy có Zalo PC App.
+                      Script tự cài Node.js + openzca nếu máy chưa có. Chạy 1 lần trên máy có Zalo PC App đã đăng nhập tài khoản đó.
                     </p>
                   </div>
                 </div>
@@ -965,13 +990,18 @@ function ComingSoonCard({ config }: { config: any }) {
 
 function ManualLoginFallback() {
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const cmd = 'openzca --profile zalo-monitor auth login'
+  const [copied, setCopied] = useState<'restart' | 'push' | null>(null)
 
-  function copyCmd() {
-    navigator.clipboard.writeText(cmd)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  // Lệnh 1: restart listener — kích lại login_zalo từ pending queue
+  const restartCmd = 'systemctl --user restart zalo-monitor-listener'
+
+  // Lệnh 2: push QR trực tiếp lên dashboard (tự đọc creds từ ~/.zalo-monitor/.env)
+  const pushCmd = `set -a; . ~/.zalo-monitor/.env; set +a; openzca --profile zalo-monitor auth login --qr-base64 2>&1 | grep -oE 'data:image/[a-z]+;base64,[A-Za-z0-9+/=]+' | head -1 | xargs -I{} curl -s -X POST "$BACKEND_URL/api/setup/qr-push" -H "content-type: application/json" -H "x-webhook-secret: $WEBHOOK_SECRET" -H "x-tenant-id: $TENANT_ID" -d '{"dataUrl":"{}"}'`
+
+  function copy(text: string, key: 'restart' | 'push') {
+    navigator.clipboard.writeText(text)
+    setCopied(key)
+    setTimeout(() => setCopied(null), 2000)
   }
 
   return (
@@ -985,20 +1015,36 @@ function ManualLoginFallback() {
         </button>
       </p>
       {showAdvanced && (
-        <div className="pt-2 border-t border-amber-200 dark:border-amber-500/30 space-y-2">
-          <p>SSH vào server đã cài listener, paste lệnh:</p>
-          <div className="flex items-center gap-2">
-            <code className="flex-1 bg-gray-900 text-green-400 text-[11px] font-mono px-2 py-1.5 rounded overflow-x-auto select-all">
-              {cmd}
-            </code>
-            <button
-              onClick={copyCmd}
-              className="px-2 py-1 text-[11px] font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded shrink-0"
-            >
-              {copied ? '✓' : 'Copy'}
-            </button>
+        <div className="pt-2 border-t border-amber-200 dark:border-amber-500/30 space-y-3">
+          <div className="space-y-1.5">
+            <p className="font-medium">Cách 1 — Restart listener (đơn giản):</p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 bg-gray-900 text-green-400 text-[11px] font-mono px-2 py-1.5 rounded overflow-x-auto select-all">
+                {restartCmd}
+              </code>
+              <button
+                onClick={() => copy(restartCmd, 'restart')}
+                className="px-2 py-1 text-[11px] font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded shrink-0"
+              >
+                {copied === 'restart' ? '✓' : 'Copy'}
+              </button>
+            </div>
           </div>
-          <p className="text-[11px] opacity-75">QR sẽ hiện trong terminal — quét bằng Zalo điện thoại.</p>
+          <div className="space-y-1.5">
+            <p className="font-medium">Cách 2 — Push QR thẳng về dashboard:</p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 bg-gray-900 text-green-400 text-[10px] font-mono px-2 py-1.5 rounded overflow-x-auto select-all whitespace-pre-wrap break-all">
+                {pushCmd}
+              </code>
+              <button
+                onClick={() => copy(pushCmd, 'push')}
+                className="px-2 py-1 text-[11px] font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded shrink-0"
+              >
+                {copied === 'push' ? '✓' : 'Copy'}
+              </button>
+            </div>
+            <p className="text-[11px] opacity-75">QR sẽ tự hiện trên dashboard sau ~5 giây.</p>
+          </div>
         </div>
       )}
     </div>

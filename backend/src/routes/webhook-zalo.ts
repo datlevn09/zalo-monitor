@@ -83,7 +83,10 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const isGroup = raw.chatType === 1 || raw.isGroup === true || String(threadId).startsWith('group:')
-    const cleanThreadId = String(threadId).replace(/^group:/, '')
+    // GIỮ prefix 'group:' trong externalId để KHÔNG collision giữa DM "123" và group "group:123"
+    // (Zalo có thể có cùng số ID cho DM và group khác nhau)
+    const fullExternalId = isGroup && !String(threadId).startsWith('group:') ? `group:${threadId}` : String(threadId)
+    const numericId = String(threadId).replace(/^group:/, '')
     const senderType: 'SELF' | 'CONTACT' = raw.isSelf || raw.senderType === 'SELF' ? 'SELF' : 'CONTACT'
 
     // Identify which user owns the OpenClaw (try to find by webhook secret)
@@ -101,24 +104,40 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
 
     // Auto-create group với monitor ON mặc định
     // (use case: tổng hợp tất cả nhóm Zalo admin có; user tắt từng nhóm nếu cần)
-    const group = await db.group.upsert({
-      where: {
-        tenantId_externalId_channelType: {
-          tenantId,
-          externalId: cleanThreadId,
-          channelType: 'ZALO',
-        },
-      },
-      update: {},
-      create: {
-        tenantId,
-        externalId: cleanThreadId,
-        channelType: 'ZALO',
-        name: raw.groupName ?? raw.threadName ?? raw.dName ?? raw.senderName ?? (isGroup ? `Nhóm ${cleanThreadId.slice(-6)}` : `DM ${cleanThreadId.slice(-6)}`),
-        monitorEnabled: true,
-        isDirect: !isGroup,
-      },
+    //
+    // Tên nhóm:
+    // - Group chat: chỉ dùng tên thật từ Zalo (groupName/threadName).
+    //   KHÔNG fallback dName/senderName vì đó là tên người gửi gần nhất, không phải tên nhóm.
+    // - DM 1-1: lấy tên người chat (dName/senderName).
+    const realGroupName = isGroup ? (raw.groupName ?? raw.threadName) : (raw.dName ?? raw.senderName)
+    const fallbackName = isGroup ? `Nhóm ${numericId.slice(-6)}` : `DM ${numericId.slice(-6)}`
+
+    // Tìm group hiện có; nếu name đang là fallback và webhook có name thật → update
+    const existing = await db.group.findUnique({
+      where: { tenantId_externalId_channelType: { tenantId, externalId: fullExternalId, channelType: 'ZALO' } },
+      select: { id: true, name: true },
     })
+
+    let group
+    if (existing) {
+      const looksLikeFallback = /^(Nhóm|DM) [0-9a-z]{4,8}$/.test(existing.name)
+      const shouldRename = looksLikeFallback && realGroupName && realGroupName !== existing.name
+      group = shouldRename
+        ? await db.group.update({ where: { id: existing.id }, data: { name: realGroupName } })
+        : await db.group.findUnique({ where: { id: existing.id } })
+    } else {
+      group = await db.group.create({
+        data: {
+          tenantId,
+          externalId: fullExternalId,
+          channelType: 'ZALO',
+          name: realGroupName ?? fallbackName,
+          monitorEnabled: true,
+          isDirect: !isGroup,
+        },
+      })
+    }
+    if (!group) return reply.status(500).send({ error: 'Failed to upsert group' })
 
     // Nếu user đã tắt monitor nhóm này → skip
     if (!group.monitorEnabled) {
@@ -167,7 +186,7 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
     }
 
     // Track which user monitors this group (for board scope)
-    if (userId && cleanThreadId) {
+    if (userId && fullExternalId) {
       await db.groupMonitor.upsert({
         where: { groupId_userId: { groupId: group.id, userId } },
         create: { groupId: group.id, userId, tenantId },

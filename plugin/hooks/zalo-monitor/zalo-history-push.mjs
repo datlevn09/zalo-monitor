@@ -125,11 +125,38 @@ function detectZaloSqlite() {
 }
 
 /**
+ * Resolve openzca profile to use:
+ *   1) env PROFILE nếu set + non-empty
+ *   2) auto-detect: chọn profile có loggedIn=true (ưu tiên default=true)
+ *   3) fallback 'default'
+ */
+let _resolvedProfile = null
+function resolveProfile() {
+  if (_resolvedProfile) return _resolvedProfile
+  if (process.env.PROFILE) { _resolvedProfile = process.env.PROFILE; return _resolvedProfile }
+  try {
+    const raw = execSync('openzca account list --json', { encoding: 'utf-8', timeout: 10_000 })
+    const accounts = JSON.parse(raw)
+    if (Array.isArray(accounts)) {
+      // Ưu tiên: loggedIn=true + default=true → chỉ loggedIn → default → first
+      const loggedDefault = accounts.find(a => a.loggedIn && a.default)
+      const logged = accounts.find(a => a.loggedIn)
+      const def = accounts.find(a => a.default)
+      const picked = loggedDefault || logged || def || accounts[0]
+      if (picked?.name) { _resolvedProfile = picked.name; return _resolvedProfile }
+    }
+  } catch { /* ignore — fallback below */ }
+  _resolvedProfile = 'default'
+  return _resolvedProfile
+}
+
+/**
  * Try to use openzca CLI to fetch groups.
  */
 function getGroupsViaOpenzca() {
   try {
-    const cmd = 'openzca group list --json'
+    const profile = resolveProfile()
+    const cmd = `openzca --profile ${profile} group list --json`
     const raw = execSync(cmd, { encoding: 'utf-8', timeout: 30_000 })
     const parsed = JSON.parse(raw)
     if (Array.isArray(parsed)) return parsed
@@ -146,7 +173,8 @@ function getGroupsViaOpenzca() {
  */
 function getMessagesViaOpenzca(groupExternalId) {
   try {
-    const cmd = `openzca msg recent -g -n ${config.limit} --json ${groupExternalId}`
+    const profile = resolveProfile()
+    const cmd = `openzca --profile ${profile} msg recent -g -n ${config.limit} --json ${groupExternalId}`
     const raw = execSync(cmd, { encoding: 'utf-8', timeout: 60_000, maxBuffer: 50 * 1024 * 1024 })
     const parsed = JSON.parse(raw)
     if (Array.isArray(parsed)) return parsed

@@ -144,11 +144,11 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
       webhookUrl,
       tenantId,
       userId: userId ?? null,
-      // Chạy trực tiếp trên máy cài OpenClaw (host mode)
+      // Linux/Mac: chạy trực tiếp, script tự cài Node + openzca + listener service
       oneLineCommand: `curl -fsSL "${backendUrl}/api/setup/inject.sh?${qs}" | bash`,
-      // OpenClaw chạy trong Docker — exec vào container openclaw
-      dockerCommand: `docker exec openclaw bash -c 'curl -fsSL "${backendUrl}/api/setup/inject.sh?${qs}" | bash'`,
-      // Windows PowerShell
+      // Docker: chạy listener trong container node:22-alpine, host network để dễ login Zalo qua QR
+      dockerCommand: `docker run -d --name zalo-monitor-listener --restart unless-stopped --network host -v zalo-monitor-data:/root/.zalo-monitor -e BACKEND_URL='${backendUrl}' node:22-alpine sh -c "apk add --no-cache curl bash && curl -fsSL '${backendUrl}/api/setup/inject.sh?${qs}' | bash"`,
+      // Windows PowerShell (Run as Administrator)
       windowsCommand: `iwr -useb "${backendUrl}/api/setup/inject.ps1?${qs}" | iex`,
       admin: {
         name: process.env.ADMIN_NAME ?? 'Support',
@@ -206,7 +206,7 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     const dashboardUrl = (process.env.DASHBOARD_URL ?? process.env.PUBLIC_DASHBOARD_URL ?? '')
       .replace(/\/$/, '') || backendUrl.replace(/^https?:\/\/api\./, 'https://')
     reply.header('Content-Type', 'text/plain')
-    return generateOpenClawHookInstaller(backendUrl, dashboardUrl, secret, tenantId, displayName)
+    return generateLinuxInstaller(backendUrl, dashboardUrl, secret, tenantId, displayName)
   })
 
   // Windows PowerShell installer
@@ -258,7 +258,7 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     const { file } = req.params as { file: string }
     const path = await import('path')
     const fs = await import('fs')
-    const allowlist = new Set(['HOOK.md', 'handler.ts', 'zalo-history-push.mjs', 'zalo-listener.mjs', 'zalo-history-import.sh'])
+    const allowlist = new Set(['HOOK.md', 'handler.ts', 'zalo-history-push.mjs', 'zalo-listener.mjs', 'zalo-history-import.sh', 'zalo-history-import.ps1'])
     if (!allowlist.has(file)) return reply.status(404).send({ error: 'Not found' })
 
     // Thử nhiều vị trí có thể chứa plugin hook (dev / docker / prod)
@@ -696,8 +696,8 @@ function generateWindowsHookInstaller(
   tenantId: string,
   displayName: string,
 ): string {
-  return `# Zalo Monitor Hook Installer for Windows (PowerShell)
-# Run: iwr -useb "${backendUrl}/api/setup/inject.ps1?tenantId=${tenantId}" | iex
+  return `# Zalo Monitor Listener Installer for Windows (PowerShell)
+# Run as Administrator: iwr -useb "${backendUrl}/api/setup/inject.ps1?tenantId=${tenantId}" | iex
 $ErrorActionPreference = "Stop"
 $BACKEND_URL = "${backendUrl}"
 $TENANT_ID   = "${tenantId}"
@@ -707,7 +707,7 @@ $DASHBOARD_URL = "${dashboardUrl}"
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  Zalo Monitor Hook Installer (Windows)" -ForegroundColor Cyan
+Write-Host "  Zalo Monitor Listener Installer (Windows)" -ForegroundColor Cyan
 Write-Host "  Tenant : $DISPLAY_NAME" -ForegroundColor White
 Write-Host "  Backend: $BACKEND_URL" -ForegroundColor White
 Write-Host "========================================" -ForegroundColor Cyan
@@ -717,263 +717,112 @@ Write-Host ""
 Write-Host "[1/5] Kiem tra Node.js..." -ForegroundColor Yellow
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   Write-Host "  Node.js chua cai. Dang tu dong cai dat..." -ForegroundColor Yellow
-  $node_ok = $false
-  # Try winget (Windows 10 1709+)
   if (Get-Command winget -ErrorAction SilentlyContinue) {
-    Write-Host "  Dang cai qua winget (vui long doi ~60 giay)..." -ForegroundColor White
     winget install OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements 2>&1 | Out-Null
-    # Refresh PATH
     $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
-    if (Get-Command node -ErrorAction SilentlyContinue) { $node_ok = $true }
   }
-  if (-not $node_ok) {
-    Write-Host "  Khong the tu dong cai Node.js. Tai tai: https://nodejs.org" -ForegroundColor Red
-    Write-Host "  Sau khi cai xong, khoi dong lai PowerShell roi chay lai lenh nay." -ForegroundColor White
+  if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+    Write-Host "  Khong cai duoc Node tu dong. Tai tai: https://nodejs.org" -ForegroundColor Red
+    Write-Host "  Sau khi cai xong, mo PowerShell moi va chay lai lenh nay." -ForegroundColor White
     exit 1
   }
-  Write-Host "  OK Node.js da cai xong" -ForegroundColor Green
 }
 Write-Host "  OK Node.js $(node --version)" -ForegroundColor Green
 
-# [2/5] Check / install OpenClaw
-Write-Host "[2/5] Kiem tra OpenClaw..." -ForegroundColor Yellow
-$openclaw_dir = $null
-
-# Scan common install paths first
-$oc_candidates = @(
-  (Join-Path $env:USERPROFILE ".openclaw"),
-  (Join-Path $env:APPDATA "openclaw"),
-  "C:\\openclaw\\.openclaw",
-  "C:\\Program Files\\openclaw\\.openclaw",
-  "C:\\Program Files (x86)\\openclaw\\.openclaw"
-)
-foreach ($c in $oc_candidates) {
-  if ($c -and (Test-Path $c)) { $openclaw_dir = $c; break }
-}
-
-if (-not $openclaw_dir) {
-  Write-Host "  Chua tim thay thu muc OpenClaw." -ForegroundColor Yellow
-  Write-Host "  OpenClaw la nen tang chay hook Zalo Monitor (cau noi doc va forward tin Zalo)." -ForegroundColor White
-  Write-Host ""
-  $install_oc = Read-Host "  Cai OpenClaw ngay tren may nay? [Y/n]"
-  if ($install_oc -ne 'n' -and $install_oc -ne 'N') {
-    Write-Host "  Dang cai openclaw (vui long doi ~60 giay)..." -ForegroundColor White
-    npm install -g "openclaw" 2>&1
-    Write-Host "  Dang khoi tao config..." -ForegroundColor White
-    try { openclaw init --yes 2>&1 | Out-Null } catch {}
-    # Refresh PATH
-    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
-    foreach ($c in @((Join-Path $env:USERPROFILE ".openclaw"), (Join-Path $env:APPDATA "openclaw"))) {
-      if ($c -and (Test-Path $c)) { $openclaw_dir = $c; break }
-    }
-    if (-not $openclaw_dir) {
-      Write-Host "  Cai xong nhung khong tim thay config. Thu chay: openclaw init" -ForegroundColor Red; exit 1
-    }
-    Write-Host "  OK Cai xong: $openclaw_dir" -ForegroundColor Green
-  } else {
-    Write-Host "  Tim kiem them tren may..." -ForegroundColor White
-    # Deeper scan: all user profile dirs
-    $user_roots = @($env:USERPROFILE, $env:APPDATA, $env:LOCALAPPDATA) | Where-Object { $_ }
-    foreach ($root in $user_roots) {
-      $p = Join-Path $root ".openclaw"
-      if (Test-Path $p) { $openclaw_dir = $p; break }
-    }
-    if (-not $openclaw_dir) {
-      Write-Host ""
-      $manual = Read-Host "  Nhap duong dan thu muc .openclaw (Enter de bo qua)"
-      if ($manual -and (Test-Path $manual)) {
-        $openclaw_dir = $manual
-        Write-Host "  OK Dung: $openclaw_dir" -ForegroundColor Green
-      } else {
-        Write-Host "  Cai thu cong: npm install -g openclaw && openclaw onboard --install-daemon" -ForegroundColor Yellow
-        Write-Host "  Huong dan: $DASHBOARD_URL/docs/install-zalo" -ForegroundColor Cyan
-        exit 0
-      }
-    } else {
-      Write-Host "  OK Tim thay: $openclaw_dir" -ForegroundColor Green
-    }
+# [2/5] Cai openzca CLI (npm install -g openzca)
+Write-Host "[2/5] Kiem tra openzca..." -ForegroundColor Yellow
+if (-not (Get-Command openzca -ErrorAction SilentlyContinue)) {
+  Write-Host "  Dang cai openzca..." -ForegroundColor White
+  npm install -g openzca 2>&1 | Out-Null
+  $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+  if (-not (Get-Command openzca -ErrorAction SilentlyContinue)) {
+    Write-Host "  Cai openzca that bai. Thu thu cong: npm install -g openzca" -ForegroundColor Red
+    exit 1
   }
 }
-Write-Host "  OK OpenClaw: $openclaw_dir" -ForegroundColor Green
+Write-Host "  OK openzca da san sang" -ForegroundColor Green
 
-try {
-  $zalo_info = & openzca --profile default auth status 2>&1
-  Write-Host "  Zalo: $zalo_info" -ForegroundColor Green
-} catch {
-  Write-Host "  Zalo: chua dang nhap (se hien QR sau khi cai)" -ForegroundColor Yellow
+# [3/5] Tai zalo-listener.mjs vao %USERPROFILE%\.zalo-monitor
+Write-Host "[3/5] Tai zalo-listener.mjs..." -ForegroundColor Yellow
+$LISTENER_DIR = Join-Path $env:USERPROFILE ".zalo-monitor"
+New-Item -ItemType Directory -Force -Path $LISTENER_DIR | Out-Null
+$listenerPath = Join-Path $LISTENER_DIR "zalo-listener.mjs"
+Invoke-WebRequest -Uri "$BACKEND_URL/api/setup/hook-files/zalo-listener.mjs" -OutFile $listenerPath -UseBasicParsing
+Write-Host "  OK $listenerPath" -ForegroundColor Green
+
+# [4/5] Ghi .env + tao Scheduled Task chay listener khi logon
+Write-Host "[4/5] Cau hinh listener service..." -ForegroundColor Yellow
+$envPath = Join-Path $LISTENER_DIR ".env"
+$envContent = "BACKEND_URL=$BACKEND_URL\`r\`nWEBHOOK_SECRET=$SECRET\`r\`nTENANT_ID=$TENANT_ID\`r\`nPROFILE=zalo-monitor"
+Set-Content -Path $envPath -Value $envContent -Encoding UTF8 -NoNewline
+Write-Host "  OK .env: $envPath" -ForegroundColor Green
+
+# Wrapper script load .env roi exec node
+$wrapperPath = Join-Path $LISTENER_DIR "run-listener.ps1"
+$wrapperContent = @"
+\\$ErrorActionPreference = 'Continue'
+Get-Content '$envPath' | ForEach-Object {
+  if (\\$_ -match '^([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable(\\$matches[1], \\$matches[2], 'Process') }
 }
+& node '$listenerPath'
+"@
+Set-Content -Path $wrapperPath -Value $wrapperContent -Encoding UTF8
 
-# [3/5] Download hook files
-Write-Host "[3/5] Tai hook files..." -ForegroundColor Yellow
-$hook_dir = Join-Path $openclaw_dir "hooks" | Join-Path -ChildPath "zalo-monitor"
-New-Item -ItemType Directory -Force -Path $hook_dir | Out-Null
-foreach ($f in @("HOOK.md","handler.ts")) {
-  Invoke-WebRequest -Uri "$BACKEND_URL/api/setup/hook-files/$f" -OutFile (Join-Path $hook_dir $f) -UseBasicParsing
-  Write-Host "  OK $f" -ForegroundColor Green
-}
-
-# [4/5] Write config
-Write-Host "[4/5] Ghi config..." -ForegroundColor Yellow
-$env_file = Join-Path $hook_dir ".env"
-Set-Content -Path $env_file -Value "BACKEND_URL=$BACKEND_URL\`nWEBHOOK_SECRET=$SECRET\`nTENANT_ID=$TENANT_ID" -Encoding UTF8
-Write-Host "  OK .env da ghi: $env_file" -ForegroundColor Green
-
-try {
-  & openclaw hooks enable zalo-monitor 2>&1 | Out-Null
-  Write-Host "  OK Hook enabled" -ForegroundColor Green
-} catch {
-  Write-Host "  Hook se tu load khi OpenClaw khoi dong lai" -ForegroundColor Yellow
-}
-
-# [4.5] Kiem tra / khoi dong OpenClaw gateway — SAU KHI hook files da co mat
-Write-Host ""
-Write-Host "[4.5] Kiem tra OpenClaw gateway..." -ForegroundColor Yellow
-$gateway_running = $false
-try {
-  $r = Invoke-WebRequest "http://localhost:18789/__openclaw__/canvas/" -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
-  $gateway_running = $true
-} catch {}
-if (-not $gateway_running) {
-  $gateway_running = [bool](Get-Process -Name "openclaw","node" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*openclaw*" })
-}
-
-if (Get-Command openclaw -ErrorAction SilentlyContinue) {
-  if ($gateway_running) {
-    Write-Host "  Gateway dang chay — restart de load hook moi..." -ForegroundColor White
-    # Try service restart
-    $svc = Get-Service -Name "openclaw" -ErrorAction SilentlyContinue
-    if ($svc) {
-      Restart-Service -Name "openclaw" -Force 2>&1 | Out-Null
-      Write-Host "  OK Gateway restarted (Windows Service)" -ForegroundColor Green
-    } else {
-      # Fallback: kill and restart via onboard
-      Get-Process -Name "node" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*openclaw*" } | Stop-Process -Force -ErrorAction SilentlyContinue
-      Start-Sleep -Seconds 2
-      $daemon_job = Start-Job { openclaw onboard --install-daemon 2>&1 }
-      Wait-Job $daemon_job -Timeout 30 | Out-Null
-      Remove-Job $daemon_job -Force 2>&1 | Out-Null
-      Write-Host "  OK Gateway restarted" -ForegroundColor Green
-    }
-  } else {
-    Write-Host "  Khoi dong OpenClaw daemon..." -ForegroundColor White
-    Write-Host "  (Lenh: openclaw onboard --install-daemon)" -ForegroundColor Gray
-    $daemon_job = Start-Job { openclaw onboard --install-daemon 2>&1 }
-    if (Wait-Job $daemon_job -Timeout 60) {
-      Write-Host "  OK OpenClaw daemon da chay — hook duoc load tu dong" -ForegroundColor Green
-    } else {
-      Stop-Job $daemon_job
-      Write-Host "  Khong tu khoi dong duoc. Chay thu cong:" -ForegroundColor Yellow
-      Write-Host ""
-      Write-Host "     openclaw onboard --install-daemon" -ForegroundColor Cyan
-      Write-Host ""
-      Write-Host "  Huong dan: https://docs.openclaw.ai/start/getting-started" -ForegroundColor White
-      Write-Host ""
-    }
-    Remove-Job $daemon_job -Force 2>&1 | Out-Null
-  }
+# Tao Scheduled Task chay khi user login (auto restart neu crash)
+$taskName = "ZaloMonitorListener"
+schtasks /Delete /TN $taskName /F 2>&1 | Out-Null
+$action = "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File \\"$wrapperPath\\""
+schtasks /Create /TN $taskName /TR $action /SC ONLOGON /RL HIGHEST /F 2>&1 | Out-Null
+schtasks /Run /TN $taskName 2>&1 | Out-Null
+if ($LASTEXITCODE -eq 0) {
+  Write-Host "  OK Scheduled Task '$taskName' da chay (auto-start khi logon)" -ForegroundColor Green
 } else {
-  Write-Host "  Lenh openclaw chua co trong PATH. Chay thu cong:" -ForegroundColor Yellow
-  Write-Host ""
-  Write-Host "     openclaw onboard --install-daemon" -ForegroundColor Cyan
-  Write-Host ""
-  Write-Host "  Huong dan: https://docs.openclaw.ai/start/getting-started" -ForegroundColor White
-  Write-Host ""
+  Write-Host "  WARN Khong tao duoc Scheduled Task. Chay thu cong:" -ForegroundColor Yellow
+  Write-Host "    powershell -File '$wrapperPath'" -ForegroundColor White
 }
 
-# [5/5] Test connection
-Write-Host "[5/5] Kiem tra ket noi toi backend... (toi da 10 giay)" -ForegroundColor Yellow
+# [5/5] Test ket noi
+Write-Host "[5/5] Kiem tra ket noi toi backend..." -ForegroundColor Yellow
 try {
   $headers = @{"Content-Type"="application/json";"X-Tenant-Id"=$TENANT_ID;"X-Webhook-Secret"=$SECRET}
   $resp = Invoke-WebRequest -Uri "$BACKEND_URL/api/setup/hook-test" -Method POST -Headers $headers -Body '{}' -UseBasicParsing -TimeoutSec 10
   if ($resp.StatusCode -eq 200) {
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Green
-    Write-Host "  OK Hook da cai va ket noi voi dashboard" -ForegroundColor Green
-    Write-Host ""
-
-    # Check Zalo login
-    $logged_in = $false
-    try { & openzca --profile default auth status 2>&1 | Out-Null; if ($LASTEXITCODE -eq 0) { $logged_in = $true } } catch {}
-
-    if ($logged_in) {
-      Write-Host "  OK Zalo da dang nhap - san sang theo doi nhom!" -ForegroundColor Green
-      Write-Host ""
-      Write-Host "  Mo dashboard:" -ForegroundColor Cyan
-      Write-Host "  $DASHBOARD_URL/dashboard" -ForegroundColor White
-    } else {
-      Write-Host "  [!] Buoc cuoi: Dang nhap Zalo (quet QR)" -ForegroundColor Yellow
-      Write-Host ""
-      Write-Host "  +------------------------------------------+" -ForegroundColor Cyan
-      Write-Host "  |  Mo san Zalo tren dien thoai truoc khi   |" -ForegroundColor Cyan
-      Write-Host "  |  nhan Y -- QR chi hieu luc ~60 giay      |" -ForegroundColor Cyan
-      Write-Host "  +------------------------------------------+" -ForegroundColor Cyan
-      Write-Host ""
-      $qr_confirm = Read-Host "  Da mo Zalo tren dien thoai, san sang quet? [Y/n]"
-      if ($qr_confirm -eq 'n' -or $qr_confirm -eq 'N') {
-        Write-Host ""
-        Write-Host "  OK - mo Zalo roi vao day de quet:" -ForegroundColor White
-        Write-Host "  $DASHBOARD_URL/dashboard/settings/channels" -ForegroundColor Cyan
-      } else {
-      Write-Host ""
-      Write-Host "  Dang chuan bi QR..." -ForegroundColor White
-      # Look for QR file
-      $qr_paths = @(
-        "$env:USERPROFILE\\qr.png",
-        (Join-Path $env:USERPROFILE ".openclaw\\qr.png"),
-        "$env:APPDATA\\openclaw\\qr.png"
-      )
-      $qr_found = $false
-      foreach ($qr in $qr_paths) {
-        if (Test-Path $qr) {
-          Write-Host "  Tim thay QR: $qr" -ForegroundColor Green
-          Write-Host "  Dang mo anh QR..." -ForegroundColor White
-          Start-Process $qr
-          $qr_found = $true
-          break
-        }
-      }
-      if (-not $qr_found) {
-        Write-Host "  Cach 1 - Mo OpenClaw Canvas de quet QR:" -ForegroundColor White
-        Write-Host "  http://localhost:18789/__openclaw__/canvas/" -ForegroundColor Cyan
-        $open_browser = Read-Host "  Mo ngay trong trinh duyet? (Y/n)"
-        if ($open_browser -ne 'n' -and $open_browser -ne 'N') {
-          Start-Process "http://localhost:18789/__openclaw__/canvas/"
-        }
-        Write-Host ""
-        Write-Host "  Cach 2 - Quet qua dashboard:" -ForegroundColor White
-        Write-Host "  $DASHBOARD_URL/dashboard/settings/channels" -ForegroundColor Cyan
-      }
-      Write-Host ""
-      Write-Host "  Sau khi quet: dashboard tu cap nhat OK" -ForegroundColor Yellow
-      } # end qr_confirm check
-    }
+    Write-Host "  OK Listener da cai va ket noi voi dashboard" -ForegroundColor Green
     Write-Host "========================================" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "  Buoc tiep: Dang nhap Zalo (quet QR)" -ForegroundColor Cyan
+    Write-Host "  -> Mo dashboard: $DASHBOARD_URL/dashboard/settings/channels" -ForegroundColor White
+    Write-Host "  -> Bam nut [Ket noi lai] de hien QR" -ForegroundColor White
+    Write-Host "  -> Quet QR bang Zalo dien thoai (Them thiet bi)" -ForegroundColor White
+    Write-Host ""
   }
 } catch {
   $status = $_.Exception.Response.StatusCode.value__
   Write-Host ""
   Write-Host "========================================" -ForegroundColor Red
   if ($status -eq 401) {
-    Write-Host "  X Buoc 5 that bai: Secret khong hop le (HTTP 401)" -ForegroundColor Red
-    Write-Host "    -> Lay lai lenh cai moi nhat tu dashboard roi chay lai." -ForegroundColor White
+    Write-Host "  X That bai: Secret khong hop le (HTTP 401)" -ForegroundColor Red
+    Write-Host "    -> Lay lenh cai moi nhat tu dashboard roi chay lai." -ForegroundColor White
   } else {
-    Write-Host "  X Buoc 5 that bai: Khong ket noi duoc toi backend" -ForegroundColor Red
+    Write-Host "  X That bai: Khong ket noi duoc toi backend" -ForegroundColor Red
     Write-Host "    -> Kiem tra firewall, domain, va backend co dang chay khong." -ForegroundColor White
   }
   Write-Host "  $DASHBOARD_URL/dashboard/settings/channels" -ForegroundColor Cyan
   Write-Host "========================================" -ForegroundColor Red
   exit 1
 }
-Write-Host ""
 `
 }
 
-function generateOpenClawHookInstaller(backendUrl: string, dashboardUrl: string, secret: string, tenantId: string, tenantName: string) {
+function generateLinuxInstaller(backendUrl: string, dashboardUrl: string, secret: string, tenantId: string, tenantName: string) {
   // Escape single quotes cho an toàn khi nhúng vào bash literals
   const safeTenantName = tenantName.replace(/'/g, "'\\''")
   return `#!/bin/bash
-# Zalo Monitor — OpenClaw Hook Installer
+# Zalo Monitor — Listener Installer (Linux/Mac)
 # Tenant: ${safeTenantName}
+# Cài Node + openzca + zalo-listener.mjs + systemd user service
 set -euo pipefail
 
 TENANT_ID="${tenantId}"
@@ -989,214 +838,41 @@ echo "  Backend: $BACKEND_URL"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-# ── Bước 1/5: Kiểm tra phụ thuộc ────────────────
-echo "[1/5] Kiểm tra phụ thuộc..."
-for cmd in curl; do
-  command -v "$cmd" >/dev/null 2>&1 || { echo "  ❌ Thiếu lệnh: $cmd"; exit 1; }
-done
-echo "  ✅ OK"
-
-# ── Bước 2/5: Kiểm tra & cài OpenClaw ───────────
-echo "[2/5] Kiểm tra OpenClaw..."
-
-# Nếu có OPENCLAW_DIR từ env thì dùng luôn
-OPENCLAW_DIR="\${OPENCLAW_DIR:-}"
-
-# (không gọi openclaw CLI để detect path — lệnh không chuẩn, dễ hang)
-
-if [ -z "$OPENCLAW_DIR" ]; then
-  # Quét các vị trí phổ biến + tất cả home dirs
-  CANDIDATES=(
-    "$HOME/.openclaw"
-    "/root/.openclaw"
-    "/home/openclaw/.openclaw"
-    "/opt/openclaw/.openclaw"
-    "/var/lib/openclaw/.openclaw"
-  )
-  # Thêm tất cả user home dirs trên hệ thống
-  while IFS=: read -r _ _ _ _ _ homedir _; do
-    [ -d "\${homedir:-}/.openclaw" ] && CANDIDATES+=("$homedir/.openclaw")
-  done < /etc/passwd 2>/dev/null || true
-
-  for dir in "\${CANDIDATES[@]}"; do
-    if [ -d "\${dir:-}" ]; then OPENCLAW_DIR="$dir"; break; fi
-  done
-fi
-
-if [ -z "$OPENCLAW_DIR" ]; then
-  echo "  ⚠️  Không tìm thấy OpenClaw trên máy này."
-  echo ""
-
-  if command -v npm >/dev/null 2>&1; then
-    echo "  ℹ️  OpenClaw là nền tảng chạy hook Zalo Monitor (cầu nối đọc & forward tin nhắn từ Zalo)."
-    printf "  ❓ Cài OpenClaw ngay trên máy này không? [Y/n] "
-    read -r CONFIRM_INSTALL </dev/tty
-    if [ "\${CONFIRM_INSTALL,,}" != "n" ] && [ "\${CONFIRM_INSTALL,,}" != "no" ]; then
-      echo "  📥 Đang cài OpenClaw (vui lòng đợi ~60 giây)..."
-      npm install -g openclaw
-      echo "  🔧 Đang khởi tạo config..."
-      openclaw init --yes 2>/dev/null || true
-      for dir in "$HOME/.openclaw" "/root/.openclaw"; do
-        [ -d "$dir" ] && { OPENCLAW_DIR="$dir"; break; }
-      done
-      if [ -n "$OPENCLAW_DIR" ]; then
-        echo "  ✅ Cài xong: $OPENCLAW_DIR"
-      else
-        echo "  ❌ Cài xong nhưng không tìm thấy config. Thử chạy: openclaw init"
-        exit 1
-      fi
-    else
-      echo ""
-      echo "  Nếu OpenClaw đã cài ở chỗ khác, nhập đường dẫn thư mục .openclaw:"
-      echo "     (Ví dụ: /home/myuser/.openclaw — Enter để thoát)"
-      printf "  Đường dẫn: "
-      read -r MANUAL_DIR </dev/tty
-      if [ -n "$MANUAL_DIR" ] && [ -d "$MANUAL_DIR" ]; then
-        OPENCLAW_DIR="$MANUAL_DIR"
-        echo "  ✅ Dùng: $OPENCLAW_DIR"
-      else
-        echo ""
-        echo "  Cài thủ công rồi chạy lại script này:"
-        echo "     npm install -g openclaw && openclaw onboard --install-daemon"
-        echo "  Hướng dẫn: $DASHBOARD_URL/docs/install-zalo"
-        exit 0
-      fi
-    fi
-  else
-    echo "  Cài Node.js + OpenClaw rồi chạy lại:"
-    echo "     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -"
-    echo "     sudo apt install -y nodejs"
-    echo "     npm install -g openclaw && openclaw onboard --install-daemon"
-    echo "  Hướng dẫn: $DASHBOARD_URL/docs/install-zalo"
-    exit 0
+# ── Bước 1/5: Cài Node + npm nếu chưa có ────────
+echo "[1/5] Kiểm tra Node.js..."
+if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+  echo "  ⚠️  Node.js chưa có, đang tự cài..."
+  if command -v apt-get >/dev/null 2>&1; then
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - >/dev/null 2>&1 || true
+    sudo apt-get install -y nodejs >/dev/null 2>&1 || true
+  elif command -v yum >/dev/null 2>&1; then
+    curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash - >/dev/null 2>&1 || true
+    sudo yum install -y nodejs >/dev/null 2>&1 || true
+  elif command -v apk >/dev/null 2>&1; then
+    apk add --no-cache nodejs npm >/dev/null 2>&1 || sudo apk add --no-cache nodejs npm >/dev/null 2>&1 || true
+  elif command -v brew >/dev/null 2>&1; then
+    brew install node >/dev/null 2>&1 || true
+  fi
+  if ! command -v node >/dev/null 2>&1; then
+    echo "  ❌ Không tự cài Node được. Cài thủ công: https://nodejs.org rồi chạy lại."
+    exit 1
   fi
 fi
-echo "  ✅ OpenClaw: $OPENCLAW_DIR"
+echo "  ✅ node $(node -v), npm $(npm -v)"
 
-# ⚠️  Docker warning
-if [ -f /proc/1/cgroup ] && grep -q "docker\\|containerd\\|kubepods" /proc/1/cgroup 2>/dev/null; then
-  if ! mount | grep -q "$OPENCLAW_DIR" 2>/dev/null; then
-    echo "  ⚠️  Đang chạy trong Docker — hook sẽ MẤT khi recreate nếu chưa mount volume."
-  fi
+# ── Bước 2/5: Cài openzca CLI (nếu chưa có) ─────
+echo "[2/5] Kiểm tra openzca..."
+if ! command -v openzca >/dev/null 2>&1; then
+  echo "  📥 Đang cài openzca (npm install -g openzca)..."
+  npm install -g openzca >/dev/null 2>&1 || sudo npm install -g openzca >/dev/null 2>&1 || {
+    echo "  ❌ Cài openzca thất bại. Thử thủ công: sudo npm install -g openzca"
+    exit 1
+  }
 fi
+echo "  ✅ openzca: $(openzca --version 2>/dev/null || echo installed)"
 
-# Detect tài khoản đang login trong OpenClaw
-CONFIG_FILE="$OPENCLAW_DIR/openclaw.json"
-ZALO_FOUND=false
-
-if [ -f "$CONFIG_FILE" ] && command -v python3 >/dev/null 2>&1; then
-  python3 - "$CONFIG_FILE" "$OPENCLAW_DIR" <<'PYEOF'
-import json, sys, os, glob
-
-cfg_file  = sys.argv[1]
-oclaw_dir = sys.argv[2]
-
-try:
-  cfg = json.load(open(cfg_file))
-except:
-  sys.exit(0)
-
-channels = cfg.get('channels', {})
-
-# ── Zalo ────────────────────────────────────────
-oz = channels.get('openzalo', {})
-if oz:
-  enabled = oz.get('enabled', True)
-  status_icon = '✅' if enabled else '⏸ '
-  # Lấy danh sách profiles để tìm tài khoản đang login
-  accounts = oz.get('accounts', {})
-  profiles_to_check = []
-  if accounts:
-    for acc_id, acc_cfg in accounts.items():
-      profiles_to_check.append((acc_id, acc_cfg.get('profile', 'default')))
-  else:
-    profiles_to_check = [('default', oz.get('profile', 'default'))]
-
-  print('')
-  print('  📱 Zalo:')
-  zca_bin = oz.get('zcaBinary') or 'openzca'
-  for acc_id, profile_name in profiles_to_check:
-    # Ưu tiên: gọi openzca auth status để lấy session HIỆN TẠI (không cache)
-    name, phone, logged_in = '', '', False
-    try:
-      import subprocess
-      result = subprocess.run(
-        [zca_bin, '--profile', profile_name, 'auth', 'status'],
-        capture_output=True, text=True, timeout=5
-      )
-      out = (result.stdout or '') + (result.stderr or '')
-      # openzca trả output dạng: { profile: 'default', loggedIn: true, userId: '...', displayName: '...' }
-      if "loggedIn:" in out and "true" in out.split("loggedIn:")[1][:20]:
-        logged_in = True
-      idx = out.find("displayName:")
-      if idx >= 0:
-        rest = out[idx+12:].lstrip()
-        if rest and rest[0] in ("'", '"'): rest = rest[1:]
-        end = 0
-        while end < len(rest) and rest[end] not in ("'", '"', chr(10), ",", "}"):
-          end += 1
-        name = rest[:end].strip()
-      if logged_in:
-        pass
-    except: pass
-
-    label = f'profile:{profile_name}'
-    if name:  label = name
-    state = 'đang bật' if (logged_in and enabled) else 'CHƯA login' if not logged_in else 'tắt'
-    print(f'  {status_icon} {label} — {state}')
-
-# ── Telegram ────────────────────────────────────
-tg = channels.get('telegram', {})
-if tg and tg.get('botToken'):
-  token   = tg['botToken']
-  enabled = tg.get('enabled', True)
-  status_icon = '✅' if enabled else '⏸ '
-  # Gọi Telegram API lấy tên bot
-  try:
-    import urllib.request
-    resp = urllib.request.urlopen(
-      f'https://api.telegram.org/bot{token}/getMe', timeout=5)
-    data = json.loads(resp.read())
-    bot  = data.get('result', {})
-    uname = bot.get('username', '')
-    bname = bot.get('first_name', '')
-    label = f'@{uname}' if uname else bname or 'Telegram bot'
-    state = 'đang bật' if enabled else 'tắt'
-    print(f'')
-    print(f'  ✈️  Telegram:')
-    print(f'  {status_icon} {label} — {state}')
-  except:
-    print(f'')
-    print(f'  ✈️  Telegram: đã cấu hình (không lấy được tên bot)')
-PYEOF
-fi
-echo ""
-
-# ── Bước 3/5: Cleanup hook cũ trong OpenClaw (nếu có) ────
-echo "[3/5] Cleanup hook zalo-monitor cũ (nếu khách có cài OpenClaw)..."
-OLD_HOOK_DIR="$OPENCLAW_DIR/hooks/zalo-monitor"
-if [ -d "$OLD_HOOK_DIR" ]; then
-  rm -rf "$OLD_HOOK_DIR"
-  echo "  ✅ Đã xóa $OLD_HOOK_DIR"
-fi
-OC_CONFIG="$OPENCLAW_DIR/openclaw.json"
-if [ -f "$OC_CONFIG" ] && command -v python3 >/dev/null 2>&1; then
-  python3 - "$OC_CONFIG" <<'PYEOF' 2>/dev/null
-import json, sys
-p = sys.argv[1]
-try:
-  with open(p) as f: d = json.load(f)
-  hooks = d.get('hooks', {}).get('internal', {}).get('entries', {})
-  if 'zalo-monitor' in hooks:
-    del hooks['zalo-monitor']
-    with open(p, 'w') as f: json.dump(d, f, indent=2)
-except: pass
-PYEOF
-  echo "  ℹ️  OpenClaw config: clean — KHÔNG can thiệp gì khác"
-fi
-
-# ── Bước 4/5: Tải zalo-listener.mjs (chạy độc lập với OpenClaw) ────
-echo "[4/5] Tải zalo-listener.mjs..."
+# ── Bước 3/5: Tải zalo-listener.mjs ─────────────
+echo "[3/5] Tải zalo-listener.mjs..."
 LISTENER_DIR="$HOME/.zalo-monitor"
 mkdir -p "$LISTENER_DIR"
 curl -fsSL --connect-timeout 10 "$BACKEND_URL/api/setup/hook-files/zalo-listener.mjs" -o "$LISTENER_DIR/zalo-listener.mjs" \\
