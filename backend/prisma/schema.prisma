@@ -206,6 +206,7 @@ model Message {
   quoteText   String?
   sentAt      DateTime
   createdAt   DateTime    @default(now())
+  deletedAt   DateTime?   // Tin nhắn bị thu hồi bên Zalo — null = bình thường
 
   group    Group            @relation(fields: [groupId], references: [id])
   analysis MessageAnalysis?

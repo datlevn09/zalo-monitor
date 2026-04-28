@@ -14,6 +14,8 @@ type Message = {
   content: string | null
   contentType: string
   sentAt: string
+  deletedAt: string | null
+  attachments?: string[]
   analysis: {
     label: keyof typeof LABEL_CFG
     sentiment: string
@@ -40,9 +42,17 @@ type AiAnalysis = {
   model: string
 }
 
-function parseMediaUrl(content: string | null): string | null {
+function parseMediaUrl(content: string | null, attachments?: string[]): string | null {
+  // Ưu tiên attachments array (webhook handler set sẵn)
+  if (attachments && attachments.length > 0) {
+    const url = attachments.find(a => typeof a === 'string' && a.startsWith('http'))
+    if (url) return url
+  }
   if (!content) return null
   if (content.startsWith('http')) return content
+  // Parse format openzca: "[media attached: <path> (mime) | <url>]"
+  const m = content.match(/\|\s*(https?:\/\/[^\s\]]+)/)
+  if (m) return m[1]
   try {
     const obj = JSON.parse(content)
     return obj.href ?? obj.url ?? obj.thumb ?? obj.thumbUrl ?? obj.mediaUrl ?? null
@@ -72,8 +82,10 @@ export default function GroupDetailPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
+  // Dev mode: hiện cả tin đã thu hồi (chỉ OWNER/MANAGER thấy được trên backend)
+  const [showDeleted, setShowDeleted] = useState(false)
   const loadGroup = () => api<Group[]>('/api/groups').then(gs => setGroup(gs.find(g => g.id === id) ?? null))
-  const loadMessages = () => api<Message[]>(`/api/messages?groupId=${id}&limit=100`).then(m => {
+  const loadMessages = () => api<Message[]>(`/api/messages?groupId=${id}&limit=100${showDeleted ? '&showDeleted=1' : ''}`).then(m => {
     setMessages(m)
     setLoading(false)
   })
@@ -310,7 +322,7 @@ export default function GroupDetailPage() {
             const isFlagged = msg.analysis && ['COMPLAINT', 'RISK', 'OPPORTUNITY'].includes(msg.analysis.label)
             const isSelf = msg.senderType === 'SELF'
 
-            const mediaUrl = parseMediaUrl(msg.content)
+            const mediaUrl = parseMediaUrl(msg.content, (msg as any).attachments)
 
             return (
               <div key={msg.id}>

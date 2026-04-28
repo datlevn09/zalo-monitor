@@ -5,7 +5,7 @@ export const messageRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/messages?groupId=xxx&limit=50
   app.get('/', async (req, reply) => {
     const tenantId = req.headers['x-tenant-id'] as string
-    const { groupId, limit = '50', cursor } = req.query as { groupId?: string; limit?: string; cursor?: string }
+    const { groupId, limit = '50', cursor, showDeleted } = req.query as { groupId?: string; limit?: string; cursor?: string; showDeleted?: string }
     if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
     if (!groupId) return reply.status(400).send({ error: 'groupId required' })
 
@@ -18,8 +18,13 @@ export const messageRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(403).send({ error: 'Group thuộc người khác, không có quyền xem' })
     }
 
+    // Mặc định ẩn tin đã thu hồi. ?showDeleted=1 + role OWNER/MANAGER mới thấy
+    const includeDeleted = showDeleted === '1' && (auth?.role === 'OWNER' || auth?.role === 'MANAGER')
     const messages = await db.message.findMany({
-      where: { groupId },
+      where: {
+        groupId,
+        ...(includeDeleted ? {} : { deletedAt: null }),
+      },
       orderBy: { sentAt: 'desc' },
       take: Number(limit),
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),

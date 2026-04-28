@@ -55,6 +55,7 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
 
     // openzca payload:
     // { msgId, cliMsgId, senderId, toId, threadId, content, mediaPath, mediaUrl, ... }
+    // Recall events có: type='undo' | event='delete' | content.deletedMsgId
     const threadId = raw.threadId ?? raw.idTo ?? raw.groupId
     const messageId = raw.msgId ?? raw.cliMsgId
     const senderId = raw.senderId ?? raw.uidFrom
@@ -62,6 +63,23 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
 
     if (!threadId || !messageId || !senderId) {
       return reply.status(200).send({ ok: true, skipped: 'incomplete' })
+    }
+
+    // Detect recall: openzca event có type/msgType là 'undo' hoặc content có deletedMsgId
+    const isRecall = raw.type === 'undo' || raw.msgType === 'undo' || raw.event === 'delete' ||
+                     (typeof text === 'object' && text?.deletedMsgId) ||
+                     (typeof raw.content === 'object' && raw.content?.deletedMsgId)
+    if (isRecall) {
+      // Mark original message as deleted (don't create new)
+      const targetMsgId = (typeof raw.content === 'object' ? raw.content?.deletedMsgId : null) ?? raw.deletedMsgId ?? messageId
+      const group = await db.group.findFirst({ where: { tenantId, externalId: String(threadId).replace(/^group:/, ''), channelType: 'ZALO' } })
+      if (group) {
+        await db.message.updateMany({
+          where: { groupId: group.id, externalId: String(targetMsgId) },
+          data: { deletedAt: new Date() },
+        })
+      }
+      return reply.status(200).send({ ok: true, recalled: true })
     }
 
     const isGroup = raw.chatType === 1 || raw.isGroup === true || String(threadId).startsWith('group:')
