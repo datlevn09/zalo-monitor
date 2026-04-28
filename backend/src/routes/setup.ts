@@ -1142,66 +1142,31 @@ PYEOF
 fi
 echo ""
 
-HOOK_DIR="$OPENCLAW_DIR/hooks/zalo-monitor"
-mkdir -p "$HOOK_DIR"
-
-# ── Bước 3/5: Tải hook files ────────────────────
-echo "[3/5] Tải hook files về $HOOK_DIR ..."
-curl -fsSL --connect-timeout 10 "$BACKEND_URL/api/setup/hook-files/HOOK.md"    -o "$HOOK_DIR/HOOK.md"    && echo "  ✅ HOOK.md"    || { echo "  ❌ Tải HOOK.md thất bại"; exit 1; }
-curl -fsSL --connect-timeout 10 "$BACKEND_URL/api/setup/hook-files/handler.ts" -o "$HOOK_DIR/handler.ts" && echo "  ✅ handler.ts" || { echo "  ❌ Tải handler.ts thất bại"; exit 1; }
-
-# ── Bước 4/5: Ghi config ────────────────────────
-echo "[4/5] Ghi config..."
-cat > "$HOOK_DIR/.env" <<EOF
-BACKEND_URL=$BACKEND_URL
-WEBHOOK_SECRET=$SECRET
-TENANT_ID=$TENANT_ID
-EOF
-chmod 600 "$HOOK_DIR/.env"
-echo "  ✅ .env đã ghi (mode 600)"
-
-if command -v openclaw >/dev/null 2>&1; then
-  timeout 5 openclaw hooks enable zalo-monitor >/dev/null 2>&1 && echo "  ✅ Hook enabled (openclaw CLI)" || echo "  ℹ️  Hook sẽ tự load khi OpenClaw khởi động lại"
-else
-  echo "  ℹ️  openclaw CLI không tìm thấy — hook sẽ tự load khi OpenClaw khởi động"
+# ── Bước 3/5: Cleanup hook cũ trong OpenClaw (nếu có) ────
+echo "[3/5] Cleanup hook zalo-monitor cũ (nếu khách có cài OpenClaw)..."
+OLD_HOOK_DIR="$OPENCLAW_DIR/hooks/zalo-monitor"
+if [ -d "$OLD_HOOK_DIR" ]; then
+  rm -rf "$OLD_HOOK_DIR"
+  echo "  ✅ Đã xóa $OLD_HOOK_DIR"
 fi
-
-# Set channels.openzalo.groupPolicy=open để OpenClaw không block group messages
 OC_CONFIG="$OPENCLAW_DIR/openclaw.json"
 if [ -f "$OC_CONFIG" ] && command -v python3 >/dev/null 2>&1; then
-  python3 - "$OC_CONFIG" <<'PYEOF' && echo "  ✅ Cấu hình OpenClaw: chỉ ĐỌC tin (cấm agent reply / gửi / react)"
+  python3 - "$OC_CONFIG" <<'PYEOF' 2>/dev/null
 import json, sys
 p = sys.argv[1]
-with open(p) as f: d = json.load(f)
-oz = d.setdefault('channels', {}).setdefault('openzalo', {})
-oz['groupPolicy'] = 'open'
-oz.setdefault('groups', {})['*'] = {'requireMention': False, 'tools': {'deny': ['*']}}
-# CRITICAL: cấm agent gửi tin nhắn / reactions / thay đổi nhóm
-oz['actions'] = {'reactions': False, 'messages': False, 'groups': False, 'pins': False, 'memberInfo': False, 'groupMembers': False}
-with open(p, 'w') as f: json.dump(d, f, indent=2)
+try:
+  with open(p) as f: d = json.load(f)
+  hooks = d.get('hooks', {}).get('internal', {}).get('entries', {})
+  if 'zalo-monitor' in hooks:
+    del hooks['zalo-monitor']
+    with open(p, 'w') as f: json.dump(d, f, indent=2)
+except: pass
 PYEOF
+  echo "  ℹ️  OpenClaw config: clean — KHÔNG can thiệp gì khác"
 fi
 
-# ── Bước 4.5: KHÔNG can thiệp OpenClaw của khách (chỉ tắt hook zalo-monitor cũ) ────
-echo ""
-echo "[4.5] Tắt hook zalo-monitor cũ trong OpenClaw (không tắt OpenClaw)..."
-# Chỉ disable hook zalo-monitor trong config, KHÔNG stop openclaw service
-if [ -f "$OC_CONFIG" ] && command -v python3 >/dev/null 2>&1; then
-  python3 - "$OC_CONFIG" <<'PYEOF' && echo "  ✅ Hook zalo-monitor cũ trong OpenClaw đã disable"
-import json, sys
-p = sys.argv[1]
-with open(p) as f: d = json.load(f)
-hooks = d.get('hooks', {}).get('internal', {}).get('entries', {})
-if 'zalo-monitor' in hooks:
-  hooks['zalo-monitor']['enabled'] = False
-  with open(p, 'w') as f: json.dump(d, f, indent=2)
-PYEOF
-else
-  echo "  ℹ️  Bỏ qua — không có OpenClaw config"
-fi
-
-# ── Bước 4.6: Tải zalo-listener.mjs (architecture mới: chỉ openzca, không OpenClaw) ────
-echo "[4.6] Tải zalo-listener.mjs..."
+# ── Bước 4/5: Tải zalo-listener.mjs (chạy độc lập với OpenClaw) ────
+echo "[4/5] Tải zalo-listener.mjs..."
 LISTENER_DIR="$HOME/.zalo-monitor"
 mkdir -p "$LISTENER_DIR"
 curl -fsSL --connect-timeout 10 "$BACKEND_URL/api/setup/hook-files/zalo-listener.mjs" -o "$LISTENER_DIR/zalo-listener.mjs" \\
