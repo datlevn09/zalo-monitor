@@ -609,6 +609,11 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     if (!tenant) return reply.status(403).send({ error: 'Invalid secret' })
     // Hook đang poll → cập nhật ping để dashboard biết hook còn sống
     hookPings.set(tenant.id, Date.now())
+    // Fire-and-forget update DB để session-health (dùng DB) cũng luôn fresh
+    db.tenant.update({
+      where: { id: tenant.id },
+      data: { lastHookPingAt: new Date() },
+    }).catch(() => undefined)
     const set = pendingActions.get(tenant.id)
     const actions = set ? Array.from(set) : []
     if (set) set.clear() // consume — hook đã nhận, không gửi lại
@@ -1022,7 +1027,7 @@ ZALO_FOUND=false
 
 if [ -f "$CONFIG_FILE" ] && command -v python3 >/dev/null 2>&1; then
   python3 - "$CONFIG_FILE" "$OPENCLAW_DIR" <<'PYEOF'
-import json, sys, os, glob, re
+import json, sys, os, glob
 
 cfg_file  = sys.argv[1]
 oclaw_dir = sys.argv[2]
@@ -1062,11 +1067,18 @@ if oz:
       )
       out = (result.stdout or '') + (result.stderr or '')
       # openzca trả output dạng: { profile: 'default', loggedIn: true, userId: '...', displayName: '...' }
-      m_logged = re.search(r"loggedIn:\s*true", out)
-      m_name = re.search(r"displayName:\s*['\"]?([^'\"\n,}]+)", out)
-      if m_logged:
+      if "loggedIn:" in out and "true" in out.split("loggedIn:")[1][:20]:
         logged_in = True
-        if m_name: name = m_name.group(1).strip()
+      idx = out.find("displayName:")
+      if idx >= 0:
+        rest = out[idx+12:].lstrip()
+        if rest and rest[0] in ("'", '"'): rest = rest[1:]
+        end = 0
+        while end < len(rest) and rest[end] not in ("'", '"', "\n", ",", "}"):
+          end += 1
+        name = rest[:end].strip()
+      if logged_in:
+        pass
     except: pass
 
     label = f'profile:{profile_name}'
