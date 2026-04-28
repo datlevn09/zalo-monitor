@@ -37,8 +37,15 @@ export async function api<T = any>(path: string, init?: RequestInit): Promise<T>
   if (boardUserId && !path.includes('boardUserId=')) {
     finalPath = path + (path.includes('?') ? '&' : '?') + `boardUserId=${encodeURIComponent(boardUserId)}`
   }
+  // Fastify reject 400 khi Content-Type=application/json mà body rỗng.
+  // Auto-fill body='{}' cho POST/PUT/PATCH nếu chưa có.
+  const method = (init?.method ?? 'GET').toUpperCase()
+  const finalInit: RequestInit = { ...init }
+  if (['POST', 'PUT', 'PATCH'].includes(method) && !finalInit.body) {
+    finalInit.body = '{}'
+  }
   const res = await fetch(`${API}${finalPath}`, {
-    ...init,
+    ...finalInit,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),

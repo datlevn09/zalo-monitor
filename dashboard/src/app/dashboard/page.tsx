@@ -265,7 +265,7 @@ function PlanCard({ tenant, groupCount }: { tenant: TenantInfo; groupCount: numb
     try {
       // Queue action sync_history → listener trên máy khách tự exec zalo-history-push.mjs
       // (không dùng /sync-all-history vì backend container không có openzca CLI)
-      await api('/api/zalo/sync-history-server', { method: 'POST' })
+      await api('/api/zalo/sync-history-server', { method: 'POST', body: '{}' })
       setSyncDone(true)
       setTimeout(() => setSyncDone(false), 5000)
     } catch (e: any) {

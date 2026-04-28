@@ -217,7 +217,12 @@ export default function GroupDetailPage() {
       if (event === 'message:new' && data.groupId === id) loadMessages()
       if (event === 'analysis:result' && data.groupId === id) loadMessages()
     })
-    return () => close()
+    // Polling fallback: WS có thể fail qua Cloudflare/proxy → poll mỗi 5s khi user
+    // ở chat detail page. Stop khi unmount hoặc tab inactive.
+    const pollInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') loadMessages()
+    }, 5000)
+    return () => { close(); clearInterval(pollInterval) }
   }, [id])
 
   useEffect(() => {
