@@ -259,25 +259,43 @@ async function pollPendingActions() {
 
     for (const action of actions) {
       if (action === 'login_zalo') {
-        console.log(`▶️ Action 'login_zalo' — exec openzca auth login --qr-base64`)
-        execFile(quoteWin(OPENZCA), ['--profile', cfg.profile, 'auth', 'login', '--qr-base64'],
-          { timeout: 90_000, env: { ...process.env, OPENZCA_QR_OPEN: '0' }, ...SPAWN_OPTS_BASE },
-          async (err, stdout) => {
-            if (err) { console.error(`❌ openzca login: ${err.message}`); return }
-            const m = (stdout || '').match(/data:image\/[a-z]+;base64,[A-Za-z0-9+/=]+/)
-            if (!m) { console.error('❌ Không parse được QR data URL từ stdout'); return }
-            await fetch(`${cfg.backendUrl}/api/setup/qr-push`, {
-              method: 'POST',
-              headers: {
-                'content-type': 'application/json',
-                'x-webhook-secret': cfg.secret,
-                'x-tenant-id': cfg.tenantId,
-              },
-              body: JSON.stringify({ dataUrl: m[0] }),
-            }).catch(() => undefined)
-            console.log('✅ Đã push QR lên backend')
+        console.log(`▶️ Action 'login_zalo' — exec openzca auth login --qr-path`)
+        // File-based (giống install script): chắc chắn 100% đúng format vs --qr-base64
+        // grep stdout có thể fail khi openzca đổi format output.
+        const qrFile = process.platform === 'win32'
+          ? path.join(os.tmpdir(), 'zm-relogin-qr.png')
+          : '/tmp/zm-relogin-qr.png'
+        try { fs.unlinkSync(qrFile) } catch {}
+        const child = spawn(quoteWin(OPENZCA), ['--profile', cfg.profile, 'auth', 'login', '--qr-path', qrFile],
+          { timeout: 120_000, env: { ...process.env, OPENZCA_QR_OPEN: '0' }, ...SPAWN_OPTS_BASE, stdio: 'ignore' })
+        // Poll file until exists (max 30s)
+        let waited = 0
+        const poll = setInterval(async () => {
+          waited += 1000
+          if (fs.existsSync(qrFile) && fs.statSync(qrFile).size > 0) {
+            clearInterval(poll)
+            try {
+              const buf = fs.readFileSync(qrFile)
+              const dataUrl = `data:image/png;base64,${buf.toString('base64')}`
+              await fetch(`${cfg.backendUrl}/api/setup/qr-push`, {
+                method: 'POST',
+                headers: {
+                  'content-type': 'application/json',
+                  'x-webhook-secret': cfg.secret,
+                  'x-tenant-id': cfg.tenantId,
+                },
+                body: JSON.stringify({ dataUrl }),
+              }).catch(() => undefined)
+              console.log('✅ Đã push QR lên backend (file-based)')
+            } catch (e) {
+              console.error(`❌ Đọc QR file fail: ${e?.message ?? e}`)
+            }
+          } else if (waited >= 30_000) {
+            clearInterval(poll)
+            console.error('❌ QR file không sinh ra trong 30s — có thể openzca crash')
+            try { child.kill() } catch {}
           }
-        )
+        }, 1000)
       } else if (action === 'sync_history') {
         console.log(`▶️ Action 'sync_history' — chạy zalo-history-push.mjs`)
         const { execSync } = await import('node:child_process')
