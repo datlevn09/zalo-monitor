@@ -166,6 +166,13 @@ export default function ContactPage() {
             </div>
           </aside>
         </div>
+
+        {/* Cross-link giữa các trang công khai */}
+        <nav className="mt-10 pt-6 border-t border-gray-200 dark:border-white/10 flex flex-wrap gap-4 text-sm">
+          <Link href="/privacy" className="text-blue-600 dark:text-blue-400 hover:underline">Chính sách bảo mật</Link>
+          <Link href="/terms" className="text-blue-600 dark:text-blue-400 hover:underline">Điều khoản sử dụng</Link>
+          <Link href="/" className="text-gray-500 dark:text-zinc-400 hover:underline">Trang chủ</Link>
+        </nav>
       </div>
     </div>
   )

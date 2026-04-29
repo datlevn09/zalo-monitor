@@ -100,9 +100,18 @@ export default function PrivacyPage() {
               Liên hệ
             </h2>
             <p className="text-gray-700 dark:text-zinc-300">
-              Email: <a href="mailto:datle@outlook.com" className="text-blue-600 dark:text-blue-400 hover:underline">datle@outlook.com</a>
+              Câu hỏi, khiếu nại hoặc yêu cầu liên quan đến dữ liệu cá nhân — vui lòng truy cập{' '}
+              <Link href="/contact" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">trang Liên hệ</Link>
+              {' '}để gửi lời nhắn hoặc xem thông tin trực tiếp với tác giả.
             </p>
           </section>
+
+          {/* Cross-link giữa các trang công khai */}
+          <nav className="mt-10 pt-6 border-t border-gray-200 dark:border-white/10 flex flex-wrap gap-4 text-sm">
+            <Link href="/contact" className="text-blue-600 dark:text-blue-400 hover:underline">Liên hệ</Link>
+            <Link href="/terms" className="text-blue-600 dark:text-blue-400 hover:underline">Điều khoản sử dụng</Link>
+            <Link href="/" className="text-gray-500 dark:text-zinc-400 hover:underline">Trang chủ</Link>
+          </nav>
         </article>
       </div>
     </div>
