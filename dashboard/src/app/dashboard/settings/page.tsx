@@ -257,12 +257,32 @@ function AiConfigSection() {
       }).catch(() => undefined)
   }, [])
 
-  // Default model theo provider
-  const defaultModel: Record<string, string> = {
-    anthropic: 'claude-haiku-4-5-20251001',
-    openai: 'gpt-4o-mini',
-    google: 'gemini-1.5-flash',
+  // Model list theo provider — đồng bộ với SDK đang hỗ trợ. Phần đầu mỗi list
+  // là default. Cập nhật khi provider phát hành model mới / deprecate model cũ.
+  const PROVIDER_MODELS: Record<string, Array<{ id: string; label: string; note?: string }>> = {
+    anthropic: [
+      { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5', note: 'Mặc định · rẻ + nhanh' },
+      { id: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5', note: 'Cân bằng' },
+      { id: 'claude-opus-4-5-20251112', label: 'Claude Opus 4.5', note: 'Mạnh nhất · đắt' },
+      { id: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet (legacy)' },
+    ],
+    openai: [
+      { id: 'gpt-4o-mini', label: 'GPT-4o mini', note: 'Mặc định · rẻ' },
+      { id: 'gpt-4o', label: 'GPT-4o', note: 'Mạnh hơn · đắt' },
+      { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini' },
+      { id: 'gpt-4.1', label: 'GPT-4.1' },
+      { id: 'o1-mini', label: 'o1-mini (reasoning)' },
+    ],
+    google: [
+      { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', note: 'Mặc định · rẻ' },
+      { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', note: 'Mạnh hơn' },
+      { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+      { id: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash Experimental' },
+    ],
   }
+  const defaultModel: Record<string, string> = Object.fromEntries(
+    Object.entries(PROVIDER_MODELS).map(([k, v]) => [k, v[0].id])
+  )
 
   async function save() {
     setSaving(true); setError(null)
@@ -382,15 +402,21 @@ function AiConfigSection() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 dark:text-zinc-300 mb-1.5">Model (tùy chọn)</label>
-              <input
-                type="text"
-                value={model}
+              <label className="block text-xs font-medium text-gray-700 dark:text-zinc-300 mb-1.5">Model</label>
+              <select
+                value={model || defaultModel[provider]}
                 onChange={(e) => setModel(e.target.value)}
-                placeholder={defaultModel[provider]}
-                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <p className="mt-1 text-[11px] text-gray-500 dark:text-zinc-400">Để trống dùng mặc định: <code>{defaultModel[provider]}</code></p>
+                className="w-full px-3 py-2 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/10 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {(PROVIDER_MODELS[provider] ?? []).map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}{m.note ? ` — ${m.note}` : ''}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-gray-500 dark:text-zinc-400">
+                Mặc định: <code>{defaultModel[provider]}</code>. Chọn model nào provider của bạn đang hỗ trợ.
+              </p>
             </div>
           </>
         )}
