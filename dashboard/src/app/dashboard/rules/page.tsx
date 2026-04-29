@@ -237,11 +237,40 @@ export default function RulesPage() {
               <label className="text-sm text-gray-700 dark:text-zinc-300">Ngưỡng chậm phản hồi</label>
               <span className="text-sm font-semibold tabular-nums">{config.replyTimeoutMinutes} phút</span>
             </div>
-            <input type="range" min="5" max="480" step="5"
-              value={config.replyTimeoutMinutes}
-              onChange={e => setConfig({ ...config, replyTimeoutMinutes: Number(e.target.value) })}
-              className="w-full accent-blue-500"
-            />
+            {/* Slider phi tuyến: 4 anchor (0%/33%/66%/100% → 5p/60p/240p/480p).
+                Linear interpolate giữa các anchor để label trùng vị trí slider. */}
+            {(() => {
+              const anchors = [
+                { p: 0,   m: 5 },
+                { p: 33,  m: 60 },
+                { p: 66,  m: 240 },
+                { p: 100, m: 480 },
+              ]
+              const minutesToPos = (m: number) => {
+                for (let i = 0; i < anchors.length - 1; i++) {
+                  const a = anchors[i], b = anchors[i + 1]
+                  if (m <= b.m) return a.p + ((m - a.m) / (b.m - a.m)) * (b.p - a.p)
+                }
+                return 100
+              }
+              const posToMinutes = (p: number) => {
+                for (let i = 0; i < anchors.length - 1; i++) {
+                  const a = anchors[i], b = anchors[i + 1]
+                  if (p <= b.p) return a.m + ((p - a.p) / (b.p - a.p)) * (b.m - a.m)
+                }
+                return 480
+              }
+              return (
+                <input type="range" min="0" max="100" step="1"
+                  value={Math.round(minutesToPos(config.replyTimeoutMinutes))}
+                  onChange={e => {
+                    const minutes = Math.max(5, Math.round(posToMinutes(Number(e.target.value)) / 5) * 5)
+                    setConfig({ ...config, replyTimeoutMinutes: minutes })
+                  }}
+                  className="w-full accent-blue-500"
+                />
+              )
+            })()}
             <div className="flex justify-between text-[11px] text-gray-400 dark:text-zinc-500 mt-1">
               <span>5 phút</span>
               <span>1 giờ</span>
