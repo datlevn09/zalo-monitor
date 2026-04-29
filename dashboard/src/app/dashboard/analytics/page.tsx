@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
+import { SyncHistoryButton } from '@/components/SyncHistoryButton'
 import { GradientAreaChart, MultiLineChart } from '@/components/charts/AreaChart'
 import { DonutChart, DonutLegend } from '@/components/charts/Donut'
 import { Heatmap } from '@/components/charts/Heatmap'
@@ -119,9 +120,14 @@ export default function AnalyticsPage() {
     <div className="p-4 md:p-8 max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-6 md:mb-8 flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-zinc-100 tracking-tight">Phân tích</h1>
-          <p className="text-gray-500 dark:text-zinc-400 mt-1 text-sm">Hiểu sâu về hoạt động các nhóm và DM</p>
+        <div className="flex items-start gap-3">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-zinc-100 tracking-tight">Phân tích</h1>
+            <p className="text-gray-500 dark:text-zinc-400 mt-1 text-sm">Hiểu sâu về hoạt động các nhóm và DM</p>
+          </div>
+          <div className="pt-1">
+            <SyncHistoryButton />
+          </div>
         </div>
 
         <div className="flex flex-col gap-2 items-end">

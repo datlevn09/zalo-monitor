@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { IcChat, IcMail, IcAlert, IcWarning, IcMoney, IcSparkles } from '@/components/icons'
+import { SyncHistoryButton } from '@/components/SyncHistoryButton'
 import { api, connectWebSocket } from '@/lib/api'
 import { LABEL_CFG, formatRelative } from '@/lib/format'
 import { DigestModal } from '@/components/dashboard/DigestModal'
@@ -180,21 +182,21 @@ export default function OverviewPage() {
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6">
         <StatCard
-          icon={<span className="text-xl">💬</span>}
+          icon={<IcChat size={20} />}
           tint="bg-blue-500/10 text-blue-600"
           label="Nhóm đang theo dõi"
           value={s?.totalGroups ?? '—'}
           sub={`${s?.activeGroups ?? 0} hoạt động 24h`}
         />
         <StatCard
-          icon={<span className="text-xl">📨</span>}
+          icon={<IcMail size={20} />}
           tint="bg-purple-500/10 text-purple-600"
           label="Tin nhắn"
           value={s?.messagesInRange ?? '—'}
           sub={range === 1 ? 'trong 24 giờ qua' : 'trong 7 ngày qua'}
         />
         <StatCard
-          icon={<span className="text-xl">🚨</span>}
+          icon={<IcAlert size={20} />}
           tint="bg-red-500/10 text-red-600"
           label="Cần xử lý"
           value={s?.openAlerts ?? '—'}
@@ -202,21 +204,21 @@ export default function OverviewPage() {
           highlight={s && s.openAlerts > 0}
         />
         <StatCard
-          icon={<span className="text-xl">⚠️</span>}
+          icon={<IcWarning size={20} />}
           tint="bg-orange-500/10 text-orange-600"
           label="Khiếu nại"
           value={s?.complaintsInRange ?? '—'}
           sub={range === 1 ? '24 giờ qua' : '7 ngày qua'}
         />
         <StatCard
-          icon={<span className="text-xl">💰</span>}
+          icon={<IcMoney size={20} />}
           tint="bg-green-500/10 text-green-600"
           label="Cơ hội"
           value={s?.opportunitiesInRange ?? '—'}
           sub={range === 1 ? '24 giờ qua' : '7 ngày qua'}
         />
         <StatCard
-          icon={<span className="text-xl">✨</span>}
+          icon={<IcSparkles size={20} />}
           tint="bg-indigo-500/10 text-indigo-600"
           label="AI đã phân tích"
           value={s?.messagesInRange ?? '—'}
@@ -287,22 +289,6 @@ export default function OverviewPage() {
 }
 
 function PlanCard({ tenant, groupCount }: { tenant: TenantInfo; groupCount: number }) {
-  const [syncing, setSyncing] = useState(false)
-  const [syncDone, setSyncDone] = useState(false)
-
-  async function triggerSync() {
-    setSyncing(true)
-    try {
-      // Queue action sync_history → listener trên máy khách tự exec zalo-history-push.mjs
-      // (không dùng /sync-all-history vì backend container không có openzca CLI)
-      await api('/api/zalo/sync-history-server', { method: 'POST', body: '{}' })
-      setSyncDone(true)
-      setTimeout(() => setSyncDone(false), 5000)
-    } catch (e: any) {
-      alert('Không gửi được lệnh sync: ' + (e?.message || 'unknown'))
-    } finally { setSyncing(false) }
-  }
-
   const msgPct = tenant.maxMessagesPerMonth > 0 ? Math.min(100, (tenant.messagesThisMonth / tenant.maxMessagesPerMonth) * 100) : 0
   const grpPct = tenant.maxGroups > 0 ? Math.min(100, (groupCount / tenant.maxGroups) * 100) : 0
 
@@ -324,13 +310,7 @@ function PlanCard({ tenant, groupCount }: { tenant: TenantInfo; groupCount: numb
             {tenant.plan}
           </span>
         </div>
-        <button
-          onClick={triggerSync}
-          disabled={syncing}
-          className="text-xs px-3 py-1.5 bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 dark:hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-lg font-medium transition-colors disabled:opacity-50"
-        >
-          {syncDone ? '✓ Đã sync' : syncing ? 'Đang sync...' : '🔄 Sync lịch sử'}
-        </button>
+        <SyncHistoryButton size="sm" />
       </div>
 
       <div className="grid grid-cols-2 gap-3">
