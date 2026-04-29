@@ -305,27 +305,75 @@ function OnboardBanner({ installCmd, copyCmd, copied }: { installCmd: string; co
           </p>
 
           {/* Primary CTA: download buttons */}
-          <div className="flex flex-wrap gap-2 mb-3">
+          <div className="flex flex-wrap gap-2 mb-4">
             <button
               onClick={() => downloadInstaller('mac')}
-              className={`inline-flex items-center gap-2 px-4 py-2.5 ${os === 'mac' ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10'} text-sm font-semibold rounded-xl transition-colors`}
+              className={`inline-flex items-center gap-2 px-4 py-2.5 ${os === 'mac' ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-md' : 'bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10'} text-sm font-semibold rounded-xl transition-colors`}
             >
               <span></span>
               <span>Tải installer cho Mac</span>
-              {os === 'mac' && <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded">Đề xuất</span>}
+              {os === 'mac' && <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded">Máy của bạn</span>}
             </button>
             <button
               onClick={() => downloadInstaller('win')}
-              className={`inline-flex items-center gap-2 px-4 py-2.5 ${os === 'win' ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10'} text-sm font-semibold rounded-xl transition-colors`}
+              className={`inline-flex items-center gap-2 px-4 py-2.5 ${os === 'win' ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-md' : 'bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10'} text-sm font-semibold rounded-xl transition-colors`}
             >
               <span>🪟</span>
               <span>Tải installer cho Windows</span>
-              {os === 'win' && <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded">Đề xuất</span>}
+              {os === 'win' && <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded">Máy của bạn</span>}
             </button>
           </div>
 
+          {/* Hướng dẫn ngay dưới nút — 3 bước rõ ràng */}
+          <div className="bg-white/70 dark:bg-white/5 ring-1 ring-blue-200 dark:ring-blue-500/30 rounded-xl p-3 mb-3">
+            <p className="text-[11px] font-semibold text-blue-700 dark:text-blue-300 mb-2">📌 Sau khi tải, làm 3 bước này:</p>
+            <ol className="space-y-1.5 text-xs text-gray-700 dark:text-zinc-300">
+              <li className="flex gap-2">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">1</span>
+                <span>Mở thư mục <strong>Downloads</strong> (nơi vừa tải file về).</span>
+              </li>
+              {os === 'mac' || os === 'other' ? (
+                <li className="flex gap-2">
+                  <span className="shrink-0 w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">2</span>
+                  <span>
+                    <strong>Chuột phải</strong> vào file <code className="bg-gray-100 dark:bg-white/10 px-1 rounded text-[10px]">zalo-monitor-installer.command</code> → chọn <strong>Open</strong> → <strong>Open</strong> lần nữa khi Mac hỏi.
+                    <br /><span className="text-[10px] text-gray-500 dark:text-zinc-500">(Lần đầu Gatekeeper hỏi vì file mới — chỉ cần xác nhận 1 lần)</span>
+                  </span>
+                </li>
+              ) : (
+                <li className="flex gap-2">
+                  <span className="shrink-0 w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">2</span>
+                  <span>
+                    <strong>Double-click</strong> file <code className="bg-gray-100 dark:bg-white/10 px-1 rounded text-[10px]">zalo-monitor-installer.bat</code>.
+                    <br /><span className="text-[10px] text-gray-500 dark:text-zinc-500">(Nếu Windows SmartScreen hỏi: bấm "More info" → "Run anyway")</span>
+                  </span>
+                </li>
+              )}
+              <li className="flex gap-2">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">3</span>
+                <span>
+                  Terminal tự mở và chạy. Khi hỏi <strong>"Đã mở Zalo? [Y/n]"</strong> → mở Zalo trên điện thoại trước → bấm <kbd className="bg-gray-100 dark:bg-white/10 px-1 rounded text-[10px]">Y</kbd>.
+                </span>
+              </li>
+              <li className="flex gap-2">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center">4</span>
+                <span>
+                  <strong>QR sẽ hiện 2 chỗ cùng lúc</strong> — quét chỗ nào cũng được:
+                  <ul className="mt-1 ml-3 space-y-0.5 text-[11px] text-gray-600 dark:text-zinc-400">
+                    <li>📱 <strong>Trên máy của bạn</strong>: cửa sổ {os === 'win' ? 'Photos' : 'Preview'} tự mở với hình QR.</li>
+                    <li>💻 <strong>Trên dashboard này</strong>: vào <Link href="/dashboard/settings/channels" className="text-blue-600 dark:text-blue-400 underline">Cài đặt → Kênh</Link> → QR hiện ở thẻ Zalo.</li>
+                  </ul>
+                  <span className="text-[11px] text-gray-600 dark:text-zinc-400">Mở Zalo → Cài đặt → <strong>Thiết bị đã đăng nhập</strong> → <strong>Thêm thiết bị</strong> → quét.</span>
+                </span>
+              </li>
+            </ol>
+            <p className="text-[10px] text-gray-500 dark:text-zinc-400 mt-2.5 pt-2 border-t border-gray-200 dark:border-white/5">
+              Quét xong: dashboard tự refresh, listener chạy ngầm — không cần mở Terminal lại bao giờ.
+            </p>
+          </div>
+
           <details className="mb-3">
-            <summary className="text-[11px] text-gray-600 dark:text-zinc-400 cursor-pointer hover:text-gray-800 dark:hover:text-zinc-200">Hoặc dùng dòng lệnh trực tiếp (cho người tech)</summary>
+            <summary className="text-[11px] text-gray-500 dark:text-zinc-400 cursor-pointer hover:text-gray-700 dark:hover:text-zinc-200">⌨️ Tôi quen Terminal — dùng dòng lệnh thay file</summary>
             <div className="mt-2 bg-gray-900 dark:bg-black/60 rounded-xl p-2.5 font-mono text-[11px] text-green-400 break-all whitespace-pre-wrap">
               {installCmd}
             </div>
@@ -336,12 +384,10 @@ function OnboardBanner({ installCmd, copyCmd, copied }: { installCmd: string; co
             </div>
           </details>
 
-          <div className="flex flex-wrap gap-2 text-[11px]">
-            <Link href="/docs/install" className="text-blue-600 dark:text-blue-400 hover:underline">📖 Hướng dẫn chi tiết</Link>
+          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <Link href="/docs/install" className="text-blue-600 dark:text-blue-400 hover:underline">📖 Hướng dẫn đầy đủ (Win/Mac/VPS/NAS)</Link>
             <span className="text-gray-300 dark:text-white/20">·</span>
-            <span className="text-gray-500 dark:text-zinc-400">
-              Mac lần đầu: chuột phải file → Open (Gatekeeper bảo vệ)
-            </span>
+            <Link href="/contact" className="text-blue-600 dark:text-blue-400 hover:underline">💬 Cần hỗ trợ</Link>
           </div>
 
           <div className="mt-3 pt-3 border-t border-blue-200/60 dark:border-blue-500/20">
