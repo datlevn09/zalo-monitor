@@ -327,17 +327,15 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
     const [thisWeek, lastWeek] = await Promise.all(
       [weekAgo, twoWeekAgo].map(async (sinceStart, i) => {
         const untilEnd = i === 0 ? new Date(now) : weekAgo
+        // Đồng nhất nguồn data với pie chart "Phân loại tin" (label-distribution):
+        // dùng message_analyses thay vì alerts (alerts chỉ trigger khi có rule, gây
+        // mismatch KPI=0 nhưng pie=3).
+        const baseWhere = { message: { group: { tenantId } }, createdAt: { gte: sinceStart, lt: untilEnd } } as const
         const [total, opportunity, complaint, positive] = await Promise.all([
           db.message.count({ where: { group: { tenantId }, createdAt: { gte: sinceStart, lt: untilEnd } } }),
-          db.alert.count({ where: { tenantId, label: 'OPPORTUNITY', createdAt: { gte: sinceStart, lt: untilEnd } } }),
-          db.alert.count({ where: { tenantId, label: 'COMPLAINT', createdAt: { gte: sinceStart, lt: untilEnd } } }),
-          db.messageAnalysis.count({
-            where: {
-              label: 'POSITIVE',
-              message: { group: { tenantId } },
-              createdAt: { gte: sinceStart, lt: untilEnd },
-            },
-          }),
+          db.messageAnalysis.count({ where: { ...baseWhere, label: 'OPPORTUNITY' } }),
+          db.messageAnalysis.count({ where: { ...baseWhere, label: 'COMPLAINT' } }),
+          db.messageAnalysis.count({ where: { ...baseWhere, label: 'POSITIVE' } }),
         ])
         return { total, opportunity, complaint, positive }
       })
