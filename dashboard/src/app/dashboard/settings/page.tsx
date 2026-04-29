@@ -185,17 +185,17 @@ export default function SettingsPage() {
       {/* Mã hoá tin nhắn — toggle per-tenant */}
       {tenant && (
         <Section
-          title="🔐 Mã hoá tin nhắn"
-          description="Tin nhắn lưu trong CSDL được mã hoá AES-256-GCM. Bảo vệ chống lộ DB / backup. Vẫn dùng được AI phân tích, word cloud, search vì khoá mã hoá nằm ở server (giải mã khi đọc)."
+          title="🔐 Bảo vệ tin nhắn"
+          description="Bật để tăng mức bảo vệ cho tin nhắn lưu trữ. AI phân tích, word cloud, tìm kiếm vẫn hoạt động bình thường."
         >
           <div className="flex items-center gap-3 px-4 py-3.5">
             <div className="w-10 h-10 rounded-2xl bg-emerald-500 flex items-center justify-center text-white font-bold shrink-0">
               🔒
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Mã hoá nội dung tin nhắn</p>
+              <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Bảo vệ tin nhắn nâng cao</p>
               <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                Bật = tin về sau encrypt trong DB. Tin cũ không bị ảnh hưởng. Có thể tắt bất kỳ lúc nào.
+                Bật = áp dụng cho tin về sau. Tin cũ không bị ảnh hưởng. Có thể tắt bất kỳ lúc nào.
               </p>
             </div>
             <button
@@ -222,9 +222,7 @@ export default function SettingsPage() {
           {tenant.encryptMessages && (
             <div className="px-4 py-3 bg-emerald-50 dark:bg-emerald-500/10 border-t border-emerald-200 dark:border-emerald-500/30">
               <p className="text-xs text-emerald-800 dark:text-emerald-300">
-                ✓ Tin nhắn mới được mã hoá. AI phân tích / word cloud vẫn chạy bình thường (server tự giải mã khi cần).
-                Đội ngũ vận hành KHÔNG đọc nội dung tin nhắn của bạn trong điều kiện vận hành thường — xem
-                <a href="/privacy" className="underline ml-1">Chính sách riêng tư</a>.
+                ✓ Đang bảo vệ tin nhắn. AI và phân tích vẫn hoạt động bình thường.
               </p>
             </div>
           )}

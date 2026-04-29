@@ -469,38 +469,28 @@ function ShowcaseSecurity() {
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
       <div>
         <span className="inline-flex px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-500/20 rounded-full mb-3">
-          🔐 Bảo mật & Riêng tư
+          🔐 Riêng tư
         </span>
         <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-zinc-100 tracking-tight mb-3">
-          Tin nhắn được <span className="text-emerald-600 dark:text-emerald-400">mã hoá</span>, đội vận hành không đọc
+          Chúng tôi <span className="text-emerald-600 dark:text-emerald-400">không đọc</span> tin nhắn của bạn
         </h2>
         <p className="text-gray-600 dark:text-zinc-400 leading-relaxed mb-3">
-          Bật mã hoá AES-256-GCM trong Cài đặt — tin nhắn lưu trong CSDL được mã hoá, backup/disk dump không đọc được.
-          AI vẫn phân tích được vì chỉ chạy tự động trên dữ liệu của bạn.
+          Dữ liệu chỉ được hệ thống xử lý tự động để phục vụ chính bạn — phân loại tin, gợi ý, báo cáo. Không có người nào ngồi đọc tin của bạn.
         </p>
         <ul className="space-y-1.5 text-sm text-gray-600 dark:text-zinc-400">
-          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-0.5">✓</span> Cách ly per-tenant — DN A không thấy DN B</li>
-          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-0.5">✓</span> Bật/tắt mã hoá tuỳ chọn cho từng tenant</li>
-          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-0.5">✓</span> API key AI lưu mã hoá riêng — không nhân viên nào đọc được</li>
+          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-0.5">✓</span> Cách ly riêng cho từng doanh nghiệp</li>
+          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-0.5">✓</span> Tin nhắn không bao giờ được dùng để huấn luyện AI</li>
+          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-0.5">✓</span> Bạn có thể yêu cầu xoá hoàn toàn dữ liệu bất kỳ lúc nào</li>
         </ul>
       </div>
-      <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-500/10 dark:via-teal-500/10 dark:to-cyan-500/10 rounded-3xl p-5 ring-1 ring-emerald-200 dark:ring-emerald-500/30 shadow-xl">
-          <div className="flex items-start gap-3 mb-4">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-lg shrink-0">🔒</div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Mã hoá nội dung tin nhắn</p>
-              <p className="text-xs text-gray-600 dark:text-zinc-400 mt-0.5">AES-256-GCM · ON</p>
-            </div>
-            <div className="w-11 h-6 rounded-full bg-emerald-500 relative">
-              <span className="absolute top-0.5 right-0.5 w-5 h-5 bg-white rounded-full shadow-md" />
-            </div>
-          </div>
-          <div className="bg-white dark:bg-zinc-900/60 rounded-xl p-3 font-mono text-[10px] text-gray-500 dark:text-zinc-500 break-all">
-            v1:8efa1a03ba4c96049bf4fac3097169a085583de7…
-          </div>
-          <p className="mt-3 text-[11px] text-emerald-700 dark:text-emerald-300">
-            ✓ Tin mới được mã hoá. AI / phân tích vẫn chạy bình thường (server tự giải mã khi cần).
+      <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-500/10 dark:via-teal-500/10 dark:to-cyan-500/10 rounded-3xl p-6 ring-1 ring-emerald-200 dark:ring-emerald-500/30 shadow-xl flex items-center justify-center min-h-[180px]">
+        <div className="text-center max-w-xs">
+          <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-2xl">🔒</div>
+          <p className="text-base font-semibold text-gray-900 dark:text-zinc-100 mb-1.5">Tin nhắn — chỉ của bạn</p>
+          <p className="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed">
+            Đội ngũ vận hành không có công cụ để đọc nội dung tin nhắn của bạn.
           </p>
+        </div>
       </div>
     </div>
   )
