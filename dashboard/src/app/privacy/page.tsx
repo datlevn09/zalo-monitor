@@ -20,9 +20,11 @@ export default function PrivacyPage() {
             <h2 className="text-lg font-semibold text-emerald-900 dark:text-emerald-200 mb-2">
               Cam kết về dữ liệu của bạn
             </h2>
-            <p className="text-sm text-emerald-800 dark:text-emerald-200 leading-relaxed">
-              <strong>Chúng tôi không đọc nội dung tin nhắn của bạn.</strong> Dữ liệu chỉ được hệ thống xử lý tự động để phục vụ chính bạn — phân loại tin, gợi ý, báo cáo.
-            </p>
+            <ul className="text-sm text-emerald-800 dark:text-emerald-200 space-y-1.5 list-disc list-inside leading-relaxed">
+              <li>Tin nhắn được <strong>mã hoá</strong>.</li>
+              <li><strong>Listener chạy trên thiết bị của bạn</strong> — tin Zalo không đi qua đâu khác.</li>
+              <li>Tôi chỉ đưa nó <strong>lên board cho chính bạn xem</strong> — không đọc, không lưu để training, không chia sẻ với bên khác.</li>
+            </ul>
           </section>
 
           <section className="mb-8">

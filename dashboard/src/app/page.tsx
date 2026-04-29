@@ -472,23 +472,20 @@ function ShowcaseSecurity() {
           🔐 Riêng tư
         </span>
         <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-zinc-100 tracking-tight mb-3">
-          Chúng tôi <span className="text-emerald-600 dark:text-emerald-400">không đọc</span> tin nhắn của bạn
+          Tin nhắn của bạn — <span className="text-emerald-600 dark:text-emerald-400">vẫn là của bạn</span>
         </h2>
-        <p className="text-gray-600 dark:text-zinc-400 leading-relaxed mb-3">
-          Dữ liệu chỉ được hệ thống xử lý tự động để phục vụ chính bạn — phân loại tin, gợi ý, báo cáo. Không có người nào ngồi đọc tin của bạn.
-        </p>
-        <ul className="space-y-1.5 text-sm text-gray-600 dark:text-zinc-400">
-          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-0.5">✓</span> Cách ly riêng cho từng doanh nghiệp</li>
-          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-0.5">✓</span> Tin nhắn không bao giờ được dùng để huấn luyện AI</li>
-          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-0.5">✓</span> Bạn có thể yêu cầu xoá hoàn toàn dữ liệu bất kỳ lúc nào</li>
+        <ul className="space-y-2 text-sm md:text-base text-gray-700 dark:text-zinc-300">
+          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-1">✓</span> Tin nhắn được <strong>mã hoá</strong>.</li>
+          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-1">✓</span> Listener <strong>chạy trên thiết bị của bạn</strong> — không qua server lạ.</li>
+          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-1">✓</span> Tôi chỉ <strong>đưa nó lên board cho bạn xem</strong> — không đọc.</li>
         </ul>
       </div>
-      <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-500/10 dark:via-teal-500/10 dark:to-cyan-500/10 rounded-3xl p-6 ring-1 ring-emerald-200 dark:ring-emerald-500/30 shadow-xl flex items-center justify-center min-h-[180px]">
+      <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-500/10 dark:via-teal-500/10 dark:to-cyan-500/10 rounded-3xl p-6 ring-1 ring-emerald-200 dark:ring-emerald-500/30 shadow-xl flex items-center justify-center min-h-[200px]">
         <div className="text-center max-w-xs">
           <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-2xl">🔒</div>
-          <p className="text-base font-semibold text-gray-900 dark:text-zinc-100 mb-1.5">Tin nhắn — chỉ của bạn</p>
+          <p className="text-base font-semibold text-gray-900 dark:text-zinc-100 mb-2">Mã hoá · trên thiết bị của bạn</p>
           <p className="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed">
-            Đội ngũ vận hành không có công cụ để đọc nội dung tin nhắn của bạn.
+            Tôi chỉ là người đưa tin nhắn lên board cho bạn xem.
           </p>
         </div>
       </div>
