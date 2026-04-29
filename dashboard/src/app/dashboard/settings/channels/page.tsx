@@ -533,13 +533,9 @@ function ZaloChannelCard({
                 >
                   {reconnecting ? 'Đang khởi động...' : status.connected ? 'Đổi tài khoản' : 'Kết nối lại'}
                 </button>
-                <button
-                  onClick={() => setShowInstall(s => !s)}
-                  className="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"
-                  title="Lấy lệnh cài lại / cập nhật listener trên server"
-                >
-                  {showInstall ? 'Ẩn lệnh' : '🔄 Lệnh cập nhật'}
-                </button>
+                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1" title="Listener tự cập nhật mỗi 6 giờ">
+                  ⚡ <span>Tự cập nhật</span>
+                </span>
               </>
             )}
             {sessionHealth && !notInstalled && (
