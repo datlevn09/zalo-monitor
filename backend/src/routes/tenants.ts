@@ -25,6 +25,7 @@ export const tenantRoutes: FastifyPluginAsync = async (app) => {
         id: true, name: true, slug: true, industry: true,
         enabledChannels: true, setupDone: true,
         monitorDMs: true, allowedDMIds: true,
+        encryptMessages: true,
         plan: true, maxGroups: true, maxMessagesPerMonth: true,
         messagesThisMonth: true, maxBoardViewers: true,
         licenseExpiresAt: true,
@@ -45,6 +46,7 @@ export const tenantRoutes: FastifyPluginAsync = async (app) => {
       enabledChannels?: string[]
       monitorDMs?: boolean
       allowedDMIds?: string[]
+      encryptMessages?: boolean
     }
     const updated = await db.tenant.update({
       where: { id: tenantId },
@@ -54,8 +56,15 @@ export const tenantRoutes: FastifyPluginAsync = async (app) => {
         ...(body.enabledChannels ? { enabledChannels: body.enabledChannels } : {}),
         ...(body.monitorDMs !== undefined ? { monitorDMs: body.monitorDMs } : {}),
         ...(body.allowedDMIds !== undefined ? { allowedDMIds: body.allowedDMIds } : {}),
+        ...(body.encryptMessages !== undefined ? { encryptMessages: body.encryptMessages } : {}),
       },
     })
+
+    // Invalidate cache flag → message write tiếp theo dùng setting mới ngay
+    if (body.encryptMessages !== undefined) {
+      const { invalidateEncryptFlag } = await import('../services/db.js')
+      invalidateEncryptFlag(tenantId)
+    }
 
     // Side-effect: khi monitorDMs đổi → cascade vào group.monitorEnabled cho mọi DM
     // (đảm bảo board/analytics/customer/alert đều ẩn DM nếu master tắt)

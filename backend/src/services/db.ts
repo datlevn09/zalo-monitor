@@ -7,6 +7,27 @@ const base = new PrismaClient()
 const ENCRYPTED_FIELDS: Record<string, string[]> = {
   tenant: ['aiApiKey'],
   customer: ['note'],
+  // message.content encrypt CONDITIONAL theo tenant.encryptMessages
+}
+
+// Cache encryptMessages flag per tenant (TTL 60s) — tránh query DB mỗi message.
+const tenantFlagCache = new Map<string, { encryptMessages: boolean; ts: number }>()
+const FLAG_TTL_MS = 60_000
+
+async function shouldEncryptMessages(tenantId: string): Promise<boolean> {
+  const c = tenantFlagCache.get(tenantId)
+  if (c && Date.now() - c.ts < FLAG_TTL_MS) return c.encryptMessages
+  const t = await base.tenant.findUnique({
+    where: { id: tenantId },
+    select: { encryptMessages: true },
+  })
+  const flag = !!t?.encryptMessages
+  tenantFlagCache.set(tenantId, { encryptMessages: flag, ts: Date.now() })
+  return flag
+}
+
+export function invalidateEncryptFlag(tenantId: string) {
+  tenantFlagCache.delete(tenantId)
 }
 
 function encryptInputData(model: string, data: any): any {
@@ -47,21 +68,35 @@ export const db = base.$extends({
   query: {
     message: {
       async create({ args, query }) {
-        const result = await query(args)
         const groupId = (args.data as any)?.groupId
+        if (groupId) await maybeEncryptContent(args.data, groupId)
+        const result = await query(args)
         if (groupId) bumpCounter(groupId)
-        return result
+        return decryptMessageRow(result)
       },
       async upsert({ args, query }) {
-        // Cần biết là CREATE hay UPDATE: query existence trước
         const where = args.where as any
         const existing = await base.message.findUnique({ where, select: { id: true } })
+        const groupId = (args.create as any)?.groupId
+        if (groupId) await maybeEncryptContent(args.create, groupId)
+        if (args.update) await maybeEncryptContent(args.update, groupId)
         const result = await query(args)
-        if (!existing) {
-          const groupId = (args.create as any)?.groupId
-          if (groupId) bumpCounter(groupId)
+        if (!existing && groupId) bumpCounter(groupId)
+        return decryptMessageRow(result)
+      },
+      async update({ args, query }) {
+        // groupId không có trong update payload thường → look up
+        if (args.data && (args.data as any).content !== undefined) {
+          const m = await base.message.findUnique({ where: args.where as any, select: { groupId: true } })
+          if (m) await maybeEncryptContent(args.data, m.groupId)
         }
-        return result
+        return decryptMessageRow(await query(args))
+      },
+      async findUnique({ args, query }) { return decryptMessageRow(await query(args)) },
+      async findFirst({ args, query })  { return decryptMessageRow(await query(args)) },
+      async findMany({ args, query })   {
+        const r = await query(args)
+        return Array.isArray(r) ? r.map(decryptMessageRow) : r
       },
     },
     // Tenant + Customer: auto encrypt/decrypt sensitive fields
@@ -103,6 +138,27 @@ export const db = base.$extends({
     },
   },
 })
+
+async function maybeEncryptContent(data: any, groupId: string) {
+  if (!data || typeof data.content !== 'string' || data.content === '') return
+  const g = await base.group.findUnique({ where: { id: groupId }, select: { tenantId: true } })
+  if (!g) return
+  if (await shouldEncryptMessages(g.tenantId)) {
+    data.content = encrypt(data.content)
+  }
+}
+
+function decryptMessageRow<T>(row: T): T {
+  if (!row) return row
+  if (Array.isArray(row)) return row.map(decryptMessageRow) as any
+  if (typeof row !== 'object') return row
+  const r: any = { ...(row as any) }
+  if (typeof r.content === 'string') {
+    const dec = decrypt(r.content)
+    if (dec !== null) r.content = dec
+  }
+  return r
+}
 
 function bumpCounter(groupId: string) {
   // Fire-and-forget — không chặn write chính

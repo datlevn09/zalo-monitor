@@ -16,6 +16,19 @@ export default function PrivacyPage() {
             Zalo Monitor — Cập nhật: tháng 4 năm 2026
           </p>
 
+          <section className="mb-8 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-xl p-4">
+            <h2 className="text-lg font-semibold text-emerald-900 dark:text-emerald-200 mb-2">
+              🔐 Cam kết về tin nhắn của bạn
+            </h2>
+            <ul className="text-sm text-emerald-800 dark:text-emerald-200 space-y-1.5 list-disc list-inside">
+              <li><strong>Đội ngũ vận hành KHÔNG đọc nội dung tin nhắn</strong> trong điều kiện vận hành thường.</li>
+              <li>Tin nhắn chỉ được xử lý tự động bởi hệ thống AI để phân loại (Cơ hội / Khiếu nại / Tích cực) phục vụ chính bạn.</li>
+              <li>Khi bật mã hoá tin nhắn (Cài đặt → Mã hoá), dữ liệu trong CSDL được mã hoá AES-256-GCM. Backup, disk dump, log truy vấn đều không đọc được.</li>
+              <li>AI / word cloud / phân tích vẫn chạy bình thường vì khoá mã hoá nằm ở server và chỉ được dùng tự động khi xử lý request của bạn — không có công cụ admin để duyệt nội dung tin nhắn.</li>
+              <li>Trường hợp duy nhất kỹ thuật viên có thể thấy tin nhắn: khi BẠN báo lỗi và xác nhận cho phép kiểm tra cụ thể tin nào — sẽ ghi audit log đầy đủ.</li>
+            </ul>
+          </section>
+
           <section className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-zinc-100 mb-3">
               Dữ liệu được đồng bộ
@@ -47,8 +60,20 @@ export default function PrivacyPage() {
             <h2 className="text-xl font-semibold text-gray-900 dark:text-zinc-100 mb-3">
               Quyền truy cập của nhà vận hành
             </h2>
+            <p className="text-gray-700 dark:text-zinc-300 mb-2">
+              Đội ngũ vận hành <strong>không đọc nội dung tin nhắn</strong> của bạn trong điều kiện vận hành thường. Việc bảo trì, sao lưu, theo dõi hiệu năng đều thao tác trên metadata (tên nhóm, thời gian, số lượng) — không trên nội dung.
+            </p>
             <p className="text-gray-700 dark:text-zinc-300">
-              Là nhà vận hành dịch vụ, chúng tôi có thể truy cập dữ liệu kỹ thuật khi cần để duy trì hệ thống (bảo trì, hỗ trợ kỹ thuật). Chúng tôi không sử dụng nội dung tin nhắn cho mục đích khác.
+              Khi bạn bật <strong>Mã hoá tin nhắn</strong>, dữ liệu trong cơ sở dữ liệu được mã hoá AES-256-GCM. Khoá mã hoá nằm trên server để hệ thống AI tự động phân tích phục vụ chính bạn — không tồn tại công cụ admin nào cho phép nhân viên xem tin nhắn cá nhân.
+            </p>
+          </section>
+
+          <section className="mb-8">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-zinc-100 mb-3">
+              Tin nhắn được gửi đi đâu để AI phân tích?
+            </h2>
+            <p className="text-gray-700 dark:text-zinc-300">
+              Khi bạn dùng key chung (mặc định) hoặc cấu hình API key của riêng bạn, nội dung tin nhắn được gửi tới nhà cung cấp AI mà bạn chọn (Anthropic Claude / OpenAI / Google Gemini) qua kết nối TLS để phân loại. Các nhà cung cấp này có chính sách riêng về dữ liệu — vui lòng tham khảo trang chính sách của họ. Nếu cần kiểm soát tuyệt đối, bạn có thể dùng key riêng và cấu hình opt-out training với nhà cung cấp đó.
             </p>
           </section>
 

@@ -13,6 +13,7 @@ type Tenant = {
   setupDone: boolean
   monitorDMs: boolean
   allowedDMIds: string[]
+  encryptMessages: boolean
 }
 
 type InstallCommand = { oneLineCommand: string; windowsCommand?: string; dockerCommand?: string }
@@ -181,6 +182,55 @@ export default function SettingsPage() {
         </Section>
       )}
 
+      {/* Mã hoá tin nhắn — toggle per-tenant */}
+      {tenant && (
+        <Section
+          title="🔐 Mã hoá tin nhắn"
+          description="Tin nhắn lưu trong CSDL được mã hoá AES-256-GCM. Bảo vệ chống lộ DB / backup. Vẫn dùng được AI phân tích, word cloud, search vì khoá mã hoá nằm ở server (giải mã khi đọc)."
+        >
+          <div className="flex items-center gap-3 px-4 py-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500 flex items-center justify-center text-white font-bold shrink-0">
+              🔒
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Mã hoá nội dung tin nhắn</p>
+              <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
+                Bật = tin về sau encrypt trong DB. Tin cũ không bị ảnh hưởng. Có thể tắt bất kỳ lúc nào.
+              </p>
+            </div>
+            <button
+              onClick={async () => {
+                setSaving(true)
+                const next = !tenant.encryptMessages
+                await api('/api/tenants/current', {
+                  method: 'PATCH',
+                  body: JSON.stringify({ encryptMessages: next }),
+                })
+                setTenant({ ...tenant, encryptMessages: next })
+                setSaving(false); setSaved(true)
+                setTimeout(() => setSaved(false), 2000)
+              }}
+              disabled={saving}
+              className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${tenant.encryptMessages ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-white/15'} ${saving ? 'opacity-50' : ''}`}
+            >
+              <span
+                className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform"
+                style={{ transform: tenant.encryptMessages ? 'translateX(20px)' : 'translateX(0)' }}
+              />
+            </button>
+          </div>
+          {tenant.encryptMessages && (
+            <div className="px-4 py-3 bg-emerald-50 dark:bg-emerald-500/10 border-t border-emerald-200 dark:border-emerald-500/30">
+              <p className="text-xs text-emerald-800 dark:text-emerald-300">
+                ✓ Tin nhắn mới được mã hoá. AI phân tích / word cloud vẫn chạy bình thường (server tự giải mã khi cần).
+                Đội ngũ vận hành KHÔNG đọc nội dung tin nhắn của bạn trong điều kiện vận hành thường — xem
+                <a href="/privacy" className="underline ml-1">Chính sách riêng tư</a>.
+              </p>
+            </div>
+          )}
+        </Section>
+      )}
+
       {/* Save indicator */}
       {saved && (
         <div className="fixed bottom-20 md:bottom-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-4 py-2 rounded-full text-sm shadow-lg z-50 animate-in fade-in slide-in-from-bottom-2">
@@ -274,10 +324,10 @@ function AiConfigSection() {
       { id: 'o1-mini', label: 'o1-mini (reasoning)' },
     ],
     google: [
-      { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', note: 'Mặc định · rẻ' },
-      { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', note: 'Mạnh hơn' },
-      { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
-      { id: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash Experimental' },
+      { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', note: 'Mặc định · rẻ nhất' },
+      { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', note: 'Cân bằng' },
+      { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', note: 'Mạnh nhất · đắt' },
+      { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (legacy)' },
     ],
   }
   const defaultModel: Record<string, string> = Object.fromEntries(
@@ -326,8 +376,8 @@ function AiConfigSection() {
 
   return (
     <Section
-      title="🤖 AI Provider — API key của riêng anh"
-      description="Anh tự dùng API key của mình để chạy AI Chat + phân loại tin (anh trả tiền cho provider, không qua hệ thống). Không cấu hình → dùng key chung của hệ thống nếu có."
+      title="🤖 AI Provider — API key của bạn"
+      description="Dùng API key của bạn để chạy AI Chat + phân loại tin (bạn trả tiền trực tiếp cho provider, không qua hệ thống). Không cấu hình → dùng key chung của hệ thống nếu còn quota."
     >
       <div className="px-4 py-3.5 space-y-3">
         {/* Trạng thái hiện tại */}
@@ -343,11 +393,11 @@ function AiConfigSection() {
           </div>
         ) : systemFallback ? (
           <div className="px-3 py-2 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 rounded-lg text-xs text-blue-700 dark:text-blue-300">
-            ℹ️ Đang dùng key chung của hệ thống (Claude Haiku). Nhập key dưới đây để dùng provider/account của riêng anh.
+            ℹ️ Bạn đang dùng key chung của hệ thống. Nhập key riêng bên dưới nếu muốn tự kiểm soát chi phí và provider.
           </div>
         ) : (
           <div className="px-3 py-2 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-lg text-xs text-amber-700 dark:text-amber-300">
-            ⚠️ Chưa cấu hình AI — AI Chat sẽ không hoạt động. Nhập key bên dưới.
+            ⚠️ Chưa có API key — AI Chat và phân loại tin sẽ tạm ngưng. Nhập key bên dưới để kích hoạt.
           </div>
         )}
 

@@ -26,7 +26,7 @@ async function getAiConfigForTenant(tenantId: string): Promise<{
     return {
       provider: t.aiProvider as any,
       apiKey: t.aiApiKey,
-      model: t.aiModel || (t.aiProvider === 'openai' ? 'gpt-4o-mini' : t.aiProvider === 'google' ? 'gemini-1.5-flash' : 'claude-haiku-4-5-20251001'),
+      model: t.aiModel || (t.aiProvider === 'openai' ? 'gpt-4o-mini' : t.aiProvider === 'google' ? 'gemini-2.5-flash-lite' : 'claude-haiku-4-5-20251001'),
     }
   }
   if (process.env.ANTHROPIC_API_KEY) {

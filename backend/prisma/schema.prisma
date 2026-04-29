@@ -40,6 +40,10 @@ model Tenant {
   aiApiKey   String? // encrypted/plain key — TRUST tenant (per-tenant isolation)
   aiModel    String? // 'claude-haiku-4-5-20251001' | 'gpt-4o-mini' | etc
 
+  // Mã hoá tin nhắn at-rest. Bật = tin nhắn mới được encrypt AES-256-GCM trong
+  // DB. Tin cũ không backfill. Đọc vẫn OK qua extension (auto detect prefix).
+  encryptMessages Boolean @default(false)
+
   // Webhook secret — mỗi tenant 1 secret riêng (OpenClaw hook dùng để auth)
   webhookSecret   String  @unique @default(cuid())
 
