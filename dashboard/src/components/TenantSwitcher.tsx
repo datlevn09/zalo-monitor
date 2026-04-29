@@ -40,8 +40,13 @@ export function TenantSwitcher() {
   const current = tenants.find(t => t.isCurrent)
   const others = tenants.filter(t => !t.isCurrent)
 
-  // Chỉ ẩn nếu user chưa có nhiều tenant VÀ chưa muốn add — mặc định luôn hiện nút "Thêm DN"
+  // STAFF không tạo được tenant mới (chỉ OWNER). User chỉ có 1 tenant + role
+  // STAFF → ẩn switcher hoàn toàn (không có gì để switch + không có quyền tạo).
+  // OWNER có 1 tenant: vẫn hiện để có nút 'Thêm doanh nghiệp / Zalo mới'.
+  // OWNER/MANAGER có >1 tenant: hiện switcher.
+  const canAddTenant = current?.role === 'OWNER'
   if (tenants.length === 0) return null
+  if (tenants.length === 1 && !canAddTenant) return null
 
   async function switchTo(tenantId: string) {
     try {
@@ -87,7 +92,7 @@ export function TenantSwitcher() {
         <button
           onClick={() => setOpen(o => !o)}
           className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 border border-gray-200 dark:border-white/10 rounded-full text-xs font-medium text-gray-800 dark:text-zinc-200 transition-colors"
-          title="Đổi doanh nghiệp"
+          title="Doanh nghiệp đang dùng — đổi nếu bạn quản lý nhiều DN/Zalo khác nhau"
         >
           <span className="w-5 h-5 rounded-md bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
             {current?.tenantName?.[0]?.toUpperCase() ?? '?'}

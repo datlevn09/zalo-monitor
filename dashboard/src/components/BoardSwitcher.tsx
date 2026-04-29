@@ -25,6 +25,7 @@ export function BoardSwitcher() {
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
+        title="Đổi board đang xem — board của bạn hoặc board được người khác chia sẻ"
         className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 rounded-full text-xs font-medium text-gray-700 dark:text-zinc-300 transition-colors"
       >
         <span className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold shrink-0">
