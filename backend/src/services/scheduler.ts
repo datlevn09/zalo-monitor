@@ -108,6 +108,61 @@ new Worker('scheduler', async (job) => {
       console.log(`[scheduler] reset-monthly-counter: reset ${r.count} tenants`)
       break
     }
+    case 'onboard-reminder': {
+      // Nhắc khách chưa kết nối Zalo — gửi email cho OWNER tenant nào chưa có
+      // listener ping HOẶC chưa có group nào (= chưa sync history thành công).
+      const { sendMail } = await import('./mailer.js')
+      const reminderRound = job.data?.round ?? 1  // 1 = lần đầu, 2 = nhắc lại
+      const tenants = await db.tenant.findMany({
+        where: { active: true },
+        include: {
+          users: { where: { role: 'OWNER' }, take: 1, select: { email: true, name: true } },
+          _count: { select: { groups: true } },
+        },
+      })
+      let sent = 0
+      for (const t of tenants) {
+        // Skip nếu đã ping VÀ có >=1 group (đã sync OK)
+        if (t.lastHookPingAt && t._count.groups > 0) continue
+        const owner = t.users[0]
+        if (!owner?.email) continue
+        const installUrl = `https://zalo.datthongdong.com/dashboard`
+        const docsUrl = `https://zalo.datthongdong.com/dashboard/docs/install`
+        const greeting = reminderRound === 1
+          ? `Chào ${owner.name},\n\nDoanh nghiệp "${t.name}" của bạn đã đăng ký Zalo Monitor nhưng chưa kết nối Zalo cá nhân — nên dashboard chưa có dữ liệu.`
+          : `Chào ${owner.name},\n\nĐây là email nhắc lại — doanh nghiệp "${t.name}" của bạn vẫn chưa kết nối Zalo. Có thể bạn đang gặp khó khăn?`
+        const text = `${greeting}
+
+CÁCH KẾT NỐI (chỉ 2 click, không cần biết Terminal):
+1. Mở dashboard: ${installUrl}
+2. Bấm nút "Cài đặt cho Mac" hoặc "Cài đặt cho Windows" (auto-detect máy)
+3. Tải file về → double-click → cửa sổ đen tự cài + bật QR
+4. Mở Zalo trên điện thoại → quét QR
+
+Tin nhắn từ Zalo sẽ tự về dashboard sau khi quét xong.
+
+Hướng dẫn chi tiết: ${docsUrl}
+
+Cần hỗ trợ trực tiếp? Reply email này hoặc Telegram @datlevn.
+
+— Lê Đạt (dat.thong.dong)
+`
+        try {
+          await sendMail({
+            to: owner.email,
+            subject: reminderRound === 1
+              ? `[Zalo Monitor] Hoàn tất cài đặt cho "${t.name}" — chỉ 2 click`
+              : `[Zalo Monitor] Nhắc lại — "${t.name}" vẫn chưa kết nối Zalo`,
+            text,
+          })
+          sent++
+        } catch (e: any) {
+          console.error(`[onboard-reminder] sendMail failed for ${owner.email}:`, e?.message)
+        }
+      }
+      console.log(`[scheduler] onboard-reminder round=${reminderRound}: sent ${sent} emails`)
+      break
+    }
     default:
       console.warn(`[scheduler] Unknown job: ${job.name}`)
   }
@@ -168,4 +223,26 @@ export async function registerScheduledJobs() {
     { repeat: { pattern: '5 0 1 * *', tz: 'Asia/Ho_Chi_Minh' } },
   )
   console.log(`[scheduler] reset-monthly-counter registered (00:05 day-1 monthly)`)
+
+  // Onboard reminder — 1 lần 8h sáng 2026-05-01 (mai), nhắc lại 8h sáng 2026-05-04
+  // Asia/Ho_Chi_Minh = UTC+7 → 8h VN = 1h UTC
+  const remind1 = new Date('2026-05-01T01:00:00.000Z') // 8h VN
+  const remind2 = new Date('2026-05-04T01:00:00.000Z') // 8h VN
+  const now = Date.now()
+  if (remind1.getTime() > now) {
+    await schedulerQueue.add(
+      'onboard-reminder',
+      { round: 1 },
+      { delay: remind1.getTime() - now, jobId: 'onboard-reminder-r1' },
+    )
+    console.log(`[scheduler] onboard-reminder R1 scheduled at ${remind1.toISOString()}`)
+  }
+  if (remind2.getTime() > now) {
+    await schedulerQueue.add(
+      'onboard-reminder',
+      { round: 2 },
+      { delay: remind2.getTime() - now, jobId: 'onboard-reminder-r2' },
+    )
+    console.log(`[scheduler] onboard-reminder R2 scheduled at ${remind2.toISOString()}`)
+  }
 }
