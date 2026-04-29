@@ -352,7 +352,19 @@ function OnboardBanner({ installCmd, copyCmd, copied }: { installCmd: string; co
               <li className="flex gap-2">
                 <span className="shrink-0 w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">3</span>
                 <span>
-                  Terminal tự mở và chạy. Khi hỏi <strong>"Đã mở Zalo? [Y/n]"</strong> → mở Zalo trên điện thoại trước → bấm <kbd className="bg-gray-100 dark:bg-white/10 px-1 rounded text-[10px]">Y</kbd>.
+                  Cửa sổ <strong>Terminal/CMD tự mở</strong> và chạy.
+                  {os === 'mac' || os === 'other' ? (
+                    <span className="block mt-1 p-2 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded text-[11px] text-amber-800 dark:text-amber-300">
+                      ⚠️ <strong>Có thể hỏi mật khẩu máy 1 lần</strong> (Password). Nhập mật khẩu đăng nhập máy của bạn — <strong>màn hình KHÔNG hiện gì khi bạn gõ</strong> (ngay cả dấu *) — đó là bình thường, cứ gõ và bấm Enter.
+                    </span>
+                  ) : (
+                    <span className="block mt-1 p-2 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded text-[11px] text-amber-800 dark:text-amber-300">
+                      ⚠️ <strong>Có thể hiện UAC popup</strong> hỏi quyền admin (1-2 lần) → bấm <strong>"Yes"</strong>. Không cần nhập password (nếu account của bạn là Admin).
+                    </span>
+                  )}
+                  <span className="block mt-1.5">
+                    Khi script hỏi <strong>"Đã mở Zalo? [Y/n]"</strong> → mở Zalo trên điện thoại trước → bấm <kbd className="bg-gray-100 dark:bg-white/10 px-1 rounded text-[10px]">Y</kbd> rồi <kbd className="bg-gray-100 dark:bg-white/10 px-1 rounded text-[10px]">Enter</kbd>.
+                  </span>
                 </span>
               </li>
               <li className="flex gap-2">

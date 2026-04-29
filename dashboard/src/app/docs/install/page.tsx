@@ -274,7 +274,10 @@ function MacGuide({ cmd, copy, copied }: { cmd?: string; copy: () => void; copie
           <li>Nhấn <Kbd>Enter</Kbd></li>
         </ol>
         <Note tint="blue">
-          Script tự kiểm tra Node.js. Nếu chưa có, sẽ tải bản pre-built cho Mac (không cần password). Sau đó cài openzca + tạo launchd service tự khởi động.
+          Script tự kiểm tra Node.js. Nếu chưa có, sẽ tải bản pre-built cho Mac. Sau đó cài openzca + tạo launchd service tự khởi động.
+        </Note>
+        <Note tint="amber">
+          <strong>Nếu Terminal hỏi mật khẩu (Password)</strong>: nhập mật khẩu đăng nhập máy của bạn. <strong>Màn hình KHÔNG hiện gì khi gõ</strong> — đó là bình thường (mặc định bảo mật của Mac). Cứ gõ xong rồi bấm Enter.
         </Note>
       </Step>
 
