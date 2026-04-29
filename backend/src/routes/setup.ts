@@ -927,6 +927,10 @@ function generateWindowsHookInstaller(
 ): string {
   return `# Zalo Monitor Listener Installer for Windows (PowerShell)
 # Run as Administrator: iwr -useb "${backendUrl}/api/setup/inject.ps1?tenantId=${tenantId}" | iex
+
+# Bypass ExecutionPolicy cho process này — tránh prompt "Y/N" khi npm.ps1 run
+try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue } catch {}
+
 $ErrorActionPreference = "Stop"
 $BACKEND_URL = "${backendUrl}"
 $TENANT_ID   = "${tenantId}"
@@ -978,8 +982,13 @@ Write-Host "  OK Node.js \`$(node --version)" -ForegroundColor Green
 Write-Host "[2/5] Kiem tra openzca..." -ForegroundColor Yellow
 if (-not (Get-Command openzca -ErrorAction SilentlyContinue)) {
   Write-Host "  Dang cai openzca..." -ForegroundColor White
-  npm install -g openzca 2>&1 | Out-Null
-  $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+  # npm hay write 'npm notice' ra stderr — KHÔNG phải lỗi. ErrorActionPreference=Stop sẽ
+  # treat stderr as terminating error → bypass tạm thời.
+  \`$prevEAPNpm = \`$ErrorActionPreference
+  \`$ErrorActionPreference = "Continue"
+  cmd /c "npm install -g openzca" 2>&1 | Out-Null
+  \`$ErrorActionPreference = \`$prevEAPNpm
+  \`$env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
   if (-not (Get-Command openzca -ErrorAction SilentlyContinue)) {
     Write-Host "  Cai openzca that bai. Thu thu cong: npm install -g openzca" -ForegroundColor Red
     exit 1
