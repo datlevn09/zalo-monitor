@@ -160,15 +160,31 @@ export default function LandingPage() {
 
       {/* ── Showcases — minh hoạ từng tính năng ────────────── */}
       <section className="max-w-5xl mx-auto w-full px-4 md:px-6 pb-12 md:pb-16 space-y-12">
-        {/* Showcase 1: Inbox gom nhiều kênh */}
+        {/* 1. Inbox gom nhiều kênh */}
         <ShowcaseUnifiedInbox />
 
-        {/* Showcase 2: AI phân loại tin nhắn */}
+        {/* 2. AI phân loại tin nhắn */}
         <ShowcaseAIClassify />
 
-        {/* Showcase 3: Pipeline khách hàng + cảnh báo */}
+        <InlineCTA tone="indigo" loggedIn={loggedIn} />
+
+        {/* 3. Tổng quan / KPI dashboard */}
+        <ShowcaseOverview />
+
+        {/* 4. Phân tích sâu — heatmap + xu hướng */}
+        <ShowcaseAnalytics />
+
+        <InlineCTA tone="pink" loggedIn={loggedIn} />
+
+        {/* 5. Pipeline + cảnh báo */}
         <ShowcasePipelineAlert />
+
+        {/* 6. Bảo mật — mã hoá tin nhắn */}
+        <ShowcaseSecurity />
       </section>
+
+      {/* ── Final CTA banner — to, gradient, trước footer ─────────── */}
+      <FinalCTA loggedIn={loggedIn} />
 
       {/* ── Ad placeholder ─────────────────────────────── */}
       {/* TODO: Replace with actual ad component when ready */}
@@ -183,6 +199,7 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto px-4 md:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-gray-400 dark:text-zinc-500">
           <span>© 2025 Zalo Monitor by <a href="https://datthongdong.com" className="hover:text-gray-600 dark:hover:text-zinc-300 transition-colors font-medium">dat.thong.dong</a></span>
           <div className="flex items-center gap-4">
+            <Link href="/contact" className="hover:text-gray-600 dark:hover:text-zinc-300 transition-colors">Liên hệ</Link>
             <Link href="/privacy" className="hover:text-gray-600 dark:hover:text-zinc-300 transition-colors">Chính sách</Link>
             <Link href="/terms" className="hover:text-gray-600 dark:hover:text-zinc-300 transition-colors">Điều khoản</Link>
             <Link href="/login" className="hover:text-gray-600 dark:hover:text-zinc-300 transition-colors">Đăng nhập</Link>
@@ -284,6 +301,206 @@ function ShowcaseAIClassify() {
         <p className="text-gray-600 dark:text-zinc-400 leading-relaxed">
           AI đọc từng tin và gán nhãn tự động: <strong>cơ hội bán hàng</strong>, <strong>khiếu nại</strong>, <strong>rủi ro</strong>, <strong>tích cực</strong>. Anh xem báo cáo theo tuần / tháng / quý để biết xu hướng — không cần lội từng group.
         </p>
+      </div>
+    </div>
+  )
+}
+
+/** CTA inline ở giữa landing — pill nhỏ, không choán màn hình */
+function InlineCTA({ tone, loggedIn }: { tone: 'indigo' | 'pink'; loggedIn: boolean }) {
+  const tones: Record<string, string> = {
+    indigo: 'from-indigo-500 to-blue-600',
+    pink:   'from-pink-500 to-rose-600',
+  }
+  return (
+    <div className={`bg-gradient-to-r ${tones[tone]} rounded-2xl p-5 md:p-6 text-center shadow-lg`}>
+      <p className="text-white text-sm md:text-base font-semibold mb-3">
+        Sẵn sàng bỏ thói quen lội từng group chat?
+      </p>
+      <Link
+        href={loggedIn ? '/dashboard' : '/register'}
+        className="inline-flex items-center gap-2 px-5 py-2.5 bg-white text-gray-900 hover:bg-gray-50 font-semibold text-sm rounded-xl shadow-md transition-all hover:-translate-y-0.5"
+      >
+        {loggedIn ? 'Vào Dashboard' : 'Dùng thử miễn phí'}
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+        </svg>
+      </Link>
+    </div>
+  )
+}
+
+/** CTA cuối trang — banner lớn trước footer */
+function FinalCTA({ loggedIn }: { loggedIn: boolean }) {
+  return (
+    <section className="max-w-5xl mx-auto w-full px-4 md:px-6 pb-12 md:pb-16">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 p-8 md:p-12 text-center shadow-2xl">
+        {/* Decorative blobs */}
+        <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-20 -left-20 w-60 h-60 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+
+        <div className="relative">
+          <h2 className="text-2xl md:text-4xl font-bold text-white tracking-tight mb-3">
+            Bắt đầu trong 5 phút
+          </h2>
+          <p className="text-white/80 text-sm md:text-base max-w-xl mx-auto mb-6">
+            Đăng ký → cài listener → Zalo của bạn về dashboard với phân loại AI tự động. Không cần code, không cần kỹ thuật.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Link
+              href={loggedIn ? '/dashboard' : '/register'}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-white text-blue-700 hover:bg-blue-50 font-semibold text-base rounded-2xl shadow-lg transition-all hover:-translate-y-0.5"
+            >
+              {loggedIn ? 'Vào Dashboard' : 'Đăng ký dùng thử'}
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+              </svg>
+            </Link>
+            <Link
+              href="/docs/install"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 bg-white/10 hover:bg-white/20 backdrop-blur text-white border border-white/30 font-semibold text-base rounded-2xl transition-all"
+            >
+              📖 Đọc hướng dẫn trước
+            </Link>
+          </div>
+          <p className="mt-4 text-white/60 text-xs">
+            Miễn phí dùng thử · Không cần thẻ tín dụng · Hỗ trợ qua Telegram
+          </p>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function ShowcaseOverview() {
+  const stats = [
+    { label: 'Tin nhắn', val: '1.284', sub: 'trong 24 giờ', tint: 'bg-purple-500/10 text-purple-600' },
+    { label: 'Cơ hội',   val: '47',    sub: 'AI đánh dấu', tint: 'bg-green-500/10 text-green-600' },
+    { label: 'Khiếu nại', val: '8',    sub: 'cần xử lý',   tint: 'bg-red-500/10 text-red-600' },
+    { label: 'Tích cực',  val: '156',  sub: 'phản hồi tốt', tint: 'bg-blue-500/10 text-blue-600' },
+  ]
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+      <div>
+        <span className="inline-flex px-2.5 py-1 text-[11px] font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-500/20 rounded-full mb-3">
+          📊 Tổng quan trong 1 màn hình
+        </span>
+        <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-zinc-100 tracking-tight mb-3">
+          Mỗi sáng mở dashboard <span className="text-indigo-600 dark:text-indigo-400">là biết phải làm gì</span>
+        </h2>
+        <p className="text-gray-600 dark:text-zinc-400 leading-relaxed">
+          KPI cards hiển thị 24h hoặc 7 ngày: tin nhắn, cơ hội, khiếu nại, tích cực. Click vào card để xem chi tiết. Toàn bộ số liệu đồng bộ với trang Phân tích — không có chuyện chỗ này 0 chỗ kia 100.
+        </p>
+      </div>
+      <div className="bg-white dark:bg-zinc-900 dark:ring-1 dark:ring-white/5 rounded-3xl shadow-xl p-4 border border-gray-200 dark:border-white/10">
+        <div className="grid grid-cols-2 gap-3">
+          {stats.map(s => (
+            <div key={s.label} className="bg-gray-50 dark:bg-white/5 rounded-2xl p-3.5">
+              <div className="flex items-center gap-2 mb-2">
+                <span className={`w-7 h-7 rounded-lg ${s.tint} flex items-center justify-center`}>
+                  <span className="w-3 h-3 rounded-full bg-current" />
+                </span>
+                <span className="text-[11px] text-gray-500 dark:text-zinc-400">{s.label}</span>
+              </div>
+              <p className="text-2xl font-bold text-gray-900 dark:text-zinc-100 tabular-nums">{s.val}</p>
+              <p className="text-[10px] text-gray-400 dark:text-zinc-500">{s.sub}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ShowcaseAnalytics() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+      <div className="order-2 md:order-1 bg-white dark:bg-zinc-900 dark:ring-1 dark:ring-white/5 rounded-3xl shadow-xl p-5 border border-gray-200 dark:border-white/10">
+        {/* Mini line chart minh hoạ xu hướng tin nhắn 7 ngày */}
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-semibold text-gray-700 dark:text-zinc-200">Xu hướng tin nhắn · 7 ngày</p>
+          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">↑ 23% vs tuần trước</span>
+        </div>
+        <svg viewBox="0 0 300 80" className="w-full h-20">
+          <defs>
+            <linearGradient id="grad-trend" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#6366f1" stopOpacity="0.4" />
+              <stop offset="100%" stopColor="#6366f1" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path d="M0,60 L43,55 L86,40 L128,45 L171,30 L214,25 L257,15 L300,20 L300,80 L0,80 Z" fill="url(#grad-trend)" />
+          <path d="M0,60 L43,55 L86,40 L128,45 L171,30 L214,25 L257,15 L300,20" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        {/* Top groups */}
+        <div className="mt-4 space-y-1.5">
+          <p className="text-[11px] font-semibold text-gray-500 dark:text-zinc-400">Top nhóm cơ hội</p>
+          {[
+            ['Khách VIP — Q1', 18],
+            ['Khách quan tâm BĐS', 12],
+            ['Sales bán lẻ', 9],
+          ].map(([name, count]) => (
+            <div key={name as string} className="flex items-center gap-2">
+              <span className="text-xs text-gray-700 dark:text-zinc-300 flex-1 truncate">{name}</span>
+              <div className="w-20 h-1.5 bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-500" style={{ width: `${(count as number) * 5}%` }} />
+              </div>
+              <span className="text-xs font-bold tabular-nums text-gray-900 dark:text-zinc-100 w-6 text-right">{count}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="order-1 md:order-2">
+        <span className="inline-flex px-2.5 py-1 text-[11px] font-semibold text-pink-700 dark:text-pink-300 bg-pink-100 dark:bg-pink-500/20 rounded-full mb-3">
+          📈 Phân tích sâu
+        </span>
+        <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-zinc-100 tracking-tight mb-3">
+          Hiểu rõ <span className="text-pink-600 dark:text-pink-400">khách đang nói gì</span>
+        </h2>
+        <p className="text-gray-600 dark:text-zinc-400 leading-relaxed">
+          Heatmap giờ vàng để gửi bài, top nhóm cơ hội vs khiếu nại, word cloud từ khoá khách dùng nhiều. Xem theo 7 ngày / 30 ngày / quý / năm — số liệu thống nhất với dashboard.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function ShowcaseSecurity() {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+      <div>
+        <span className="inline-flex px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-500/20 rounded-full mb-3">
+          🔐 Bảo mật & Riêng tư
+        </span>
+        <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-zinc-100 tracking-tight mb-3">
+          Tin nhắn được <span className="text-emerald-600 dark:text-emerald-400">mã hoá</span>, đội vận hành không đọc
+        </h2>
+        <p className="text-gray-600 dark:text-zinc-400 leading-relaxed mb-3">
+          Bật mã hoá AES-256-GCM trong Cài đặt — tin nhắn lưu trong CSDL được mã hoá, backup/disk dump không đọc được.
+          AI vẫn phân tích được vì chỉ chạy tự động trên dữ liệu của bạn.
+        </p>
+        <ul className="space-y-1.5 text-sm text-gray-600 dark:text-zinc-400">
+          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-0.5">✓</span> Cách ly per-tenant — DN A không thấy DN B</li>
+          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-0.5">✓</span> Bật/tắt mã hoá tuỳ chọn cho từng tenant</li>
+          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-0.5">✓</span> API key AI lưu mã hoá riêng — không nhân viên nào đọc được</li>
+        </ul>
+      </div>
+      <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-500/10 dark:via-teal-500/10 dark:to-cyan-500/10 rounded-3xl p-5 ring-1 ring-emerald-200 dark:ring-emerald-500/30 shadow-xl">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-lg shrink-0">🔒</div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Mã hoá nội dung tin nhắn</p>
+              <p className="text-xs text-gray-600 dark:text-zinc-400 mt-0.5">AES-256-GCM · ON</p>
+            </div>
+            <div className="w-11 h-6 rounded-full bg-emerald-500 relative">
+              <span className="absolute top-0.5 right-0.5 w-5 h-5 bg-white rounded-full shadow-md" />
+            </div>
+          </div>
+          <div className="bg-white dark:bg-zinc-900/60 rounded-xl p-3 font-mono text-[10px] text-gray-500 dark:text-zinc-500 break-all">
+            v1:8efa1a03ba4c96049bf4fac3097169a085583de7…
+          </div>
+          <p className="mt-3 text-[11px] text-emerald-700 dark:text-emerald-300">
+            ✓ Tin mới được mã hoá. AI / phân tích vẫn chạy bình thường (server tự giải mã khi cần).
+          </p>
       </div>
     </div>
   )
