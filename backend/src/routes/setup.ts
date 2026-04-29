@@ -71,12 +71,20 @@ const pendingActions = new Map<string, Set<string>>()
 
 // Trạng thái sync history: tenantId → { ok, output, at }
 const syncHistoryStatus = new Map<string, { ok: boolean | null; output: string; at: number }>()
+/**
+ * Queue action: in-memory (nhanh) + persist DB (sống sót backend restart +
+ * khách offline nhiều ngày). Listener poll /pending-actions sẽ thấy cả 2.
+ */
 export function queueAction(tenantId: string, action: string) {
+  // In-memory: pickup ngay nếu listener đang ping, không cần đợi DB
   if (!pendingActions.has(tenantId)) pendingActions.set(tenantId, new Set())
   pendingActions.get(tenantId)!.add(action)
-  // TTL 24h: action sống sót khi listener offline lâu (Mac sleep, mất mạng, etc.).
-  // Sau 24h auto cleanup để không bị stale.
+  // Auto cleanup memory sau 24h (nếu DB version đã pickup rồi)
   setTimeout(() => pendingActions.get(tenantId)?.delete(action), 24 * 60 * 60 * 1000)
+  // Persist DB: khách offline nhiều ngày vẫn pickup được khi sống lại
+  import('../services/db.js').then(({ db }) => {
+    db.pendingAction.create({ data: { tenantId, action } }).catch(() => undefined)
+  })
 }
 
 export function getQrEntryFromStore(tenantId: string) {
@@ -868,10 +876,24 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
       where: { id: tenantId },
       data: { lastHookPingAt: new Date() },
     }).catch(() => undefined)
-    const set = pendingActions.get(tenantId)
-    const actions = set ? Array.from(set) : []
-    if (set) set.clear() // consume — hook đã nhận, không gửi lại
-    return { actions }
+
+    // Pickup actions từ cả 2 nguồn: memory (nhanh) + DB (sống sót offline lâu)
+    const memSet = pendingActions.get(tenantId)
+    const memActions = memSet ? Array.from(memSet) : []
+    if (memSet) memSet.clear()
+
+    // DB: lấy tất cả pending actions của tenant này, xoá luôn (consume)
+    const dbRows = await db.pendingAction.findMany({
+      where: { tenantId },
+      select: { id: true, action: true },
+    })
+    if (dbRows.length > 0) {
+      await db.pendingAction.deleteMany({ where: { id: { in: dbRows.map(r => r.id) } } }).catch(() => undefined)
+    }
+
+    // Dedupe + return
+    const merged = Array.from(new Set([...memActions, ...dbRows.map(r => r.action)]))
+    return { actions: merged }
   })
 }
 

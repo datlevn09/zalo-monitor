@@ -552,6 +552,20 @@ model SystemSetting {
   @@map("system_settings")
 }
 
+// ─── Pending Action — listener pickup (persist DB, sống sót backend restart) ──
+// Dashboard queue action (sync_history, login_zalo, sync_groups…) cho listener
+// trên máy khách. Listener poll /pending-actions mỗi 1s, exec, rồi /ack-action
+// để xoá row. Khách offline cả tuần vẫn pickup được khi sống lại.
+model PendingAction {
+  id        String   @id @default(cuid())
+  tenantId  String
+  action    String
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@map("pending_actions")
+}
+
 // ─── Audit Log (privacy compliance) ───────────────────────────────────────────
 // Ghi mọi truy cập nhạy cảm đến tin nhắn / customer / aiApiKey để bằng chứng:
 // đội vận hành KHÔNG đọc nội dung tin nhắn trong điều kiện thường (privacy.tsx
