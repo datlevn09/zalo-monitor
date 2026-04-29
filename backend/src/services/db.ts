@@ -1,6 +1,37 @@
 import { PrismaClient } from '@prisma/client'
+import { encrypt, decrypt } from './crypto.js'
 
 const base = new PrismaClient()
+
+// Field cần auto-encrypt: { model: [field, ...] }
+const ENCRYPTED_FIELDS: Record<string, string[]> = {
+  tenant: ['aiApiKey'],
+  customer: ['note'],
+}
+
+function encryptInputData(model: string, data: any): any {
+  const fields = ENCRYPTED_FIELDS[model.toLowerCase()]
+  if (!fields || !data) return data
+  const out: any = { ...data }
+  for (const f of fields) {
+    if (out[f] !== undefined && out[f] !== null && typeof out[f] === 'string') {
+      out[f] = encrypt(out[f])
+    }
+  }
+  return out
+}
+
+function decryptResult<T>(model: string, result: T): T {
+  const fields = ENCRYPTED_FIELDS[model.toLowerCase()]
+  if (!fields || !result) return result
+  if (Array.isArray(result)) return result.map(r => decryptResult(model, r)) as any
+  if (typeof result !== 'object') return result
+  const out: any = { ...(result as any) }
+  for (const f of fields) {
+    if (typeof out[f] === 'string') out[f] = decrypt(out[f])
+  }
+  return out
+}
 
 /**
  * Tự động tăng tenant.messagesThisMonth mỗi khi có 1 message MỚI được tạo,
@@ -32,6 +63,43 @@ export const db = base.$extends({
         }
         return result
       },
+    },
+    // Tenant + Customer: auto encrypt/decrypt sensitive fields
+    tenant: {
+      async create({ args, query }) {
+        args.data = encryptInputData('tenant', args.data)
+        return decryptResult('tenant', await query(args))
+      },
+      async update({ args, query }) {
+        args.data = encryptInputData('tenant', args.data)
+        return decryptResult('tenant', await query(args))
+      },
+      async upsert({ args, query }) {
+        args.create = encryptInputData('tenant', args.create)
+        args.update = encryptInputData('tenant', args.update)
+        return decryptResult('tenant', await query(args))
+      },
+      async findUnique({ args, query }) { return decryptResult('tenant', await query(args)) },
+      async findFirst({ args, query })  { return decryptResult('tenant', await query(args)) },
+      async findMany({ args, query })   { return decryptResult('tenant', await query(args)) },
+    },
+    customer: {
+      async create({ args, query }) {
+        args.data = encryptInputData('customer', args.data)
+        return decryptResult('customer', await query(args))
+      },
+      async update({ args, query }) {
+        args.data = encryptInputData('customer', args.data)
+        return decryptResult('customer', await query(args))
+      },
+      async upsert({ args, query }) {
+        args.create = encryptInputData('customer', args.create)
+        args.update = encryptInputData('customer', args.update)
+        return decryptResult('customer', await query(args))
+      },
+      async findUnique({ args, query }) { return decryptResult('customer', await query(args)) },
+      async findFirst({ args, query })  { return decryptResult('customer', await query(args)) },
+      async findMany({ args, query })   { return decryptResult('customer', await query(args)) },
     },
   },
 })
