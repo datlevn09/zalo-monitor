@@ -716,16 +716,18 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     }
     if (!ok) return reply.status(401).send({ error: 'Invalid' })
 
-    const body = req.body as { groups?: Array<{ groupId: string; name: string }> }
+    const body = req.body as { groups?: Array<{ groupId: string; name: string; avatar?: string | null; memberCount?: number | null }> }
     if (!Array.isArray(body?.groups) || body.groups.length === 0) {
       return reply.status(400).send({ error: 'No groups' })
     }
 
-    let renamed = 0, flipped = 0, merged = 0
+    let renamed = 0, flipped = 0, merged = 0, avatarsSet = 0
     for (const g of body.groups) {
       const numericId = String(g.groupId).replace(/^group:/, '')
       const fullExternalId = `group:${numericId}`
       const realName = (g.name || '').trim().slice(0, 200)
+      const avatar = g.avatar && typeof g.avatar === 'string' && g.avatar.startsWith('http') ? g.avatar : null
+      const memberCount = typeof g.memberCount === 'number' && g.memberCount > 0 ? g.memberCount : null
       if (!numericId) continue
 
       // Tìm cả 2 records: với prefix và không prefix
@@ -784,9 +786,19 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
         await db.group.update({ where: { id: groupRec.id }, data: { name: realName } })
         renamed++
       }
+
+      // Update avatar + memberCount nếu có (cho cả groupRec hoặc dmRec đã flip)
+      const finalGroupId = groupRec?.id ?? dmRec?.id
+      if (finalGroupId && (avatar || memberCount)) {
+        const updateData: any = {}
+        if (avatar) updateData.avatarUrl = avatar
+        if (memberCount) updateData.memberCount = memberCount
+        await db.group.update({ where: { id: finalGroupId }, data: updateData }).catch(() => undefined)
+        if (avatar) avatarsSet++
+      }
     }
 
-    return { ok: true, total: body.groups.length, renamed, flipped, merged }
+    return { ok: true, total: body.groups.length, renamed, flipped, merged, avatarsSet }
   })
 
   // POST /api/setup/sync-history-done — listener báo đã sync xong

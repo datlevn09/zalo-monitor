@@ -169,6 +169,13 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
         ? await db.group.update({ where: { id: existing.id }, data: { name: realGroupName } })
         : await db.group.findUnique({ where: { id: existing.id } })
     } else {
+      // Tìm OWNER của tenant để gán làm chủ group mới (tránh null-owner lọt vào
+      // 'Board của tôi' của user khác sau khi backfill).
+      const owner = await db.user.findFirst({
+        where: { tenantId, role: 'OWNER' },
+        select: { id: true },
+        orderBy: { createdAt: 'asc' },
+      })
       group = await db.group.create({
         data: {
           tenantId,
@@ -177,6 +184,7 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
           name: realGroupName ?? fallbackName,
           monitorEnabled: true,
           isDirect: !isGroup,
+          ownerUserId: owner?.id ?? null,
         },
       })
     }

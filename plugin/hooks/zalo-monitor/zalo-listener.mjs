@@ -398,7 +398,13 @@ async function syncGroupList() {
     })
     const list = JSON.parse(raw)
     if (!Array.isArray(list) || list.length === 0) return
-    const payload = list.map(g => ({ groupId: String(g.groupId), name: String(g.name || '').slice(0, 200) }))
+    const payload = list.map(g => ({
+      groupId: String(g.groupId),
+      name: String(g.name || '').slice(0, 200),
+      // openzca có thể dùng nhiều field name khác nhau cho avatar — thử cả
+      avatar: g.avatar || g.avatarUrl || g.avatar_url || g.icon || g.thumbUrl || g.thumb || null,
+      memberCount: g.memberCount ?? g.member_count ?? g.totalMember ?? null,
+    }))
     await fetch(`${cfg.backendUrl}/api/setup/sync-zalo-groups`, {
       method: 'POST',
       headers: {
