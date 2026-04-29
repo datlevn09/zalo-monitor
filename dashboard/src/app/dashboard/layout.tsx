@@ -9,6 +9,7 @@ import { Header } from '@/components/Header'
 import { RemoteBanner } from '@/components/RemoteBanner'
 import { BoardProvider } from '@/lib/board-context'
 import { BoardSwitcher } from '@/components/BoardSwitcher'
+import { TenantSwitcher } from '@/components/TenantSwitcher'
 
 const NAV = [
   { href: '/',                    label: 'Home',       icon: IconHome,     tint: 'bg-blue-500',   exact: true },
@@ -101,6 +102,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <Header
           right={
             <div className="flex items-center gap-3">
+              <TenantSwitcher />
               <BoardSwitcher />
               <span
                 title={live ? 'Live' : 'Offline'}

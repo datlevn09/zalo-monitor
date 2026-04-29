@@ -153,6 +153,118 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     }
   })
 
+  // ── /my-tenants — list tất cả tenant mà email user đang login đăng ký ──
+  // Multi-tenant v2: 1 email có thể own/là member của nhiều tenant.
+  app.get('/my-tenants', async (req, reply) => {
+    const auth = req.headers.authorization
+    if (!auth?.startsWith('Bearer ')) return reply.status(401).send({ error: 'No token' })
+    let p: any
+    try { p = app.jwt.verify(auth.slice(7)) } catch { return reply.status(401).send({ error: 'Invalid token' }) }
+    const me = await db.user.findUnique({ where: { id: p.userId }, select: { email: true } })
+    if (!me?.email) return reply.status(404).send({ error: 'User not found' })
+    const users = await db.user.findMany({
+      where: { email: me.email },
+      select: {
+        id: true, role: true,
+        tenant: {
+          select: {
+            id: true, name: true, slug: true, plan: true, active: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    })
+    return users
+      .filter(u => u.tenant.active)
+      .map(u => ({
+        userId: u.id,
+        role: u.role,
+        tenantId: u.tenant.id,
+        tenantName: u.tenant.name,
+        slug: u.tenant.slug,
+        plan: u.tenant.plan,
+        isCurrent: u.id === p.userId,
+      }))
+  })
+
+  // ── /add-tenant — tạo tenant + user mới với email hiện tại (multi-Zalo) ──
+  app.post('/add-tenant', async (req, reply) => {
+    const auth = req.headers.authorization
+    if (!auth?.startsWith('Bearer ')) return reply.status(401).send({ error: 'No token' })
+    let p: any
+    try { p = app.jwt.verify(auth.slice(7)) } catch { return reply.status(401).send({ error: 'Invalid token' }) }
+    const me = await db.user.findUnique({
+      where: { id: p.userId },
+      select: { email: true, name: true, passwordHash: true },
+    })
+    if (!me?.email || !me.passwordHash) return reply.status(404).send({ error: 'User not found' })
+
+    const body = req.body as { companyName?: string; phone?: string }
+    const companyName = (body?.companyName ?? '').toString().trim().slice(0, 200)
+    if (!companyName) return reply.status(400).send({ error: 'Thiếu companyName' })
+
+    const baseSlug = companyName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 30)
+    const randomSuffix = randomBytes(3).toString('hex')
+    const slug = `${baseSlug}-${randomSuffix}`
+
+    const tenant = await db.tenant.create({
+      data: {
+        name: companyName,
+        slug,
+        active: false,                  // chờ admin kích hoạt như register thường
+        plan: 'trial',
+        setupDone: false,
+        contactName: me.name,
+        contactPhone: body?.phone,
+        contactEmail: me.email,
+      },
+    })
+
+    await db.user.create({
+      data: {
+        tenantId: tenant.id,
+        name: me.name,
+        email: me.email,
+        passwordHash: me.passwordHash,  // reuse hash → đổi pass 1 chỗ apply tất cả tenant
+        role: 'OWNER',
+      },
+    })
+
+    return { ok: true, tenantId: tenant.id, slug, message: 'Tạo doanh nghiệp mới — chờ admin kích hoạt.' }
+  })
+
+  // ── /switch-tenant — re-issue JWT với tenantId khác (cùng email) ──
+  app.post('/switch-tenant', async (req, reply) => {
+    const auth = req.headers.authorization
+    if (!auth?.startsWith('Bearer ')) return reply.status(401).send({ error: 'No token' })
+    let p: any
+    try { p = app.jwt.verify(auth.slice(7)) } catch { return reply.status(401).send({ error: 'Invalid token' }) }
+
+    const body = req.body as { tenantId?: string }
+    const targetTenantId = (body?.tenantId ?? '').toString()
+    if (!targetTenantId) return reply.status(400).send({ error: 'Thiếu tenantId' })
+
+    const me = await db.user.findUnique({ where: { id: p.userId }, select: { email: true } })
+    if (!me?.email) return reply.status(404).send({ error: 'User not found' })
+
+    const targetUser = await db.user.findFirst({
+      where: { email: me.email, tenantId: targetTenantId },
+      include: { tenant: { select: { id: true, name: true, slug: true, active: true } } },
+    })
+    if (!targetUser) return reply.status(403).send({ error: 'Tenant không thuộc email này' })
+    if (!targetUser.tenant.active) return reply.status(403).send({ error: 'Tenant chưa kích hoạt' })
+
+    const token = app.jwt.sign(
+      { userId: targetUser.id, tenantId: targetUser.tenantId, role: targetUser.role },
+      { expiresIn: '30d' }
+    )
+    return {
+      token,
+      user: publicUser(targetUser),
+      tenant: { id: targetUser.tenant.id, name: targetUser.tenant.name, slug: targetUser.tenant.slug },
+    }
+  })
+
   // ── /my-privacy — GET/PATCH privacy settings per-user (monitorDMs, allowedDMIds)
   app.get('/my-privacy', async (req, reply) => {
     const auth = req.headers.authorization

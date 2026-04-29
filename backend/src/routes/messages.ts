@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../services/db.js'
+import { audit } from '../services/audit.js'
 
 export const messageRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/messages?groupId=xxx&limit=50
@@ -34,6 +35,12 @@ export const messageRoutes: FastifyPluginAsync = async (app) => {
       take: Number(limit),
       ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
       include: { analysis: true },
+    })
+    // Audit log: ghi mỗi lần user đọc tin nhắn của 1 group (1 log/req, không phải 1/tin)
+    audit({
+      req, action: 'read_messages',
+      target: groupId,
+      meta: { count: messages.length, includeDeleted },
     })
     return messages.reverse()
   })

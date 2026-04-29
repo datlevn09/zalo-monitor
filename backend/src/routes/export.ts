@@ -4,6 +4,7 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import { db } from '../services/db.js'
+import { audit } from '../services/audit.js'
 
 function escapeCsv(v: any): string {
   if (v === null || v === undefined) return ''
@@ -50,6 +51,7 @@ export const exportRoutes: FastifyPluginAsync = async (app) => {
 
     reply.header('Content-Type', 'text/csv; charset=utf-8')
     reply.header('Content-Disposition', `attachment; filename="messages-${new Date().toISOString().slice(0,10)}.csv"`)
+    audit({ req, action: 'export_csv', meta: { type: 'messages', count: messages.length, days: Number(days ?? 30) } })
     return '\uFEFF' + toCsv(rows) // BOM for Excel UTF-8
   })
 

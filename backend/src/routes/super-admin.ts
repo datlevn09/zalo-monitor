@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { randomBytes } from 'node:crypto'
 import { db } from '../services/db.js'
 import { invalidateTenantCache } from '../services/tenant-guard.js'
+import { audit } from '../services/audit.js'
 import bcrypt from 'bcryptjs'
 
 // Gatekeeper: kiểm tra x-super-admin-token
@@ -283,6 +284,7 @@ export const superAdminRoutes: FastifyPluginAsync = async (app) => {
   // GET /api/super-admin/tenants/:id — chi tiết 1 tenant: owner, users, groups by channel
   app.get('/tenants/:id', async (req, reply) => {
     const { id } = req.params as { id: string }
+    audit({ req, tenantId: id, action: 'super_admin_view', target: id, meta: { what: 'tenant_detail' } })
     const tenant = await db.tenant.findUnique({
       where: { id },
       include: {
