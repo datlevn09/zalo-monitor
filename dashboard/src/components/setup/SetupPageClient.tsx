@@ -121,6 +121,14 @@ export function SetupPageClient() {
             Zalo Monitor <sup className="text-[10px] font-semibold text-blue-500 ml-0.5 align-top">beta</sup>
           </h1>
           <p className="text-gray-500 dark:text-zinc-400 mt-1 text-sm">Thiết lập kết nối Zalo</p>
+          <a
+            href="/docs/install"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 mt-3 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-500/10 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 text-xs font-medium rounded-full transition-colors"
+          >
+            📖 Mới vào? Đọc hướng dẫn từ đầu (đăng ký → cấu hình)
+          </a>
         </div>
 
         {/* Step indicators */}

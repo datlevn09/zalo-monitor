@@ -3,9 +3,7 @@
 import Link from 'next/link'
 import { ThemeToggleCompact } from './ThemeToggle'
 
-const TELE  = 'https://t.me/datlevn'
-const EMAIL = 'mailto:datle@outlook.com'
-const WEB   = 'https://datthongdong.com'
+const WEB = 'https://datthongdong.com'
 
 export function Footer() {
   return (
@@ -17,21 +15,21 @@ export function Footer() {
           <Link href={WEB} target="_blank" rel="noopener noreferrer" className="hover:underline font-medium text-gray-500 dark:text-zinc-400">
             @dat.thong.dong
           </Link>
-          {' · '}
-          <a href="tel:0869999664" className="tabular-nums hover:underline">0869.999.664</a>
         </p>
 
-        {/* Contact + theme */}
-        <div className="flex items-center gap-2 flex-wrap justify-center text-[10px] text-gray-400 dark:text-zinc-500">
-          <a href={TELE} target="_blank" rel="noopener noreferrer" title="Telegram @datlevn"
-             className="hover:underline font-medium text-gray-500 dark:text-zinc-400 inline-flex items-center gap-0.5">
-            <span className="text-[9px]">✈️</span>Tele
-          </a>
+        {/* Links + theme */}
+        <div className="flex items-center gap-3 flex-wrap justify-center text-[10px] text-gray-400 dark:text-zinc-500">
+          <Link href="/contact" className="hover:underline font-medium text-gray-500 dark:text-zinc-400">
+            Liên hệ
+          </Link>
           <span className="text-gray-300 dark:text-zinc-600">·</span>
-          <a href={EMAIL} title="datle@outlook.com"
-             className="hover:underline font-medium text-gray-500 dark:text-zinc-400 inline-flex items-center gap-0.5">
-            <span className="text-[9px]">✉️</span>Email
-          </a>
+          <Link href="/privacy" className="hover:underline font-medium text-gray-500 dark:text-zinc-400">
+            Bảo mật
+          </Link>
+          <span className="text-gray-300 dark:text-zinc-600">·</span>
+          <Link href="/terms" className="hover:underline font-medium text-gray-500 dark:text-zinc-400">
+            Điều khoản
+          </Link>
           <span className="mx-1 w-px h-4 bg-gray-200 dark:bg-white/10" />
           <ThemeToggleCompact />
         </div>

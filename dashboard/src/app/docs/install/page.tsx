@@ -83,11 +83,43 @@ export default function InstallGuidePage() {
         <Card>
           <h2 className="text-lg font-bold mb-2">📋 Tổng quan</h2>
           <p className="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed">
-            <strong>Listener</strong> là 1 chương trình nhỏ chạy ngầm trên máy có Zalo của anh.
+            <strong>Listener</strong> là 1 chương trình nhỏ chạy ngầm trên máy có Zalo của bạn.
             Nó <strong>chỉ ĐỌC</strong> tin nhắn và đẩy về dashboard — <em>không bao giờ</em> tự reply.
-            Chỉ gửi tin khi anh chủ động bấm Gửi từ dashboard.
+            Chỉ gửi tin khi bạn chủ động bấm Gửi từ dashboard.
           </p>
         </Card>
+
+        {/* Bước 0 — Đăng ký tài khoản */}
+        <Step n={0} title="Bước 1 — Tạo tài khoản dashboard" customIcon="📝">
+          <ol className="text-sm text-gray-700 dark:text-zinc-300 space-y-2 list-decimal list-inside">
+            <li>
+              Truy cập{' '}
+              <Link href="/register" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
+                trang Đăng ký
+              </Link>
+              {' '}— nhập tên doanh nghiệp + email + mật khẩu.
+            </li>
+            <li>Có thể đăng nhập bằng <strong>Google</strong> nếu thuận tiện.</li>
+            <li>Sau khi đăng ký → tự động chuyển vào dashboard.</li>
+            <li>
+              Có thể cấu hình <Link href="/dashboard/settings" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
+              API Key AI riêng</Link> (Anthropic / OpenAI / Google) hoặc dùng key chung của hệ thống.
+            </li>
+          </ol>
+          <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-500/10 rounded-lg text-xs text-blue-800 dark:text-blue-300">
+            💡 <strong>Chưa muốn cài listener?</strong> Bạn vẫn có thể đăng ký để xem board mà người khác chia sẻ cho bạn (nếu có) — không cần cài gì thêm.
+          </div>
+        </Step>
+
+        {/* Bước 1 — Cài listener (intro) */}
+        <Step n={1} title="Bước 2 — Cài listener trên máy có Zalo" customIcon="💻">
+          <p className="text-sm text-gray-700 dark:text-zinc-300 mb-2">
+            Chọn nền tảng máy bạn dùng (Windows / macOS / VPS Linux / NAS) ở tab phía trên rồi làm theo hướng dẫn cụ thể.
+          </p>
+          <p className="text-xs text-gray-500 dark:text-zinc-400">
+            Mỗi tài khoản Zalo cần 1 listener riêng. Lệnh cài có sẵn webhookSecret riêng cho doanh nghiệp của bạn.
+          </p>
+        </Step>
 
         {/* Platform-specific */}
         {tab === 'windows' && <WindowsGuide cmd={installCmd} copy={copy} copied={copied} />}
