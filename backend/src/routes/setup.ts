@@ -74,8 +74,9 @@ const syncHistoryStatus = new Map<string, { ok: boolean | null; output: string; 
 export function queueAction(tenantId: string, action: string) {
   if (!pendingActions.has(tenantId)) pendingActions.set(tenantId, new Set())
   pendingActions.get(tenantId)!.add(action)
-  // Auto cleanup sau 5 phút (phòng hook offline, không xử lý)
-  setTimeout(() => pendingActions.get(tenantId)?.delete(action), 5 * 60 * 1000)
+  // TTL 24h: action sống sót khi listener offline lâu (Mac sleep, mất mạng, etc.).
+  // Sau 24h auto cleanup để không bị stale.
+  setTimeout(() => pendingActions.get(tenantId)?.delete(action), 24 * 60 * 60 * 1000)
 }
 
 export function getQrEntryFromStore(tenantId: string) {
