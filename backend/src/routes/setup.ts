@@ -911,17 +911,33 @@ Write-Host ""
 Write-Host "[1/5] Kiem tra Node.js..." -ForegroundColor Yellow
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   Write-Host "  Node.js chua cai. Dang tu dong cai dat..." -ForegroundColor Yellow
+  # Cach 1: winget (Win 10 1809+ hoac Win 11)
   if (Get-Command winget -ErrorAction SilentlyContinue) {
     winget install OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements 2>&1 | Out-Null
-    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+    \`$env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+  }
+  # Cach 2: Tai MSI tu nodejs.org (fallback khi khong co winget)
+  if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+    Write-Host "  Khong co winget, tai MSI tu nodejs.org..." -ForegroundColor Yellow
+    \`$arch = if ([Environment]::Is64BitOperatingSystem) { "x64" } else { "x86" }
+    \`$msiUrl = "https://nodejs.org/dist/v20.18.1/node-v20.18.1-\`$arch.msi"
+    \`$msiPath = "\`$env:TEMP\\node-installer.msi"
+    try {
+      Invoke-WebRequest -Uri \`$msiUrl -OutFile \`$msiPath -UseBasicParsing -TimeoutSec 60
+      Start-Process msiexec.exe -ArgumentList "/i \`"\`$msiPath\`" /quiet /qn /norestart" -Wait -Verb RunAs
+      Remove-Item \`$msiPath -ErrorAction SilentlyContinue
+      \`$env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")
+    } catch {
+      Write-Host "  Tai MSI that bai (\`$_)" -ForegroundColor Red
+    }
   }
   if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-    Write-Host "  Khong cai duoc Node tu dong. Tai tai: https://nodejs.org" -ForegroundColor Red
-    Write-Host "  Sau khi cai xong, mo PowerShell moi va chay lai lenh nay." -ForegroundColor White
+    Write-Host "  Khong tu cai Node duoc. Tai thu cong tai: https://nodejs.org/en/download" -ForegroundColor Red
+    Write-Host "  Sau khi cai xong, double-click file installer mot lan nua." -ForegroundColor White
     exit 1
   }
 }
-Write-Host "  OK Node.js $(node --version)" -ForegroundColor Green
+Write-Host "  OK Node.js \`$(node --version)" -ForegroundColor Green
 
 # [2/5] Cai openzca CLI (npm install -g openzca)
 Write-Host "[2/5] Kiem tra openzca..." -ForegroundColor Yellow

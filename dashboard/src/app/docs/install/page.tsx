@@ -116,10 +116,21 @@ export default function InstallGuidePage() {
         {/* Bước 1 — Cài listener (intro) */}
         <Step n={1} title="Bước 2 — Cài listener trên máy có Zalo" customIcon="💻">
           <p className="text-sm text-gray-700 dark:text-zinc-300 mb-2">
-            Chọn nền tảng máy bạn dùng (Windows / macOS / VPS Linux / NAS) ở tab phía trên rồi làm theo hướng dẫn cụ thể.
+            <strong>Cách dễ nhất</strong>: vào dashboard → trang Tổng quan → bấm <strong>"Tải installer cho Mac/Windows"</strong> → double-click file vừa tải. Terminal/CMD tự mở và làm tất cả mọi thứ:
           </p>
+          <ul className="text-xs text-gray-600 dark:text-zinc-400 space-y-1 list-disc list-inside ml-2 mb-3">
+            <li>Tự cài <strong>Node.js</strong> nếu máy chưa có (Mac: tải tarball nodejs.org / Win: winget hoặc MSI installer).</li>
+            <li>Tự cài <strong>openzca CLI</strong> qua npm.</li>
+            <li>Tự tạo <strong>service ngầm</strong> (launchd cho Mac, systemd cho Linux, Scheduled Task cho Windows) — listener chạy tự động khi mở máy.</li>
+            <li>Tự bật QR đăng nhập Zalo — bạn quét bằng điện thoại là xong.</li>
+          </ul>
+          <div className="p-2.5 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-lg mb-3">
+            <p className="text-xs text-emerald-800 dark:text-emerald-300">
+              ✓ Khách <strong>không cần cài gì trước</strong> — script tự lo Node, npm, brew, dependencies. Cũng không cần biết Terminal/CMD.
+            </p>
+          </div>
           <p className="text-xs text-gray-500 dark:text-zinc-400">
-            Mỗi tài khoản Zalo cần 1 listener riêng. Lệnh cài có sẵn webhookSecret riêng cho doanh nghiệp của bạn.
+            Nếu bạn quen dùng Terminal: chọn tab Win/Mac/VPS/NAS phía trên để xem lệnh raw.
           </p>
         </Step>
 
