@@ -308,11 +308,14 @@ export default function TeamPage() {
             <select
               value={form.role}
               onChange={(e) => setForm({ ...form, role: e.target.value })}
-              className="w-full mb-3 px-4 py-2.5 bg-gray-50 dark:bg-white/5 rounded-xl text-sm border border-gray-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-zinc-100"
+              className="w-full mb-1.5 px-4 py-2.5 bg-gray-50 dark:bg-white/5 rounded-xl text-sm border border-gray-200 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-zinc-100"
             >
-              <option value="STAFF">Staff</option>
-              <option value="MANAGER">Manager</option>
+              <option value="STAFF">Staff — chỉ thấy nhóm/dữ liệu được phân quyền</option>
+              <option value="MANAGER">Manager — quản lý + cấp quyền (vẫn không tự động thấy hết, phải vào tab "Tổng quan tenant")</option>
             </select>
+            <p className="text-[11px] text-gray-500 dark:text-zinc-400 mb-3">
+              💡 Mặc định Staff để an toàn. Manager chỉ cần khi user đó cần quyền cấp quyền cho người khác.
+            </p>
 
             {/* Board access toggle */}
             <label className="flex items-center gap-3 px-4 py-3 bg-blue-50 dark:bg-blue-500/10 rounded-xl mb-4 cursor-pointer">

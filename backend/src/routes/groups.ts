@@ -49,18 +49,21 @@ export const groupRoutes: FastifyPluginAsync = async (app) => {
       return groups
     }
 
-    const seeAll = auth && (auth.role === 'OWNER' || auth.role === 'MANAGER') && scope !== 'mine'
+    // Mặc định "Board của tôi" = chỉ groups của user (mọi role).
+    // OWNER/MANAGER muốn xem hết tenant → phải explicit ?scope=all.
+    // ?scope=mine vẫn giữ ngữ nghĩa cũ (chỉ groups own) cho compat.
+    const seeAll = scope === 'all' && auth && (auth.role === 'OWNER' || auth.role === 'MANAGER')
 
     const where: any = { tenantId }
     if (!seeAll && auth) {
-      // Get group IDs this staff has permission for via GroupPermission
+      // Filter: groups own (ownerUserId=me) HOẶC GroupPermission HOẶC legacy null-owner
       const perms = await db.groupPermission.findMany({
         where: { tenantId, userId: auth.userId },
         select: { groupId: true },
       })
       const permGroupIds = perms.map(p => p.groupId)
-      // Show groups with explicit permission OR legacy groups (ownerUserId=null)
       where.OR = [
+        { ownerUserId: auth.userId },
         { id: { in: permGroupIds } },
         { ownerUserId: null },
       ]
