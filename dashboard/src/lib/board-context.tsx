@@ -55,14 +55,24 @@ export function BoardProvider({
       })
   }, [currentUserId, currentUserName])
 
+  const [switching, setSwitching] = useState(false)
   function setActiveBoard(b: Board) {
     setActiveBoardState(b)
     localStorage.setItem('zm:boardUserId', b.userId)
+    // Trigger reload để mọi page re-fetch với board scope mới
+    setSwitching(true)
+    setTimeout(() => { window.location.reload() }, 600)
   }
 
   return (
     <BoardContext.Provider value={{ boards, activeBoard, setActiveBoard, isReady }}>
       {children}
+      {switching && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] bg-blue-500 text-white px-4 py-2.5 rounded-full shadow-lg flex items-center gap-2 text-sm font-medium animate-in fade-in slide-in-from-top-4">
+          <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+          <span>Đang chuyển board, chờ chút...</span>
+        </div>
+      )}
     </BoardContext.Provider>
   )
 }

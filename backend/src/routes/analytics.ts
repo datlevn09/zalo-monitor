@@ -22,6 +22,66 @@ function filterClause(filter: string): string {
   return ''
 }
 
+/**
+ * RBAC helper — trả về list groupIds user được xem, dựa trên scope + boardUserId.
+ * Trả null = không filter (full tenant — chỉ Manager/Owner với scope=all).
+ * Trả [] = không có gì → endpoint return empty.
+ * Trả [...ids] = filter WHERE g.id IN (ids).
+ */
+async function getAllowedGroupIds(req: any, tenantId: string): Promise<string[] | null> {
+  const auth = req.authUser
+  const scope = req.query?.scope as string | undefined
+  const boardUserIdQ = req.query?.boardUserId as string | undefined
+  if (!auth) return [] // no auth — return empty
+
+  // Manager/Owner toàn tenant
+  if (scope === 'all' && (auth.role === 'OWNER' || auth.role === 'MANAGER')) return null
+
+  // Tất cả board của tôi (gộp): own + sharers
+  if (scope === 'all_shared') {
+    const accesses = await db.boardAccess.findMany({
+      where: { tenantId, viewerUserId: auth.userId },
+      select: { boardUserId: true },
+    })
+    const sharerIds = accesses.map(a => a.boardUserId)
+    const groups = await db.group.findMany({
+      where: {
+        tenantId,
+        OR: [
+          { ownerUserId: auth.userId },
+          { ownerUserId: { in: sharerIds } },
+        ],
+      },
+      select: { id: true },
+    })
+    return groups.map(g => g.id)
+  }
+
+  // Board của user khác (đã pass auth-guard BoardAccess check)
+  if (boardUserIdQ && boardUserIdQ !== auth.userId && !boardUserIdQ.startsWith('__')) {
+    const groups = await db.group.findMany({
+      where: { tenantId, ownerUserId: boardUserIdQ },
+      select: { id: true },
+    })
+    return groups.map(g => g.id)
+  }
+
+  // Default = Board của tôi (own + GroupPermission)
+  const [groups, perms] = await Promise.all([
+    db.group.findMany({ where: { tenantId, ownerUserId: auth.userId }, select: { id: true } }),
+    db.groupPermission.findMany({ where: { tenantId, userId: auth.userId }, select: { groupId: true } }),
+  ])
+  return Array.from(new Set([...groups.map(g => g.id), ...perms.map(p => p.groupId)]))
+}
+
+/** Returns SQL clause `AND g.id IN ('id1','id2')` hoặc empty string nếu null (no filter). */
+function groupIdsClause(ids: string[] | null, alias = 'g'): string {
+  if (ids === null) return ''
+  if (ids.length === 0) return `AND ${alias}."id" = '__none__'` // force empty result
+  const escaped = ids.map(id => `'${id.replace(/'/g, "''")}'`).join(',')
+  return `AND ${alias}."id" IN (${escaped})`
+}
+
 // Stop words tiếng Việt + Anh — bỏ khi tạo word cloud
 const STOP_WORDS = new Set([
   // Vietnamese function words
@@ -67,6 +127,9 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
     const filterSql = filterClause(filter)
     const since = new Date(Date.now() - days * 24 * 3600 * 1000)
 
+    const allowedIds = await getAllowedGroupIds(req, tenantId)
+    const rbacClause = groupIdsClause(allowedIds, 'g')
+
     // Query: per group, count by label
     const rows = await db.$queryRawUnsafe<Array<{
       id: string; name: string; member_count: number | null;
@@ -88,6 +151,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
       LEFT JOIN messages m ON m."groupId" = g.id AND m."sentAt" >= $2 AND m."senderType"='CONTACT'
       LEFT JOIN message_analyses a ON a."messageId" = m.id
       WHERE g."tenantId" = $1 AND g."monitorEnabled" = true ${filterSql}
+        ${rbacClause}
       GROUP BY g.id, g.name, g."memberCount", g."lastMessageAt"
     `, tenantId, since)
 
@@ -277,6 +341,8 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
     const tenantId = requireTenant(req, reply); if (!tenantId) return
     const days = Math.min(Number((req.query as any)?.days ?? 30), 60)
     const since = new Date(Date.now() - days * 24 * 3600 * 1000)
+    const allowedIds = await getAllowedGroupIds(req, tenantId)
+    const rbacClause = groupIdsClause(allowedIds, 'g')
 
     const rows = await db.$queryRawUnsafe<Array<{
       day: string; positive: bigint; negative: bigint; neutral: bigint;
@@ -298,6 +364,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
         JOIN groups g ON g.id = m."groupId"
         LEFT JOIN message_analyses a ON a."messageId" = m.id
         WHERE g."tenantId" = $1 AND m."sentAt" >= $2
+          ${rbacClause}
         GROUP BY 1
       )
       SELECT d.day::text AS day,
@@ -335,6 +402,8 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
     const isDirectClause =
       filter === 'group' ? 'AND g."isDirect" = false' :
       filter === 'dm'    ? 'AND g."isDirect" = true' : ''
+    const allowedIds = await getAllowedGroupIds(req, tenantId)
+    const rbacClause = groupIdsClause(allowedIds, 'g')
 
     const fetchWindow = async (from: Date, to: Date) => {
       const rows = await db.$queryRawUnsafe<Array<{ label: string | null; count: bigint }>>(`
@@ -346,6 +415,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
           AND m."sentAt" >= $2 AND m."sentAt" < $3
           AND m."senderType" = 'CONTACT'
           ${isDirectClause}
+          ${rbacClause}
         GROUP BY 1
       `, tenantId, from, to)
       const acc = { total: 0, opportunity: 0, complaint: 0, positive: 0 }
@@ -387,6 +457,8 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
     const isDirectClause =
       filter === 'group' ? 'AND g."isDirect" = false' :
       filter === 'dm'    ? 'AND g."isDirect" = true' : ''
+    const allowedIds = await getAllowedGroupIds(req, tenantId)
+    const rbacClause = groupIdsClause(allowedIds, 'g')
 
     const rows = await db.$queryRawUnsafe<Array<{ label: string | null; count: bigint }>>(`
       SELECT COALESCE(a.label, 'NEUTRAL') AS label, COUNT(*)::bigint AS count
@@ -396,6 +468,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
       WHERE g."tenantId" = $1 AND m."sentAt" >= $2
         AND m."senderType" = 'CONTACT'
         ${isDirectClause}
+        ${rbacClause}
       GROUP BY 1
       ORDER BY count DESC
     `, tenantId, since)
