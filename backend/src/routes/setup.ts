@@ -946,9 +946,8 @@ Write-Host "  Backend: \`$BACKEND_URL" -ForegroundColor White
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  CHUAN BI:" -ForegroundColor Yellow
-Write-Host "  1. Mo Zalo tren dien thoai cua ban" -ForegroundColor White
-Write-Host "  2. Vao: Cai dat -> Thiet bi da dang nhap -> Them thiet bi" -ForegroundColor White
-Write-Host "  3. San sang quet QR (lat nua se hien tren web)" -ForegroundColor White
+Write-Host "  Mo Zalo tren dien thoai, san sang quet QR" -ForegroundColor White
+Write-Host "  (Zalo tu nhan QR o moi noi, khong can vao Cai dat)" -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "  Script bat dau sau 5 giay..." -ForegroundColor DarkGray
 Start-Sleep -Seconds 5
@@ -1206,9 +1205,8 @@ echo "  Backend: $BACKEND_URL"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "  📱 CHUẨN BỊ:"
-echo "     1. Mở Zalo trên điện thoại của bạn"
-echo "     2. Vào: Cài đặt → Thiết bị đã đăng nhập → Thêm thiết bị"
-echo "     3. Sẵn sàng quét QR (lát nữa sẽ hiện trên dashboard)"
+echo "     Mở Zalo trên điện thoại, sẵn sàng quét QR"
+echo "     (Zalo tự nhận QR ở mọi nơi, không cần vào Cài đặt)"
 echo ""
 echo "  Script bắt đầu sau 5 giây..."
 sleep 5
