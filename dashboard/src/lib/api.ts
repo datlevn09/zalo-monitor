@@ -34,7 +34,13 @@ export async function api<T = any>(path: string, init?: RequestInit): Promise<T>
   // Backend dùng để filter groups/messages/analytics theo board owner.
   const boardUserId = typeof window !== 'undefined' ? localStorage.getItem('zm:boardUserId') : null
   let finalPath = path
-  if (boardUserId && !path.includes('boardUserId=')) {
+  if (boardUserId === '__all__' && !path.includes('scope=')) {
+    // 'Tất cả board của tôi (gộp)' — own + tất cả board được share cho user
+    finalPath = path + (path.includes('?') ? '&' : '?') + 'scope=all_shared'
+  } else if (boardUserId === '__tenant__' && !path.includes('scope=')) {
+    // Manager 'Toàn tổ chức' — gộp toàn tenant (admin view)
+    finalPath = path + (path.includes('?') ? '&' : '?') + 'scope=all'
+  } else if (boardUserId && !boardUserId.startsWith('__') && !path.includes('boardUserId=')) {
     finalPath = path + (path.includes('?') ? '&' : '?') + `boardUserId=${encodeURIComponent(boardUserId)}`
   }
   // Fastify reject 400 khi Content-Type=application/json mà body rỗng.

@@ -49,14 +49,30 @@ export const groupRoutes: FastifyPluginAsync = async (app) => {
       return groups
     }
 
-    // 'Board của tôi' = CHỈ groups của user đang login (mọi role, kể cả OWNER/MANAGER).
-    // - Manager xem nhân viên/CEO chia sẻ → switch qua BoardSwitcher (boardUserId)
-    // - Manager xem tổng tenant → ?scope=all (admin view)
-    // Legacy null-owner KHÔNG còn hiện ở 'Board của tôi' (đã backfill về OWNER của tenant).
+    // 3 loại view (cho mọi user):
+    //   default        : Board của tôi (own + GroupPermission)
+    //   scope=all_shared: Gộp own + các board được share qua BoardAccess
+    //   scope=all       : Toàn tenant (chỉ Manager/Owner — admin view)
     const seeAll = scope === 'all' && auth && (auth.role === 'OWNER' || auth.role === 'MANAGER')
 
     const where: any = { tenantId }
-    if (!seeAll && auth) {
+    if (seeAll) {
+      // toàn tenant — không filter thêm
+    } else if (scope === 'all_shared' && auth) {
+      // gộp: own + GroupPermission + tất cả users đã share board cho me
+      const [perms, accesses] = await Promise.all([
+        db.groupPermission.findMany({ where: { tenantId, userId: auth.userId }, select: { groupId: true } }),
+        db.boardAccess.findMany({ where: { tenantId, viewerUserId: auth.userId }, select: { boardUserId: true } }),
+      ])
+      const permGroupIds = perms.map(p => p.groupId)
+      const sharerIds = accesses.map(a => a.boardUserId)
+      where.OR = [
+        { ownerUserId: auth.userId },
+        { ownerUserId: { in: sharerIds } },
+        { id: { in: permGroupIds } },
+      ]
+    } else if (auth) {
+      // default: Board của tôi
       const perms = await db.groupPermission.findMany({
         where: { tenantId, userId: auth.userId },
         select: { groupId: true },

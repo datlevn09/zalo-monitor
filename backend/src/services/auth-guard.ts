@@ -76,7 +76,9 @@ export function registerAuthGuard(app: FastifyInstance) {
     const m = url2.match(/[?&]boardUserId=([^&]+)/)
     if (m) {
       const boardUserId = decodeURIComponent(m[1])
-      if (boardUserId && boardUserId !== payload.userId) {
+      // Skip pseudo-IDs (__all__, __tenant__ — handled bởi scope= ở lib/api.ts)
+      if (boardUserId.startsWith('__')) { /* no-op */ }
+      else if (boardUserId && boardUserId !== payload.userId) {
         const { db } = await import('./db.js')
         // Cả OWNER và STAFF: boardUserId !== self → bắt buộc có BoardAccess record.
         // Tránh stale localStorage trỏ sang STAFF cùng tenant (STAFF không own group →

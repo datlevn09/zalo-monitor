@@ -26,7 +26,7 @@ export const boardRoutes: FastifyPluginAsync = async (app) => {
       include: { boardUser: { select: { id: true, name: true, role: true } } },
     })
 
-    const boards = [
+    const boards: any[] = [
       own,
       ...granted.map(a => ({
         userId: a.boardUser.id,
@@ -35,6 +35,31 @@ export const boardRoutes: FastifyPluginAsync = async (app) => {
         role: a.boardUser.role,
       }))
     ]
+
+    // 'Tất cả board (gộp)' — chỉ hiện nếu user có >=1 board được share.
+    // Áp dụng cho mọi role: gộp own + các board được share cho user này.
+    // Frontend dùng userId='__all__' → API gửi ?scope=all_shared.
+    if (granted.length > 0) {
+      boards.push({
+        userId: '__all__',
+        userName: 'Tất cả board của tôi (gộp)',
+        isOwn: false,
+        role: 'GROUP_VIEW',
+        isAllView: true,
+      })
+    }
+
+    // Manager/Owner: thêm 'Toàn <Tên tổ chức>' — gộp toàn tenant.
+    if (auth.role === 'OWNER' || auth.role === 'MANAGER') {
+      const tenant = await db.tenant.findUnique({ where: { id: auth.tenantId }, select: { name: true } })
+      boards.push({
+        userId: '__tenant__',
+        userName: `Toàn ${tenant?.name ?? 'tổ chức'} (admin)`,
+        isOwn: false,
+        role: 'ADMIN_VIEW',
+        isAllView: true,
+      })
+    }
 
     return { boards }
   })

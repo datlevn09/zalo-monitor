@@ -1376,97 +1376,16 @@ if [ "$TEST_STATUS" = "200" ]; then
   echo "  ✅ Hook đã cài và kết nối với dashboard"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
-  # ── Kiểm tra Zalo đã login chưa ──────────────────
-  ZALO_LOGGED_IN=false
-  if command -v openzca >/dev/null 2>&1; then
-    if openzca --profile zalo-monitor auth status >/dev/null 2>&1; then
-      ZALO_LOGGED_IN=true
-    fi
-  fi
-
-  if [ "$ZALO_LOGGED_IN" = "true" ]; then
-    echo "  ✅ Zalo đã đăng nhập — sẵn sàng theo dõi nhóm!"
-    echo ""
-    echo "  🔗 Mở dashboard:"
-    echo "     $DASHBOARD_URL/dashboard"
-  else
-    echo "  📱 Bước cuối: Đăng nhập Zalo (quét QR)"
-    echo ""
-    echo "  ┌─────────────────────────────────────────┐"
-    echo "  │  Mở sẵn Zalo trên điện thoại trước khi  │"
-    echo "  │  bấm Y — QR chỉ hiệu lực ~60 giây       │"
-    echo "  └─────────────────────────────────────────┘"
-    echo ""
-    printf "  Đã mở Zalo trên điện thoại, sẵn sàng quét? [Y/n] "
-    read -r QR_CONFIRM </dev/tty
-    QR_CONFIRM_LOWER=$(echo "$QR_CONFIRM" | tr '[:upper:]' '[:lower:]')
-    if [ "$QR_CONFIRM_LOWER" = "n" ]; then
-      echo ""
-      echo "  OK — mở Zalo rồi vào đây để quét:"
-      echo "  🔗 $DASHBOARD_URL/dashboard/settings/channels"
-      echo ""
-      echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    else
-
-    # Tìm canvas port openclaw (mặc định 18789)
-    CANVAS_PORT=18789
-    SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost")
-
-    # Thử lấy QR qua openzca auth login (sinh file qr.png)
-    QR_FILE=""
-    if command -v openzca >/dev/null 2>&1; then
-      echo ""
-      echo "  Đang tạo QR..."
-      openzca --profile zalo-monitor auth login --qr-path /tmp/zalo-qr.png >/dev/null 2>&1 &
-      OPENZCA_PID=$!
-      # Chờ file QR xuất hiện tối đa 10s
-      for _i in $(seq 1 10); do
-        for _f in /tmp/zalo-qr.png ~/qr.png ~/.openclaw/qr.png /root/qr.png; do
-          if [ -f "$_f" ] && [ -s "$_f" ]; then
-            QR_FILE="$_f"
-            break 2
-          fi
-        done
-        sleep 1
-      done
-      kill $OPENZCA_PID 2>/dev/null || true
-    fi
-
-    if [ -n "$QR_FILE" ]; then
-      # Push QR lên dashboard (để user quét trên web nếu thuận tiện)
-      QR_B64=$(base64 -w0 < "$QR_FILE" 2>/dev/null || base64 < "$QR_FILE" | tr -d '\n')
-      if [ -n "$QR_B64" ]; then
-        curl -s -X POST "$BACKEND_URL/api/setup/qr-push" \
-          -H 'content-type: application/json' \
-          -H "x-webhook-secret: $WEBHOOK_SECRET" \
-          -H "x-tenant-id: $TENANT_ID" \
-          -d "{\\"dataUrl\\":\\"data:image/png;base64,$QR_B64\\"}" >/dev/null 2>&1 || true
-      fi
-      # Mở QR file bằng GUI viewer
-      if command -v open >/dev/null 2>&1; then
-        open "$QR_FILE" 2>/dev/null && echo "  📂 Đã mở QR trong Preview — quét bằng Zalo trên điện thoại." || true
-      elif command -v xdg-open >/dev/null 2>&1; then
-        xdg-open "$QR_FILE" 2>/dev/null && echo "  📂 Đã mở QR — quét bằng Zalo trên điện thoại." || true
-      else
-        echo "  📂 File QR: $QR_FILE"
-        echo "     Mở file này và quét bằng Zalo trên điện thoại."
-      fi
-      echo ""
-      echo "  Hoặc quét trên dashboard (QR đã được đẩy):"
-      echo "  🔗 $DASHBOARD_URL/dashboard/settings/channels"
-    else
-      # Fallback: openclaw canvas UI
-      echo "  Cách 1 — Quét qua OpenClaw Canvas (mở trên máy này):"
-      echo "  🔗 http://$SERVER_IP:$CANVAS_PORT/__openclaw__/canvas/"
-      echo ""
-      echo "  Cách 2 — Quét qua dashboard (sau khi QR xuất hiện ~30s):"
-      echo "  🔗 $DASHBOARD_URL/dashboard/settings/channels"
-      echo "     → Bấm [Kết nối lại] nếu chưa tự hiện"
-    fi
-    echo ""
-    echo "  ⚠️  Sau khi quét: dashboard tự cập nhật ✅"
-    fi # end QR_CONFIRM check
-  fi
+  echo "  ✅ Listener đã cài + đang chạy ngầm."
+  echo ""
+  echo "  📱 Bước cuối — đăng nhập Zalo (1 lần):"
+  echo "     1. Mở dashboard: $DASHBOARD_URL/dashboard/settings/channels"
+  echo "     2. Bấm nút [Kết nối lại] / [Đổi tài khoản] → QR sẽ hiện ngay trên web"
+  echo "     3. Mở Zalo điện thoại → Cài đặt → Thiết bị đã đăng nhập → Thêm thiết bị → quét"
+  echo ""
+  echo "  Sau khi quét: tin nhắn tự về dashboard."
+  echo ""
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 elif [ "$TEST_STATUS" = "401" ]; then

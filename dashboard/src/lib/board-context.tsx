@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 
-type Board = { userId: string; userName: string; isOwn: boolean }
+type Board = { userId: string; userName: string; isOwn: boolean; isAllView?: boolean; role?: string }
 
 type BoardContextType = {
   boards: Board[]
