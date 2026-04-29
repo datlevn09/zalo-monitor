@@ -85,7 +85,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
         COUNT(CASE WHEN a.label='RISK' THEN 1 END)::bigint AS risk_msgs,
         COUNT(CASE WHEN a.label='OPPORTUNITY' THEN 1 END)::bigint AS opportunity_msgs
       FROM groups g
-      LEFT JOIN messages m ON m."groupId" = g.id AND m."createdAt" >= $2 AND m."senderType"='CONTACT'
+      LEFT JOIN messages m ON m."groupId" = g.id AND m."sentAt" >= $2 AND m."senderType"='CONTACT'
       LEFT JOIN message_analyses a ON a."messageId" = m.id
       WHERE g."tenantId" = $1 AND g."monitorEnabled" = true ${filterSql}
       GROUP BY g.id, g.name, g."memberCount", g."lastMessageAt"
@@ -249,9 +249,9 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
       FROM messages m
       JOIN groups g ON g.id = m."groupId"
       WHERE g."tenantId" = $1 AND g."monitorEnabled" = true ${filterSql}
-        AND m."createdAt" >= $2 AND m."senderType" = 'CONTACT'
+        AND m."sentAt" >= $2 AND m."senderType" = 'CONTACT'
         AND m.content IS NOT NULL AND length(m.content) > 0
-      ORDER BY m."createdAt" DESC
+      ORDER BY m."sentAt" DESC
       LIMIT 5000
     `, tenantId, since)
 
@@ -290,14 +290,14 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
       ),
       stats AS (
         SELECT
-          date_trunc('day', m."createdAt")::date AS day,
+          date_trunc('day', m."sentAt")::date AS day,
           COUNT(CASE WHEN a.label='POSITIVE' THEN 1 END)::bigint AS positive,
           COUNT(CASE WHEN a.label IN ('COMPLAINT','RISK') THEN 1 END)::bigint AS negative,
           COUNT(CASE WHEN a.label='NEUTRAL' OR a.label IS NULL THEN 1 END)::bigint AS neutral
         FROM messages m
         JOIN groups g ON g.id = m."groupId"
         LEFT JOIN message_analyses a ON a."messageId" = m.id
-        WHERE g."tenantId" = $1 AND m."createdAt" >= $2
+        WHERE g."tenantId" = $1 AND m."sentAt" >= $2
         GROUP BY 1
       )
       SELECT d.day::text AS day,
@@ -316,30 +316,52 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
     }))
   })
 
-  // GET /api/analytics/weekly-compare
+  // GET /api/analytics/weekly-compare?days=7&filter=all|group|dm
+  // KPI cards: dùng CÙNG criteria với pie chart label-distribution để các con số khớp nhau:
+  //  - Source: message_analyses (AI label)
+  //  - Time field: sentAt
+  //  - senderType = 'CONTACT' (chỉ tin nhận, đồng bộ với "Phân loại tin")
+  //  - filter group/dm áp dụng qua g.isDirect
+  // total = tổng tin CONTACT trong cùng window (= tổng pie chart).
   app.get('/weekly-compare', async (req, reply) => {
     const tenantId = requireTenant(req, reply); if (!tenantId) return
-
+    const days = Math.max(1, Number((req.query as any)?.days ?? 7))
+    const filter = String((req.query as any)?.filter ?? 'all')
     const now = Date.now()
-    const weekAgo = new Date(now - 7 * 86400000)
-    const twoWeekAgo = new Date(now - 14 * 86400000)
+    const periodMs = days * 86400000
+    const sinceCurr = new Date(now - periodMs)
+    const sincePrev = new Date(now - periodMs * 2)
 
-    const [thisWeek, lastWeek] = await Promise.all(
-      [weekAgo, twoWeekAgo].map(async (sinceStart, i) => {
-        const untilEnd = i === 0 ? new Date(now) : weekAgo
-        // Đồng nhất nguồn data với pie chart "Phân loại tin" (label-distribution):
-        // dùng message_analyses thay vì alerts (alerts chỉ trigger khi có rule, gây
-        // mismatch KPI=0 nhưng pie=3).
-        const baseWhere = { message: { group: { tenantId } }, createdAt: { gte: sinceStart, lt: untilEnd } } as const
-        const [total, opportunity, complaint, positive] = await Promise.all([
-          db.message.count({ where: { group: { tenantId }, createdAt: { gte: sinceStart, lt: untilEnd } } }),
-          db.messageAnalysis.count({ where: { ...baseWhere, label: 'OPPORTUNITY' } }),
-          db.messageAnalysis.count({ where: { ...baseWhere, label: 'COMPLAINT' } }),
-          db.messageAnalysis.count({ where: { ...baseWhere, label: 'POSITIVE' } }),
-        ])
-        return { total, opportunity, complaint, positive }
-      })
-    )
+    const isDirectClause =
+      filter === 'group' ? 'AND g."isDirect" = false' :
+      filter === 'dm'    ? 'AND g."isDirect" = true' : ''
+
+    const fetchWindow = async (from: Date, to: Date) => {
+      const rows = await db.$queryRawUnsafe<Array<{ label: string | null; count: bigint }>>(`
+        SELECT COALESCE(a.label, 'NEUTRAL') AS label, COUNT(*)::bigint AS count
+        FROM messages m
+        JOIN groups g ON g.id = m."groupId"
+        LEFT JOIN message_analyses a ON a."messageId" = m.id
+        WHERE g."tenantId" = $1
+          AND m."sentAt" >= $2 AND m."sentAt" < $3
+          AND m."senderType" = 'CONTACT'
+          ${isDirectClause}
+        GROUP BY 1
+      `, tenantId, from, to)
+      const acc = { total: 0, opportunity: 0, complaint: 0, positive: 0 }
+      for (const r of rows) {
+        const c = Number(r.count); acc.total += c
+        if (r.label === 'OPPORTUNITY') acc.opportunity = c
+        else if (r.label === 'COMPLAINT') acc.complaint = c
+        else if (r.label === 'POSITIVE') acc.positive = c
+      }
+      return acc
+    }
+
+    const [thisWeek, lastWeek] = await Promise.all([
+      fetchWindow(sinceCurr, new Date(now)),
+      fetchWindow(sincePrev, sinceCurr),
+    ])
 
     const delta = (curr: number, prev: number) =>
       prev === 0 ? (curr > 0 ? 100 : 0) : Math.round(((curr - prev) / prev) * 100)
@@ -355,11 +377,16 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
     }
   })
 
-  // GET /api/analytics/label-distribution?days=7
+  // GET /api/analytics/label-distribution?days=7&filter=all|group|dm
+  // CÙNG criteria với weekly-compare → tổng count phải khớp KPI "Tin nhắn".
   app.get('/label-distribution', async (req, reply) => {
     const tenantId = requireTenant(req, reply); if (!tenantId) return
     const days = Number((req.query as any)?.days ?? 7)
+    const filter = String((req.query as any)?.filter ?? 'all')
     const since = new Date(Date.now() - days * 24 * 3600 * 1000)
+    const isDirectClause =
+      filter === 'group' ? 'AND g."isDirect" = false' :
+      filter === 'dm'    ? 'AND g."isDirect" = true' : ''
 
     const rows = await db.$queryRawUnsafe<Array<{ label: string | null; count: bigint }>>(`
       SELECT COALESCE(a.label, 'NEUTRAL') AS label, COUNT(*)::bigint AS count
@@ -368,6 +395,7 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
       LEFT JOIN message_analyses a ON a."messageId" = m.id
       WHERE g."tenantId" = $1 AND m."sentAt" >= $2
         AND m."senderType" = 'CONTACT'
+        ${isDirectClause}
       GROUP BY 1
       ORDER BY count DESC
     `, tenantId, since)

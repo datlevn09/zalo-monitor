@@ -80,7 +80,7 @@ export default function AnalyticsPage() {
       api<Sender[]>(`/api/analytics/top-senders?${q}`).then(setSenders),
       api<HeatmapData>(`/api/analytics/heatmap?${q}`).then(setHeatmap),
       api<SentimentPoint[]>(`/api/analytics/sentiment-trend?days=${Math.max(days, 14)}&filter=${filter}`).then(setTrend),
-      api<WeekCompare>(`/api/analytics/weekly-compare?filter=${filter}`).then(setWeek),
+      api<WeekCompare>(`/api/analytics/weekly-compare?${q}`).then(setWeek),
       api<LabelDist>(`/api/analytics/label-distribution?${q}`).then(setLabels),
       api<ChannelBreak>(`/api/analytics/channel-breakdown?${q}`).then(setChannels),
       api<WordCloudData>(`/api/analytics/word-cloud?${q}`).then(setWordCloud),
