@@ -281,6 +281,23 @@ export const setupRoutes: FastifyPluginAsync = async (app) => {
     return fs.readFileSync(full, 'utf-8')
   })
 
+  // GET /api/setup/listener-version — cho listener self-update (so SHA256 với local)
+  app.get('/listener-version', async (_req, reply) => {
+    const path = await import('path')
+    const fs = await import('fs')
+    const { createHash } = await import('node:crypto')
+    const candidates = [
+      path.resolve(process.cwd(), '..', 'plugin', 'hooks', 'zalo-monitor', 'zalo-listener.mjs'),
+      path.resolve(process.cwd(), 'plugin', 'hooks', 'zalo-monitor', 'zalo-listener.mjs'),
+      path.resolve('/app', 'plugin', 'hooks', 'zalo-monitor', 'zalo-listener.mjs'),
+    ]
+    const full = candidates.find((p) => fs.existsSync(p))
+    if (!full) return reply.status(500).send({ error: 'listener file not found on server' })
+    const buf = fs.readFileSync(full)
+    const sha256 = createHash('sha256').update(buf).digest('hex')
+    return { sha256, size: buf.length }
+  })
+
   // POST /api/setup/qr-push — hook reports QR image
   app.post('/qr-push', async (req, reply) => {
     const secret = req.headers['x-webhook-secret'] as string
@@ -954,7 +971,11 @@ $wrapperLines = @(
   "Get-Content '$envPath' | ForEach-Object {",
   "  if (\`$_ -match '^([^=]+)=(.*)\`$') { [Environment]::SetEnvironmentVariable(\`$matches[1], \`$matches[2], 'Process') }",
   "}",
-  "& node '$listenerPath'"
+  "# Loop: nếu listener exit (vd self-update) → restart sau 3s. Tương đương Restart=always trên Linux.",
+  "while (\`$true) {",
+  "  & node '$listenerPath'",
+  "  Start-Sleep -Seconds 3",
+  "}"
 )
 Set-Content -Path $wrapperPath -Value ($wrapperLines -join "\`r\`n") -Encoding UTF8
 

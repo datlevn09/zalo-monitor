@@ -101,35 +101,7 @@ export default function OverviewPage() {
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
       {/* Onboarding banner — chỉ hiện khi chưa có kết nối Zalo nào */}
-      {myGroupsCount === 0 && installCmd && zaloConnected === false && (
-        <div className="mb-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-500/10 dark:to-indigo-500/10 border border-blue-200 dark:border-blue-500/30 rounded-2xl p-4 md:p-5">
-          <div className="flex items-start gap-3">
-            <div className="text-2xl">👋</div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Chào mừng! Cài listener để bắt đầu theo dõi Zalo của bạn</p>
-              <p className="text-xs text-gray-600 dark:text-zinc-400 mt-0.5 mb-3">
-                Chạy lệnh sau trên máy có Zalo PC của bạn. Tin nhắn sẽ forward về đây và chỉ bạn (và OWNER/MANAGER) thấy được.
-              </p>
-              <div className="bg-gray-900 dark:bg-black/60 rounded-xl p-2.5 font-mono text-[11px] text-green-400 break-all whitespace-pre-wrap">
-                {installCmd}
-              </div>
-              <div className="flex flex-wrap gap-2 mt-2">
-                <button onClick={copyCmd} className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg">
-                  {copied ? '✓ Đã copy' : '📋 Copy lệnh'}
-                </button>
-                <Link href="/docs/install" className="px-3 py-1.5 bg-white dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 text-xs font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-white/15">
-                  📖 Hướng dẫn chi tiết (Win/Mac/VPS/NAS)
-                </Link>
-              </div>
-              <div className="mt-3 pt-3 border-t border-blue-200/60 dark:border-blue-500/20">
-                <p className="text-[11px] text-gray-600 dark:text-zinc-400">
-                  <strong>Chưa muốn cài listener?</strong> Bạn vẫn có thể dùng dashboard để xem board mà người khác chia sẻ cho bạn (nếu có). Lúc đó hệ thống <em>không phân tích được tin nhắn từ Zalo cá nhân của bạn</em> — chỉ xem dữ liệu từ board được chia sẻ.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {myGroupsCount === 0 && installCmd && zaloConnected === false && <OnboardBanner installCmd={installCmd} copyCmd={copyCmd} copied={copied} />}
 
       {/* Header */}
       <div className="mb-6 md:mb-8 flex items-start md:items-center justify-between flex-col md:flex-row gap-3">
@@ -287,6 +259,96 @@ export default function OverviewPage() {
               </Link>
             )
           })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Onboarding banner với 2 nút download installer + lệnh copy fallback */
+function OnboardBanner({ installCmd, copyCmd, copied }: { installCmd: string; copyCmd: () => void; copied: boolean }) {
+  const [os, setOs] = useState<'mac' | 'win' | 'other'>('other')
+  useEffect(() => {
+    if (typeof navigator === 'undefined') return
+    const ua = navigator.userAgent.toLowerCase()
+    if (ua.includes('mac')) setOs('mac')
+    else if (ua.includes('windows')) setOs('win')
+    else setOs('other')
+  }, [])
+
+  function downloadInstaller(target: 'mac' | 'win') {
+    const API = process.env.NEXT_PUBLIC_API_URL ?? ''
+    const token = typeof window !== 'undefined' ? localStorage.getItem('zm:token') : null
+    if (!token) { alert('Chưa đăng nhập'); return }
+    // Fetch with auth header → blob → download (browser không gửi auth cho <a download>)
+    fetch(`${API}/api/auth/my-installer?os=${target}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => { if (!r.ok) throw new Error('Tải fail'); return r.blob() })
+      .then(blob => {
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = target === 'win' ? 'zalo-monitor-installer.bat' : 'zalo-monitor-installer.command'
+        document.body.appendChild(a); a.click(); a.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+      })
+      .catch(() => alert('Không tải được — thử lại sau'))
+  }
+
+  return (
+    <div className="mb-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-500/10 dark:to-indigo-500/10 border border-blue-200 dark:border-blue-500/30 rounded-2xl p-4 md:p-5">
+      <div className="flex items-start gap-3">
+        <div className="text-2xl">👋</div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Bắt đầu kết nối Zalo của bạn</p>
+          <p className="text-xs text-gray-600 dark:text-zinc-400 mt-0.5 mb-3">
+            Tải file cài đặt → double-click → terminal tự mở + cài tự động.
+          </p>
+
+          {/* Primary CTA: download buttons */}
+          <div className="flex flex-wrap gap-2 mb-3">
+            <button
+              onClick={() => downloadInstaller('mac')}
+              className={`inline-flex items-center gap-2 px-4 py-2.5 ${os === 'mac' ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10'} text-sm font-semibold rounded-xl transition-colors`}
+            >
+              <span></span>
+              <span>Tải installer cho Mac</span>
+              {os === 'mac' && <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded">Đề xuất</span>}
+            </button>
+            <button
+              onClick={() => downloadInstaller('win')}
+              className={`inline-flex items-center gap-2 px-4 py-2.5 ${os === 'win' ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10'} text-sm font-semibold rounded-xl transition-colors`}
+            >
+              <span>🪟</span>
+              <span>Tải installer cho Windows</span>
+              {os === 'win' && <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded">Đề xuất</span>}
+            </button>
+          </div>
+
+          <details className="mb-3">
+            <summary className="text-[11px] text-gray-600 dark:text-zinc-400 cursor-pointer hover:text-gray-800 dark:hover:text-zinc-200">Hoặc dùng dòng lệnh trực tiếp (cho người tech)</summary>
+            <div className="mt-2 bg-gray-900 dark:bg-black/60 rounded-xl p-2.5 font-mono text-[11px] text-green-400 break-all whitespace-pre-wrap">
+              {installCmd}
+            </div>
+            <div className="flex flex-wrap gap-2 mt-2">
+              <button onClick={copyCmd} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-800 text-white text-xs font-medium rounded-lg">
+                {copied ? '✓ Đã copy' : '📋 Copy lệnh'}
+              </button>
+            </div>
+          </details>
+
+          <div className="flex flex-wrap gap-2 text-[11px]">
+            <Link href="/docs/install" className="text-blue-600 dark:text-blue-400 hover:underline">📖 Hướng dẫn chi tiết</Link>
+            <span className="text-gray-300 dark:text-white/20">·</span>
+            <span className="text-gray-500 dark:text-zinc-400">
+              Mac lần đầu: chuột phải file → Open (Gatekeeper bảo vệ)
+            </span>
+          </div>
+
+          <div className="mt-3 pt-3 border-t border-blue-200/60 dark:border-blue-500/20">
+            <p className="text-[11px] text-gray-600 dark:text-zinc-400">
+              <strong>Chưa muốn cài?</strong> Vẫn dùng dashboard để xem board người khác chia sẻ — không phân tích được tin của bạn.
+            </p>
+          </div>
         </div>
       </div>
     </div>

@@ -312,7 +312,59 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       oneLineCommand: `curl -fsSL "${backendUrl}/api/setup/inject.sh?${qs}" | bash`,
       windowsCommand: `iwr -useb "${backendUrl}/api/setup/inject.ps1?${qs}" | iex`,
       dockerCommand:  `docker run -d --name zalo-monitor-listener --restart unless-stopped --network host -v zalo-monitor-data:/root/.zalo-monitor node:22-alpine sh -c "apk add --no-cache curl bash && curl -fsSL '${backendUrl}/api/setup/inject.sh?${qs}' | bash"`,
+      // Download URLs: khách bấm tải → double-click file → terminal/cmd tự mở + chạy
+      installerMac: `${backendUrl}/api/auth/my-installer?os=mac`,
+      installerWin: `${backendUrl}/api/auth/my-installer?os=win`,
     }
+  })
+
+  // ── /my-installer — tải file installer (.command cho Mac, .bat cho Win) ──
+  // Khách double-click file → terminal/cmd tự mở + chạy curl|bash. Không cần biết Terminal.
+  app.get('/my-installer', async (req, reply) => {
+    const auth = req.headers.authorization
+    if (!auth?.startsWith('Bearer ')) return reply.status(401).send({ error: 'No token' })
+    let p: any
+    try { p = app.jwt.verify(auth.slice(7)) } catch { return reply.status(401).send({ error: 'Invalid token' }) }
+
+    const os = ((req.query as any)?.os as string ?? 'mac').toLowerCase()
+    const proto = (req.headers['x-forwarded-proto'] as string) ?? (req.protocol ?? 'http')
+    const host = (req.headers['x-forwarded-host'] as string) ?? (req.headers['host'] as string)
+    const backendUrl = process.env.PUBLIC_BACKEND_URL?.replace(/\/$/, '') ?? `${proto}://${host}`
+    const qs = `tenantId=${p.tenantId}&userId=${p.userId}`
+
+    if (os === 'win' || os === 'windows') {
+      const bat = [
+        '@echo off',
+        'echo.',
+        'echo ====== Zalo Monitor Installer ======',
+        'echo.',
+        'powershell -ExecutionPolicy Bypass -NoProfile -Command "& {[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; iwr -useb \'' + backendUrl + '/api/setup/inject.ps1?' + qs + '\' | iex}"',
+        'echo.',
+        'echo ====== Hoan tat — co the dong cua so nay ======',
+        'pause',
+        '',
+      ].join('\r\n')
+      reply.header('Content-Type', 'application/octet-stream')
+      reply.header('Content-Disposition', 'attachment; filename="zalo-monitor-installer.bat"')
+      return bat
+    }
+
+    // Mac (default) — .command file: double-click → Terminal.app tự mở
+    const cmd = [
+      '#!/bin/bash',
+      'echo ""',
+      'echo "====== Zalo Monitor Installer ======"',
+      'echo ""',
+      `curl -fsSL "${backendUrl}/api/setup/inject.sh?${qs}" | bash`,
+      'echo ""',
+      'echo "====== Hoàn tất — có thể đóng cửa sổ này ======"',
+      'echo "Bấm Enter để đóng..."',
+      'read',
+      '',
+    ].join('\n')
+    reply.header('Content-Type', 'application/octet-stream')
+    reply.header('Content-Disposition', 'attachment; filename="zalo-monitor-installer.command"')
+    return cmd
   })
 
   // ── Forgot password — gửi email kèm link reset ─────────────────────────

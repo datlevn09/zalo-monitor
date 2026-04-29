@@ -21,9 +21,11 @@
  */
 
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const cfg = {
   backendUrl: (process.env.BACKEND_URL || '').replace(/\/$/, ''),
@@ -393,6 +395,43 @@ async function syncGroupList() {
 setInterval(syncGroupList, 10 * 60_000).unref?.()
 // Lần đầu sau 60s (đợi listener login xong)
 setTimeout(syncGroupList, 60_000)
+
+/**
+ * Self-update — kiểm tra version trên backend → tải bản mới nếu khác →
+ * exit (systemd / launchd auto-restart với code mới).
+ *
+ * Chạy 1 lần lúc startup + lặp mỗi 6h.
+ */
+async function checkSelfUpdate() {
+  try {
+    const SELF_PATH = fileURLToPath(import.meta.url)
+    const localBuf = fs.readFileSync(SELF_PATH)
+    const localHash = createHash('sha256').update(localBuf).digest('hex')
+
+    const r = await fetch(`${cfg.backendUrl}/api/setup/listener-version`, {
+      headers: { 'x-tenant-id': cfg.tenantId, 'x-webhook-secret': cfg.secret },
+    })
+    if (!r.ok) return  // backend cũ chưa có endpoint → bỏ qua
+    const { sha256 } = await r.json()
+    if (!sha256 || sha256 === localHash) return  // up-to-date
+
+    console.log(`🔄 Phát hiện listener bản mới (${localHash.slice(0,8)} → ${String(sha256).slice(0,8)}). Đang tải...`)
+    const fileRes = await fetch(`${cfg.backendUrl}/api/setup/hook-files/zalo-listener.mjs`)
+    if (!fileRes.ok) { console.warn('  ⚠️  Tải listener mới thất bại, tiếp tục dùng bản hiện tại'); return }
+    const newBuf = Buffer.from(await fileRes.arrayBuffer())
+    const newHash = createHash('sha256').update(newBuf).digest('hex')
+    if (newHash !== sha256) { console.warn('  ⚠️  Hash mismatch sau khi tải, bỏ qua update'); return }
+
+    fs.writeFileSync(SELF_PATH, newBuf)
+    fs.chmodSync(SELF_PATH, 0o755)
+    console.log('  ✅ Đã ghi bản mới. Restart để áp dụng...')
+    process.exit(0)  // launchd/systemd KeepAlive sẽ restart với code mới
+  } catch (e) {
+    // Silent — không chặn listener nếu update fail
+  }
+}
+checkSelfUpdate()
+setInterval(checkSelfUpdate, 6 * 60 * 60_000).unref?.()
 
 startListener()
 
