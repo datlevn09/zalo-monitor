@@ -100,6 +100,14 @@ new Worker('scheduler', async (job) => {
       }
       break
     }
+    case 'reset-monthly-counter': {
+      // Reset 0 cho tất cả tenant — chạy 00:05 ngày 1 đầu tháng
+      const r = await db.tenant.updateMany({
+        data: { messagesThisMonth: 0, usageResetAt: new Date() },
+      })
+      console.log(`[scheduler] reset-monthly-counter: reset ${r.count} tenants`)
+      break
+    }
     default:
       console.warn(`[scheduler] Unknown job: ${job.name}`)
   }
@@ -152,4 +160,12 @@ export async function registerScheduledJobs() {
     { repeat: { pattern: '*/5 * * * *', tz: 'Asia/Ho_Chi_Minh' } },
   )
   console.log(`[scheduler] remind-appointments registered (every 5 minutes)`)
+
+  // Reset counter messagesThisMonth — 00:05 ngày 1 đầu tháng (Asia/Ho_Chi_Minh)
+  await schedulerQueue.add(
+    'reset-monthly-counter',
+    {},
+    { repeat: { pattern: '5 0 1 * *', tz: 'Asia/Ho_Chi_Minh' } },
+  )
+  console.log(`[scheduler] reset-monthly-counter registered (00:05 day-1 monthly)`)
 }

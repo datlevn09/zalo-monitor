@@ -187,11 +187,7 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(200).send({ ok: true, skipped: 'group_monitor_off', groupId: group.id })
     }
 
-    // Save message — phân biệt tạo mới vs upsert để tăng counter đúng
-    const existingMsg = await db.message.findUnique({
-      where: { groupId_externalId: { groupId: group.id, externalId: String(messageId) } },
-      select: { id: true },
-    })
+    // Save message — Prisma extension trong db.ts tự tăng counter messagesThisMonth
     const message = await db.message.upsert({
       where: { groupId_externalId: { groupId: group.id, externalId: String(messageId) } },
       update: {},
@@ -219,15 +215,9 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
       data: { lastMessageAt: new Date() },
     })
 
-    // Tăng counter messagesThisMonth (chỉ tin mới, không count duplicate upsert)
-    if (!existingMsg) {
-      db.tenant.update({
-        where: { id: tenantId },
-        data: { messagesThisMonth: { increment: 1 } },
-      }).catch(() => undefined)
-    }
+    // Counter messagesThisMonth tự tăng qua Prisma extension trong db.ts (mọi path).
 
-    wsManager.broadcast('message:new', {
+wsManager.broadcast('message:new', {
       groupId: group.id,
       groupName: group.name,
       messageId: message.id,
