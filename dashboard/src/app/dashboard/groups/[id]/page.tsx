@@ -83,6 +83,7 @@ export default function GroupDetailPage() {
   const [uploading, setUploading] = useState(false)
   const [lightbox, setLightbox] = useState<{ url: string; type: 'image' | 'video' } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   async function uploadFile(file: File) {
     if (!file || uploading) return
@@ -442,13 +443,14 @@ export default function GroupDetailPage() {
                     <div className="w-8 shrink-0" />
                   )}
 
-                  <div className={`flex-1 min-w-0 ${isSelf ? 'flex flex-col items-end' : ''}`}>
+                  <div className={`flex-1 min-w-0 group ${isSelf ? 'flex flex-col items-end' : ''}`}>
                     {!sameSender && (
                       <div className={`flex items-baseline gap-2 mb-1 ${isSelf ? 'flex-row-reverse' : ''}`}>
                         <p className="text-xs font-semibold text-gray-700 dark:text-zinc-300">
                           {isSelf ? 'Bạn' : (msg.senderName ?? 'Ẩn danh')}
                         </p>
                         <p className="text-[10px] text-gray-400 dark:text-zinc-500">{formatTime(msg.sentAt)}</p>
+                        <CopyBtn text={msg.content ?? ''} />
                       </div>
                     )}
 
@@ -561,7 +563,10 @@ export default function GroupDetailPage() {
                     </div>
 
                     {sameSender && (
-                      <p className="text-[10px] text-gray-400 dark:text-zinc-500 ml-1 mt-0.5">{formatTime(msg.sentAt)}</p>
+                      <div className={`flex items-center gap-1.5 mt-0.5 ${isSelf ? 'flex-row-reverse mr-1' : 'ml-1'}`}>
+                        <p className="text-[10px] text-gray-400 dark:text-zinc-500">{formatTime(msg.sentAt)}</p>
+                        <CopyBtn text={msg.content ?? ''} />
+                      </div>
                     )}
                   </div>
                 </div>
@@ -612,15 +617,28 @@ export default function GroupDetailPage() {
               accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.zip"
               onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }}
             />
+            <input ref={imageInputRef} type="file" className="hidden"
+              accept="image/*"
+              onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }}
+            />
+
+            {/* Toolbar — giống Zalo: 1 hàng icon trên ô nhập */}
+            <div className="flex items-center gap-1 mb-1.5 px-1 text-gray-500 dark:text-zinc-400">
+              <ToolBtn title="Ảnh" onClick={() => imageInputRef.current?.click()} disabled={uploading}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              </ToolBtn>
+              <ToolBtn title="Đính kèm file" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              </ToolBtn>
+              <ToolBtn title="AI phân tích cuộc hội thoại" onClick={runAiAnalyze} disabled={aiLoading}>
+                {aiLoading ? <span className="w-[18px] h-[18px] border-2 border-purple-500 border-t-transparent rounded-full animate-spin" /> : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>
+                )}
+              </ToolBtn>
+              {uploading && <span className="ml-1 text-[11px] text-gray-400">Đang upload...</span>}
+            </div>
+
             <div className="flex items-end gap-2">
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              title="Đính kèm ảnh/video/file"
-              className="w-10 h-10 rounded-full bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 flex items-center justify-center shrink-0 disabled:opacity-50"
-            >
-              {uploading ? <span className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /> : <span className="text-lg">📎</span>}
-            </button>
             <textarea
               ref={textareaRef}
               value={sendText}
@@ -660,5 +678,47 @@ export default function GroupDetailPage() {
         <Lightbox url={lightbox.url} type={lightbox.type} onClose={() => setLightbox(null)} />
       )}
     </div>
+  )
+}
+
+/** Toolbar button trên ô nhập tin (style giống Zalo). */
+function ToolBtn({ children, title, onClick, disabled }: {
+  children: React.ReactNode; title: string; onClick: () => void; disabled?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+      className="w-8 h-8 rounded-md hover:bg-gray-100 dark:hover:bg-white/10 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+    >
+      {children}
+    </button>
+  )
+}
+
+/** Nút copy nội dung tin nhắn — hover-revealed bên cạnh thời gian/sender. */
+function CopyBtn({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  if (!text) return null
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard.writeText(text).catch(() => undefined)
+        setCopied(true); setTimeout(() => setCopied(false), 1500)
+      }}
+      title={copied ? 'Đã copy' : 'Copy tin nhắn'}
+      aria-label="Copy"
+      className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center justify-center w-5 h-5 rounded text-gray-400 hover:text-gray-700 dark:hover:text-zinc-200 hover:bg-gray-100 dark:hover:bg-white/10"
+    >
+      {copied ? (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      ) : (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      )}
+    </button>
   )
 }
