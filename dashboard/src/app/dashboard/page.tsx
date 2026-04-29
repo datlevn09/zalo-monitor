@@ -301,7 +301,7 @@ function OnboardBanner({ installCmd, copyCmd, copied }: { installCmd: string; co
         <div className="flex-1 min-w-0">
           <p className="text-base font-bold text-gray-900 dark:text-zinc-100">Kết nối Zalo của bạn</p>
           <p className="text-sm text-gray-600 dark:text-zinc-400 mt-0.5 mb-3">
-            Bấm nút bên dưới để tải file cài đặt. Sau đó <strong>bấm 2 lần</strong> vào file là xong.
+            Bấm nút bên dưới để tải file cài đặt. Sau đó <strong>double-click</strong> vào file là xong.
           </p>
 
           {/* Primary CTA: download buttons */}
@@ -345,7 +345,7 @@ function OnboardBanner({ installCmd, copyCmd, copied }: { installCmd: string; co
                 <li className="flex gap-2.5">
                   <span className="shrink-0 w-6 h-6 rounded-full bg-blue-500 text-white text-xs font-bold flex items-center justify-center">2</span>
                   <span>
-                    Tìm file tên <strong>zalo-monitor-installer</strong> → <strong>bấm 2 lần</strong> vào file.
+                    Tìm file tên <strong>zalo-monitor-installer</strong> → <strong>double-click</strong> vào file.
                     <br />
                     <span className="text-xs text-gray-600 dark:text-zinc-400">Nếu Windows hỏi <em>"Có chắc muốn chạy?"</em> → bấm <strong>"Thông tin thêm"</strong> rồi bấm <strong>"Vẫn chạy"</strong> (Run anyway).</span>
                   </span>
