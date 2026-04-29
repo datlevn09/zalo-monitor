@@ -131,6 +131,8 @@ export default function GroupDetailPage() {
   }
   const [sendError, setSendError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const lastMsgCountRef = useRef(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Dev mode: chỉ active khi URL có ?showDeleted=1 (backend cũng check email DEV_EMAIL).
@@ -225,9 +227,27 @@ export default function GroupDetailPage() {
     return () => { close(); clearInterval(pollInterval) }
   }, [id])
 
+  // Auto-scroll: chỉ scroll xuống cuối khi
+  //  (a) lần đầu load (loading vừa false → có data),
+  //  (b) số lượng tin TĂNG (tin mới về) VÀ user đang ở gần đáy (<150px).
+  // Không scroll nếu user đang cuộn lên đọc tin cũ → tránh giật về cuối liên tục.
   useEffect(() => {
-    if (!loading) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (loading) return
+    const prev = lastMsgCountRef.current
+    const curr = messages.length
+    lastMsgCountRef.current = curr
+    if (prev === 0) {
+      // Lần đầu load — scroll xuống ngay (instant để không thấy giật)
+      messagesEndRef.current?.scrollIntoView({ behavior: 'auto' })
+      return
+    }
+    if (curr > prev) {
+      const c = messagesContainerRef.current
+      if (!c) return
+      const distanceFromBottom = c.scrollHeight - c.scrollTop - c.clientHeight
+      if (distanceFromBottom < 150) {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      }
     }
   }, [messages, loading])
 
@@ -352,7 +372,7 @@ export default function GroupDetailPage() {
       )}
 
       {/* Chat thread */}
-      <div className="flex-1 overflow-auto bg-[#f2f2f7] dark:bg-zinc-950">
+      <div ref={messagesContainerRef} className="flex-1 overflow-auto bg-[#f2f2f7] dark:bg-zinc-950">
         <div className="max-w-3xl mx-auto p-4 space-y-3">
           {loading && <p className="text-center text-gray-400 dark:text-zinc-500 text-sm">Đang tải tin nhắn...</p>}
 
