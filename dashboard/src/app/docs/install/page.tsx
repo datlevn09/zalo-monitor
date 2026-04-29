@@ -198,36 +198,37 @@ export default function InstallGuidePage() {
 function WindowsGuide({ cmd, copy, copied }: { cmd?: string; copy: () => void; copied: boolean }) {
   return (
     <>
-      <Step n={1} title="Mở PowerShell với quyền Administrator">
-        <Tip title="Cách 1 — Phím tắt:">
-          <ol className="text-sm text-gray-700 dark:text-zinc-300 space-y-1 list-decimal list-inside">
-            <li>Nhấn <Kbd>Windows</Kbd> + <Kbd>X</Kbd></li>
-            <li>Chọn <strong>"Terminal (Admin)"</strong> hoặc <strong>"Windows PowerShell (Admin)"</strong></li>
-            <li>UAC hỏi → bấm <strong>Yes</strong></li>
-          </ol>
-        </Tip>
-        <Tip title="Cách 2 — Tìm Start menu:">
-          <ol className="text-sm text-gray-700 dark:text-zinc-300 space-y-1 list-decimal list-inside">
-            <li>Bấm <Kbd>Windows</Kbd>, gõ <code>PowerShell</code></li>
-            <li>Click <strong>chuột phải</strong> → <strong>"Run as administrator"</strong></li>
-          </ol>
-        </Tip>
-        <Note tint="blue">
-          ✓ Tiêu đề cửa sổ ghi <em>"Administrator: ..."</em> mới đúng. Không có chữ "Administrator" → mở lại.
-        </Note>
-      </Step>
+      {/* Cách dễ — Tải file */}
+      <Card>
+        <div className="flex items-start gap-3">
+          <div className="text-2xl">🪟</div>
+          <div className="flex-1">
+            <h2 className="text-lg font-bold mb-1">Cách dễ — Tải file cài đặt</h2>
+            <p className="text-sm text-gray-600 dark:text-zinc-400 mb-3">
+              Vào <Link href="/dashboard" className="text-blue-600 dark:text-blue-400 hover:underline">trang Tổng quan</Link> → bấm nút <strong>"Cài đặt cho Windows"</strong> để tải file <code>.bat</code>. Sau đó:
+            </p>
+            <ol className="text-sm text-gray-700 dark:text-zinc-300 space-y-1.5 list-decimal list-inside">
+              <li>Mở thư mục <strong>Tải xuống</strong> (Downloads).</li>
+              <li>Double-click vào file <code>zalo-monitor-installer.bat</code>.</li>
+              <li>Nếu Windows hỏi <em>"Có chắc muốn chạy?"</em> → bấm <strong>"Thông tin thêm"</strong> → <strong>"Vẫn chạy"</strong>.</li>
+              <li>Cửa sổ CMD tự mở. Nếu UAC hỏi → bấm <strong>Yes</strong>. Đợi 2-3 phút.</li>
+            </ol>
+          </div>
+        </div>
+      </Card>
 
-      <Step n={2} title="Copy + paste lệnh + Enter">
-        <CmdBox cmd={cmd} copy={copy} copied={copied} />
-        <ol className="mt-3 text-sm text-gray-700 dark:text-zinc-300 space-y-1.5 list-decimal list-inside">
-          <li>Click vào cửa sổ PowerShell</li>
-          <li>Click chuột phải để paste — hoặc <Kbd>Ctrl</Kbd> + <Kbd>V</Kbd></li>
-          <li>Nhấn <Kbd>Enter</Kbd></li>
+      {/* Cách 2 — PowerShell */}
+      <Card>
+        <h2 className="text-base font-bold mb-2">⌨️ Cách 2 — Dùng PowerShell (cho người rành máy tính)</h2>
+        <ol className="text-xs text-gray-600 dark:text-zinc-400 space-y-1 list-decimal list-inside mb-3">
+          <li>Nhấn <Kbd>Windows</Kbd>+<Kbd>X</Kbd> → chọn <strong>"Terminal (Admin)"</strong> hoặc <strong>"PowerShell (Admin)"</strong>. UAC → Yes.</li>
+          <li>Paste lệnh dưới rồi <Kbd>Enter</Kbd>.</li>
         </ol>
+        <CmdBox cmd={cmd} copy={copy} copied={copied} />
         <Note tint="blue">
-          Script tự cài Node.js (qua winget) + openzca + tạo Scheduled Task (~2-3 phút).
+          Script tự cài Node.js (winget hoặc MSI) + openzca + Scheduled Task (~2-3 phút).
         </Note>
-      </Step>
+      </Card>
 
       <Faqs>
         <Faq q="Báo 'Execution Policy' không cho chạy?">
@@ -259,27 +260,36 @@ Remove-Item -Recurse -Force "$env:USERPROFILE\\.zalo-monitor"`}</Code>
 function MacGuide({ cmd, copy, copied }: { cmd?: string; copy: () => void; copied: boolean }) {
   return (
     <>
-      <Step n={1} title="Mở Terminal">
-        <ol className="text-sm text-gray-700 dark:text-zinc-300 space-y-1 list-decimal list-inside">
-          <li>Nhấn <Kbd>⌘</Kbd> + <Kbd>Space</Kbd> (Spotlight)</li>
-          <li>Gõ <code>Terminal</code> → Enter</li>
-        </ol>
-      </Step>
+      {/* Cách dễ — Tải file cài đặt */}
+      <Card>
+        <div className="flex items-start gap-3">
+          <div className="text-2xl"></div>
+          <div className="flex-1">
+            <h2 className="text-lg font-bold mb-1">Cách dễ — Tải file cài đặt</h2>
+            <p className="text-sm text-gray-600 dark:text-zinc-400 mb-3">
+              Vào <Link href="/dashboard" className="text-blue-600 dark:text-blue-400 hover:underline">trang Tổng quan</Link> → bấm nút <strong>"Cài đặt cho Mac"</strong> để tải file <code>.command</code>. Sau đó:
+            </p>
+            <ol className="text-sm text-gray-700 dark:text-zinc-300 space-y-1.5 list-decimal list-inside">
+              <li>Mở thư mục <strong>Tải xuống</strong> (Downloads).</li>
+              <li>Chuột phải vào file <code>zalo-monitor-installer.command</code> → chọn <strong>Open</strong> → bấm <strong>Open</strong> lần nữa khi máy hỏi.</li>
+              <li>Cửa sổ Terminal tự mở và chạy. Đợi 1-2 phút.</li>
+            </ol>
+            <Note tint="amber">
+              <strong>Nếu Terminal hỏi mật khẩu</strong>: nhập mật khẩu đăng nhập máy. <strong>Màn hình KHÔNG hiện gì khi gõ</strong> — đó là bình thường (bảo mật của Mac). Cứ gõ rồi Enter.
+            </Note>
+          </div>
+        </div>
+      </Card>
 
-      <Step n={2} title="Copy + paste lệnh + Enter">
+      {/* Cách 2 — Dùng Terminal */}
+      <Card>
+        <h2 className="text-base font-bold mb-2">⌨️ Cách 2 — Dùng Terminal (cho người rành máy tính)</h2>
+        <p className="text-xs text-gray-500 dark:text-zinc-400 mb-3">Mở Terminal (⌘ + Space → gõ Terminal → Enter), paste lệnh dưới rồi Enter:</p>
         <CmdBox cmd={cmd} copy={copy} copied={copied} />
-        <ol className="mt-3 text-sm text-gray-700 dark:text-zinc-300 space-y-1.5 list-decimal list-inside">
-          <li>Click vào Terminal</li>
-          <li>Nhấn <Kbd>⌘</Kbd> + <Kbd>V</Kbd> để paste</li>
-          <li>Nhấn <Kbd>Enter</Kbd></li>
-        </ol>
         <Note tint="blue">
-          Script tự kiểm tra Node.js. Nếu chưa có, sẽ tải bản pre-built cho Mac. Sau đó cài openzca + tạo launchd service tự khởi động.
+          Script tự cài Node.js (tải pre-built nếu chưa có) + openzca + launchd service tự khởi động.
         </Note>
-        <Note tint="amber">
-          <strong>Nếu Terminal hỏi mật khẩu (Password)</strong>: nhập mật khẩu đăng nhập máy của bạn. <strong>Màn hình KHÔNG hiện gì khi gõ</strong> — đó là bình thường (mặc định bảo mật của Mac). Cứ gõ xong rồi bấm Enter.
-        </Note>
-      </Step>
+      </Card>
 
       <Faqs>
         <Faq q="Báo 'không tự cài Node được' trên Mac?">
