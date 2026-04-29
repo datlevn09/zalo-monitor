@@ -18,13 +18,11 @@ export default function PrivacyPage() {
 
           <section className="mb-8 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-xl p-4">
             <h2 className="text-lg font-semibold text-emerald-900 dark:text-emerald-200 mb-2">
-              Cam kết về dữ liệu của bạn
+              An toàn cho bạn
             </h2>
-            <ul className="text-sm text-emerald-800 dark:text-emerald-200 space-y-1.5 list-disc list-inside leading-relaxed">
-              <li>Tin nhắn được <strong>mã hoá</strong>.</li>
-              <li><strong>Listener chạy trên thiết bị của bạn</strong> — tin Zalo không đi qua đâu khác.</li>
-              <li>Tôi chỉ đưa nó <strong>lên board cho chính bạn xem</strong> — không đọc, không lưu để training, không chia sẻ với bên khác.</li>
-            </ul>
+            <p className="text-sm text-emerald-800 dark:text-emerald-200 leading-relaxed">
+              Listener chạy trên thiết bị của bạn. Dữ liệu chỉ được đưa lên board cho chính bạn xem — không chia sẻ với bên thứ ba.
+            </p>
           </section>
 
           <section className="mb-8">
@@ -59,7 +57,7 @@ export default function PrivacyPage() {
               Quyền truy cập của nhà vận hành
             </h2>
             <p className="text-gray-700 dark:text-zinc-300">
-              Chúng tôi không đọc nội dung tin nhắn của bạn. Việc bảo trì, sao lưu, theo dõi hiệu năng chỉ thao tác trên metadata (tên nhóm, thời gian, số lượng).
+              Việc bảo trì, sao lưu, theo dõi hiệu năng chỉ thao tác trên metadata kỹ thuật (tên nhóm, thời gian, số lượng).
             </p>
           </section>
 

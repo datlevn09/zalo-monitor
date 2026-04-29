@@ -469,23 +469,23 @@ function ShowcaseSecurity() {
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
       <div>
         <span className="inline-flex px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-500/20 rounded-full mb-3">
-          🔐 Riêng tư
+          🔐 An toàn
         </span>
         <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-zinc-100 tracking-tight mb-3">
-          Tin nhắn của bạn — <span className="text-emerald-600 dark:text-emerald-400">vẫn là của bạn</span>
+          Dữ liệu <span className="text-emerald-600 dark:text-emerald-400">của bạn</span>, board <span className="text-emerald-600 dark:text-emerald-400">của bạn</span>
         </h2>
         <ul className="space-y-2 text-sm md:text-base text-gray-700 dark:text-zinc-300">
-          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-1">✓</span> Tin nhắn được <strong>mã hoá</strong>.</li>
-          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-1">✓</span> Listener <strong>chạy trên thiết bị của bạn</strong> — không qua server lạ.</li>
-          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-1">✓</span> Tôi chỉ <strong>đưa nó lên board cho bạn xem</strong> — không đọc.</li>
+          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-1">✓</span> Listener <strong>chạy trên thiết bị của bạn</strong>.</li>
+          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-1">✓</span> Dữ liệu chỉ được <strong>đưa lên board cho bạn xem</strong>.</li>
+          <li className="flex items-start gap-2"><span className="text-emerald-500 mt-1">✓</span> <strong>Không chia sẻ</strong> với bên thứ ba.</li>
         </ul>
       </div>
       <div className="bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-500/10 dark:via-teal-500/10 dark:to-cyan-500/10 rounded-3xl p-6 ring-1 ring-emerald-200 dark:ring-emerald-500/30 shadow-xl flex items-center justify-center min-h-[200px]">
         <div className="text-center max-w-xs">
-          <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-2xl">🔒</div>
-          <p className="text-base font-semibold text-gray-900 dark:text-zinc-100 mb-2">Mã hoá · trên thiết bị của bạn</p>
+          <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-2xl">🛡️</div>
+          <p className="text-base font-semibold text-gray-900 dark:text-zinc-100 mb-2">Trên thiết bị của bạn</p>
           <p className="text-sm text-gray-600 dark:text-zinc-400 leading-relaxed">
-            Tôi chỉ là người đưa tin nhắn lên board cho bạn xem.
+            Tôi chỉ là người đưa dữ liệu lên board cho bạn dùng.
           </p>
         </div>
       </div>

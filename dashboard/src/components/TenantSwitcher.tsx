@@ -154,13 +154,11 @@ export function TenantSwitcher() {
               Email và mật khẩu giữ nguyên — bạn có thể switch giữa các DN bất kỳ lúc nào.
             </p>
 
-            {/* Cảnh báo Zalo PC 1-account/lúc */}
+            {/* Lưu ý khi chạy nhiều tài khoản 1 máy */}
             <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-lg">
-              <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">⚠️ Lưu ý quan trọng</p>
+              <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">💡 Lưu ý</p>
               <p className="text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">
-                Zalo PC chỉ login được <strong>1 account / 1 thời điểm</strong>. Nếu bạn muốn theo dõi 2 Zalo trên cùng 1 máy, phải <strong>tắt Zalo PC chính</strong> khi quét QR cho profile khác.
-                <br /><br />
-                <strong>Khuyến nghị</strong>: mỗi Zalo cài listener trên 1 máy riêng (PC khác / VPS / NAS) — đơn giản, không đụng nhau.
+                Khuyến nghị mỗi DN cài listener trên 1 máy riêng (PC khác / VPS / NAS) — đơn giản, không đụng nhau.
               </p>
             </div>
 

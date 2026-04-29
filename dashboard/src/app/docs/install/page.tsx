@@ -129,18 +129,18 @@ export default function InstallGuidePage() {
             1 email có thể tạo nhiều doanh nghiệp (mỗi DN = 1 Zalo riêng) — vào dashboard, click avatar tên DN ở góc phải header → "Thêm doanh nghiệp / Zalo mới".
           </p>
           <div className="p-3 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-lg mb-3">
-            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">⚠️ Zalo PC chỉ login 1 account / lúc</p>
+            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300 mb-1">💡 Lưu ý khi chạy nhiều tài khoản trên cùng 1 máy</p>
             <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
-              Nếu muốn theo dõi 2+ Zalo trên cùng 1 máy → phải tắt Zalo PC chính khi quét QR cho profile khác (openzca dùng profile riêng nhưng Zalo native chỉ giữ 1 phiên).
+              Nếu muốn theo dõi 2+ tài khoản trên cùng 1 máy, có thể bạn cần tạm tắt phiên đang chạy khi đăng nhập tài khoản khác.
             </p>
           </div>
           <p className="text-xs text-gray-600 dark:text-zinc-400 leading-relaxed mb-2">
             <strong>Khuyến nghị</strong>:
           </p>
           <ul className="text-xs text-gray-600 dark:text-zinc-400 space-y-1 list-disc list-inside">
-            <li>Mỗi Zalo cài listener trên 1 máy riêng (PC khác / VPS / NAS) — đơn giản, không đụng nhau, mỗi máy mở Zalo PC bình thường.</li>
-            <li>Quét QR 1 lần đầu cho mỗi tenant. Session lưu vĩnh viễn — restart máy không cần quét lại.</li>
-            <li>Switch giữa các tenant trên dashboard: header → tên DN → chọn DN khác.</li>
+            <li>Mỗi tài khoản cài listener trên 1 máy riêng (PC khác / VPS / NAS) — đơn giản, không đụng nhau.</li>
+            <li>Đăng nhập 1 lần đầu cho mỗi DN. Phiên lưu — không cần đăng nhập lại khi restart máy.</li>
+            <li>Switch giữa các DN trên dashboard: header → tên DN → chọn DN khác.</li>
           </ul>
         </Step>
 

@@ -182,52 +182,11 @@ export default function SettingsPage() {
         </Section>
       )}
 
-      {/* Mã hoá tin nhắn — toggle per-tenant */}
-      {tenant && (
-        <Section
-          title="🔐 Bảo vệ tin nhắn"
-          description="Bật để tăng mức bảo vệ cho tin nhắn lưu trữ. AI phân tích, word cloud, tìm kiếm vẫn hoạt động bình thường."
-        >
-          <div className="flex items-center gap-3 px-4 py-3.5">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500 flex items-center justify-center text-white font-bold shrink-0">
-              🔒
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Bảo vệ tin nhắn nâng cao</p>
-              <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                Bật = áp dụng cho tin về sau. Tin cũ không bị ảnh hưởng. Có thể tắt bất kỳ lúc nào.
-              </p>
-            </div>
-            <button
-              onClick={async () => {
-                setSaving(true)
-                const next = !tenant.encryptMessages
-                await api('/api/tenants/current', {
-                  method: 'PATCH',
-                  body: JSON.stringify({ encryptMessages: next }),
-                })
-                setTenant({ ...tenant, encryptMessages: next })
-                setSaving(false); setSaved(true)
-                setTimeout(() => setSaved(false), 2000)
-              }}
-              disabled={saving}
-              className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${tenant.encryptMessages ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-white/15'} ${saving ? 'opacity-50' : ''}`}
-            >
-              <span
-                className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow-md transition-transform"
-                style={{ transform: tenant.encryptMessages ? 'translateX(20px)' : 'translateX(0)' }}
-              />
-            </button>
-          </div>
-          {tenant.encryptMessages && (
-            <div className="px-4 py-3 bg-emerald-50 dark:bg-emerald-500/10 border-t border-emerald-200 dark:border-emerald-500/30">
-              <p className="text-xs text-emerald-800 dark:text-emerald-300">
-                ✓ Đang bảo vệ tin nhắn. AI và phân tích vẫn hoạt động bình thường.
-              </p>
-            </div>
-          )}
-        </Section>
-      )}
+      {/* Toggle "Bảo vệ tin nhắn" tạm ẩn — backend vẫn giữ field encryptMessages
+          để bật/tắt qua super-admin nếu cần. Frontend không expose UI để giữ
+          messaging gọn (xem privacy/page.tsx).
+          {tenant?.encryptMessages !== undefined && (...)}
+      */}
 
       {/* Save indicator */}
       {saved && (
