@@ -263,20 +263,22 @@ function MacGuide({ cmd, copy, copied }: { cmd?: string; copy: () => void; copie
           <li>Nhấn <Kbd>Enter</Kbd></li>
         </ol>
         <Note tint="blue">
-          Script cài Node (qua Homebrew) + openzca + tạo launchd service tự khởi động khi anh login Mac.
+          Script tự kiểm tra Node.js. Nếu chưa có, sẽ tải bản pre-built cho Mac (không cần password). Sau đó cài openzca + tạo launchd service tự khởi động.
         </Note>
       </Step>
 
       <Faqs>
-        <Faq q="Báo 'permission denied' khi cài npm global?">
-          <p className="text-sm text-gray-600 dark:text-zinc-400">Chạy với sudo:</p>
-          <Code>sudo npm install -g openzca</Code>
+        <Faq q="Báo 'không tự cài Node được' trên Mac?">
+          <p className="text-sm text-gray-600 dark:text-zinc-400">Mở <a href="https://nodejs.org/en/download" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">nodejs.org</a> → tải file <code>.pkg</code> macOS → double-click cài → mở <strong>Terminal mới</strong> → chạy lại lệnh.</p>
+        </Faq>
+        <Faq q="Báo 'permission denied' khi cài openzca?">
+          <p className="text-sm text-gray-600 dark:text-zinc-400">Mở Terminal mới (để PATH refresh) rồi chạy lại lệnh. Hoặc: <code>sudo npm install -g openzca</code></p>
         </Faq>
         <Faq q="Đóng Terminal có ảnh hưởng listener?">
           <p className="text-sm text-gray-600 dark:text-zinc-400">Không. Listener chạy ngầm qua launchd, độc lập với Terminal.</p>
         </Faq>
         <Faq q="Restart Mac?">
-          <p className="text-sm text-gray-600 dark:text-zinc-400">Listener tự khởi động lại khi anh login lại Mac.</p>
+          <p className="text-sm text-gray-600 dark:text-zinc-400">Listener tự khởi động lại khi bạn login lại Mac.</p>
         </Faq>
       </Faqs>
     </>

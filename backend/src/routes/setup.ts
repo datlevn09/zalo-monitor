@@ -1129,11 +1129,42 @@ if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
     sudo yum install -y nodejs >/dev/null 2>&1 || true
   elif command -v apk >/dev/null 2>&1; then
     apk add --no-cache nodejs npm >/dev/null 2>&1 || sudo apk add --no-cache nodejs npm >/dev/null 2>&1 || true
-  elif command -v brew >/dev/null 2>&1; then
-    brew install node >/dev/null 2>&1 || true
+  elif [ "$(uname)" = "Darwin" ]; then
+    # macOS: tải tarball pre-built không cần sudo, lưu vào ~/.local + PATH
+    if command -v brew >/dev/null 2>&1; then
+      brew install node >/dev/null 2>&1 || true
+    fi
+    if ! command -v node >/dev/null 2>&1; then
+      echo "  📥 Tải Node.js pre-built cho macOS (không cần sudo)..."
+      NODE_VER="v20.18.1"
+      MAC_ARCH="$(uname -m)"
+      [ "$MAC_ARCH" = "x86_64" ] && MAC_ARCH="x64"
+      [ "$MAC_ARCH" = "arm64" ] && MAC_ARCH="arm64"
+      NODE_DIR="$HOME/.local/node-$NODE_VER-darwin-$MAC_ARCH"
+      mkdir -p "$HOME/.local"
+      curl -fsSL "https://nodejs.org/dist/$NODE_VER/node-$NODE_VER-darwin-$MAC_ARCH.tar.gz" \
+        | tar -xzf - -C "$HOME/.local" 2>/dev/null || true
+      if [ -x "$NODE_DIR/bin/node" ]; then
+        export PATH="$NODE_DIR/bin:$PATH"
+        # Thêm vào shell rc để mọi lần mở Terminal đều có
+        SHELL_RC="$HOME/.zshrc"
+        [ -f "$HOME/.bash_profile" ] && [ ! -f "$SHELL_RC" ] && SHELL_RC="$HOME/.bash_profile"
+        if ! grep -q "node-$NODE_VER-darwin" "$SHELL_RC" 2>/dev/null; then
+          echo "" >> "$SHELL_RC"
+          echo "# Added by zalo-monitor installer" >> "$SHELL_RC"
+          echo "export PATH=\"$NODE_DIR/bin:\$PATH\"" >> "$SHELL_RC"
+        fi
+        echo "  ✅ Đã cài Node vào $NODE_DIR (no-sudo)"
+      fi
+    fi
   fi
   if ! command -v node >/dev/null 2>&1; then
-    echo "  ❌ Không tự cài Node được. Cài thủ công: https://nodejs.org rồi chạy lại."
+    echo "  ❌ Không tự cài Node được."
+    if [ "$(uname)" = "Darwin" ]; then
+      echo "     Cài thủ công: tải pkg từ https://nodejs.org/en/download — chạy installer → mở Terminal mới → chạy lại lệnh này."
+    else
+      echo "     Cài thủ công: https://nodejs.org rồi chạy lại."
+    fi
     exit 1
   fi
 fi
