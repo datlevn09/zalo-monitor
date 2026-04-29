@@ -287,7 +287,8 @@ function OnboardBanner({ installCmd, copyCmd, copied }: { installCmd: string; co
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = target === 'win' ? 'zalo-monitor-installer.bat' : 'zalo-monitor-installer.command'
+        // Mac: .zip (chứa .command có exec bit). Win: .bat
+        a.download = target === 'win' ? 'zalo-monitor-installer.bat' : 'zalo-monitor-installer.zip'
         document.body.appendChild(a); a.click(); a.remove()
         setTimeout(() => URL.revokeObjectURL(url), 1000)
       })
@@ -336,9 +337,10 @@ function OnboardBanner({ installCmd, copyCmd, copied }: { installCmd: string; co
                 <li className="flex gap-2.5">
                   <span className="shrink-0 w-6 h-6 rounded-full bg-blue-500 text-white text-xs font-bold flex items-center justify-center">2</span>
                   <span>
-                    Tìm file tên <strong>zalo-monitor-installer</strong> → <strong>bấm chuột phải</strong> vào file → chọn <strong>Mở</strong> (Open).
+                    Tìm file <strong>zalo-monitor-installer.zip</strong> → <strong>double-click</strong> để giải nén.
+                    Sau đó tìm file <strong>zalo-monitor-installer.command</strong> mới hiện ra → <strong>chuột phải</strong> → chọn <strong>Mở</strong> (Open) → bấm <strong>Mở</strong> lần nữa khi máy hỏi.
                     <br />
-                    <span className="text-xs text-gray-600 dark:text-zinc-400">Máy có thể hỏi <em>"Bạn có chắc muốn mở?"</em> → bấm <strong>Mở</strong> (Open) lần nữa. Đây là bình thường vì file mới tải.</span>
+                    <span className="text-xs text-gray-600 dark:text-zinc-400">Lý do giải nén: file zip giúp giữ quyền chạy của file, nếu không Mac sẽ chặn vì lý do bảo mật.</span>
                   </span>
                 </li>
               ) : (

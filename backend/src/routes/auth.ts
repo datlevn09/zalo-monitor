@@ -349,7 +349,9 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       return bat
     }
 
-    // Mac (default) — .command file: double-click → Terminal.app tự mở
+    // Mac (default) — pack file .command vào .zip với exec bit (chmod 755)
+    // Lý do: file tải qua browser không có exec bit → macOS không cho double-click chạy.
+    // ZIP preserve permission → user unzip → file bên trong có exec bit → chạy được luôn.
     const cmd = [
       '#!/bin/bash',
       'echo ""',
@@ -362,9 +364,14 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       'read',
       '',
     ].join('\n')
-    reply.header('Content-Type', 'application/octet-stream')
-    reply.header('Content-Disposition', 'attachment; filename="zalo-monitor-installer.command"')
-    return cmd
+    const AdmZip = (await import('adm-zip')).default
+    const zip = new AdmZip()
+    // attr = 0o100755 << 16 (Unix mode 755 cho file, shifted vào high bits của ZIP external attr)
+    zip.addFile('zalo-monitor-installer.command', Buffer.from(cmd, 'utf-8'), '', 0o100755 << 16)
+    const buf = zip.toBuffer()
+    reply.header('Content-Type', 'application/zip')
+    reply.header('Content-Disposition', 'attachment; filename="zalo-monitor-installer.zip"')
+    return reply.send(buf)
   })
 
   // ── Forgot password — gửi email kèm link reset ─────────────────────────
