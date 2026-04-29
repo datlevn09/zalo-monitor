@@ -58,23 +58,54 @@ export const statsRoutes: FastifyPluginAsync = async (app) => {
     const tenantId = req.headers['x-tenant-id'] as string
     if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
 
+    const auth = req.authUser
     const days = Math.max(1, Number((req.query as any)?.days ?? 1))  // default 24h
+    const scope = (req.query as any)?.scope as string | undefined
+    const boardUserIdQ = (req.query as any)?.boardUserId as string | undefined
     const since = new Date(Date.now() - days * 24 * 3600 * 1000)
-    const since24h = new Date(Date.now() - 24 * 3600 * 1000)  // luôn 24h cho activeGroups
+    const since24h = new Date(Date.now() - 24 * 3600 * 1000)
 
-    // Đồng bộ với trang Phân tích: filter theo message.sentAt + senderType=CONTACT.
+    // Build group filter theo cùng RBAC như /api/groups
+    let groupFilter: any = { tenantId }
+    if (auth) {
+      if (scope === 'all' && (auth.role === 'OWNER' || auth.role === 'MANAGER')) {
+        // Toàn tenant
+      } else if (scope === 'all_shared') {
+        const accesses = await db.boardAccess.findMany({
+          where: { tenantId, viewerUserId: auth.userId },
+          select: { boardUserId: true },
+        })
+        groupFilter = {
+          tenantId,
+          OR: [
+            { ownerUserId: auth.userId },
+            { ownerUserId: { in: accesses.map(a => a.boardUserId) } },
+          ],
+        }
+      } else if (boardUserIdQ && boardUserIdQ === auth.userId) {
+        // Board của tôi
+        groupFilter = { tenantId, ownerUserId: auth.userId }
+      } else if (boardUserIdQ) {
+        // Board của người khác (đã pass auth-guard BoardAccess check)
+        groupFilter = { tenantId, ownerUserId: boardUserIdQ }
+      } else {
+        // Default = Board của tôi
+        groupFilter = { tenantId, ownerUserId: auth.userId }
+      }
+    }
+
     const baseAnalysis = {
-      message: { group: { tenantId }, sentAt: { gte: since }, senderType: 'CONTACT' as const },
+      message: { group: groupFilter, sentAt: { gte: since }, senderType: 'CONTACT' as const },
     } as const
     const [totalGroups, activeGroups, totalMessages, openAlerts, complaints, opportunities, recentActivity] = await Promise.all([
-      db.group.count({ where: { tenantId } }),
-      db.group.count({ where: { tenantId, lastMessageAt: { gte: since24h } } }),
-      db.message.count({ where: { group: { tenantId }, sentAt: { gte: since }, senderType: 'CONTACT' } }),
-      db.alert.count({ where: { tenantId, status: 'OPEN' } }),
+      db.group.count({ where: groupFilter }),
+      db.group.count({ where: { ...groupFilter, lastMessageAt: { gte: since24h } } }),
+      db.message.count({ where: { group: groupFilter, sentAt: { gte: since }, senderType: 'CONTACT' } }),
+      db.alert.count({ where: { tenantId, status: 'OPEN', group: groupFilter } }),
       db.messageAnalysis.count({ where: { ...baseAnalysis, label: 'COMPLAINT' } }),
       db.messageAnalysis.count({ where: { ...baseAnalysis, label: 'OPPORTUNITY' } }),
       db.message.findMany({
-        where: { group: { tenantId } },
+        where: { group: groupFilter },
         orderBy: { createdAt: 'desc' },
         take: 10,
         include: {

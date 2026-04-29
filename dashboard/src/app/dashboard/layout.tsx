@@ -10,6 +10,7 @@ import { RemoteBanner } from '@/components/RemoteBanner'
 import { BoardProvider } from '@/lib/board-context'
 import { BoardSwitcher } from '@/components/BoardSwitcher'
 import { TenantSwitcher } from '@/components/TenantSwitcher'
+import { UserMenu } from '@/components/UserMenu'
 
 const NAV = [
   { href: '/',                    label: 'Home',       icon: IconHome,     tint: 'bg-blue-500',   exact: true },
@@ -101,13 +102,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Header — full width, cố định */}
         <Header
           right={
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <TenantSwitcher />
               <BoardSwitcher />
               <span
                 title={live ? 'Live' : 'Offline'}
                 className={`w-2 h-2 rounded-full ${live ? 'bg-green-500 animate-pulse' : 'bg-gray-300 dark:bg-white/20'}`}
               />
+              <UserMenu />
             </div>
           }
         />
