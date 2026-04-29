@@ -299,93 +299,103 @@ function OnboardBanner({ installCmd, copyCmd, copied }: { installCmd: string; co
       <div className="flex items-start gap-3">
         <div className="text-2xl">👋</div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Bắt đầu kết nối Zalo của bạn</p>
-          <p className="text-xs text-gray-600 dark:text-zinc-400 mt-0.5 mb-3">
-            Tải file cài đặt → double-click → terminal tự mở + cài tự động.
+          <p className="text-base font-bold text-gray-900 dark:text-zinc-100">Kết nối Zalo của bạn</p>
+          <p className="text-sm text-gray-600 dark:text-zinc-400 mt-0.5 mb-3">
+            Bấm nút bên dưới để tải file cài đặt. Sau đó <strong>bấm 2 lần</strong> vào file là xong.
           </p>
 
           {/* Primary CTA: download buttons */}
           <div className="flex flex-wrap gap-2 mb-4">
             <button
               onClick={() => downloadInstaller('mac')}
-              className={`inline-flex items-center gap-2 px-4 py-2.5 ${os === 'mac' ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-md' : 'bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10'} text-sm font-semibold rounded-xl transition-colors`}
+              className={`inline-flex items-center gap-2 px-5 py-3 ${os === 'mac' ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-md' : 'bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10'} text-base font-semibold rounded-xl transition-colors`}
             >
               <span></span>
-              <span>Tải installer cho Mac</span>
-              {os === 'mac' && <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded">Máy của bạn</span>}
+              <span>Cài đặt cho Mac</span>
+              {os === 'mac' && <span className="text-[11px] bg-white/20 px-1.5 py-0.5 rounded">Máy của bạn</span>}
             </button>
             <button
               onClick={() => downloadInstaller('win')}
-              className={`inline-flex items-center gap-2 px-4 py-2.5 ${os === 'win' ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-md' : 'bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10'} text-sm font-semibold rounded-xl transition-colors`}
+              className={`inline-flex items-center gap-2 px-5 py-3 ${os === 'win' ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-md' : 'bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10'} text-base font-semibold rounded-xl transition-colors`}
             >
               <span>🪟</span>
-              <span>Tải installer cho Windows</span>
-              {os === 'win' && <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded">Máy của bạn</span>}
+              <span>Cài đặt cho Windows</span>
+              {os === 'win' && <span className="text-[11px] bg-white/20 px-1.5 py-0.5 rounded">Máy của bạn</span>}
             </button>
           </div>
 
-          {/* Hướng dẫn ngay dưới nút — 3 bước rõ ràng */}
-          <div className="bg-white/70 dark:bg-white/5 ring-1 ring-blue-200 dark:ring-blue-500/30 rounded-xl p-3 mb-3">
-            <p className="text-[11px] font-semibold text-blue-700 dark:text-blue-300 mb-2">📌 Sau khi tải, làm 3 bước này:</p>
-            <ol className="space-y-1.5 text-xs text-gray-700 dark:text-zinc-300">
-              <li className="flex gap-2">
-                <span className="shrink-0 w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">1</span>
-                <span>Mở thư mục <strong>Downloads</strong> (nơi vừa tải file về).</span>
+          {/* Hướng dẫn dưới nút — viết cho người không rành máy tính */}
+          <div className="bg-white/80 dark:bg-white/5 ring-1 ring-blue-200 dark:ring-blue-500/30 rounded-xl p-4 mb-3">
+            <p className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-2.5">📌 Các bước tiếp theo:</p>
+            <ol className="space-y-2.5 text-sm text-gray-800 dark:text-zinc-200">
+              <li className="flex gap-2.5">
+                <span className="shrink-0 w-6 h-6 rounded-full bg-blue-500 text-white text-xs font-bold flex items-center justify-center">1</span>
+                <span>Mở thư mục <strong>Tải xuống</strong> (Downloads) — nơi máy lưu file vừa tải.</span>
               </li>
               {os === 'mac' || os === 'other' ? (
-                <li className="flex gap-2">
-                  <span className="shrink-0 w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">2</span>
+                <li className="flex gap-2.5">
+                  <span className="shrink-0 w-6 h-6 rounded-full bg-blue-500 text-white text-xs font-bold flex items-center justify-center">2</span>
                   <span>
-                    <strong>Chuột phải</strong> vào file <code className="bg-gray-100 dark:bg-white/10 px-1 rounded text-[10px]">zalo-monitor-installer.command</code> → chọn <strong>Open</strong> → <strong>Open</strong> lần nữa khi Mac hỏi.
-                    <br /><span className="text-[10px] text-gray-500 dark:text-zinc-500">(Lần đầu Gatekeeper hỏi vì file mới — chỉ cần xác nhận 1 lần)</span>
+                    Tìm file tên <strong>zalo-monitor-installer</strong> → <strong>bấm chuột phải</strong> vào file → chọn <strong>Mở</strong> (Open).
+                    <br />
+                    <span className="text-xs text-gray-600 dark:text-zinc-400">Máy có thể hỏi <em>"Bạn có chắc muốn mở?"</em> → bấm <strong>Mở</strong> (Open) lần nữa. Đây là bình thường vì file mới tải.</span>
                   </span>
                 </li>
               ) : (
-                <li className="flex gap-2">
-                  <span className="shrink-0 w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">2</span>
+                <li className="flex gap-2.5">
+                  <span className="shrink-0 w-6 h-6 rounded-full bg-blue-500 text-white text-xs font-bold flex items-center justify-center">2</span>
                   <span>
-                    <strong>Double-click</strong> file <code className="bg-gray-100 dark:bg-white/10 px-1 rounded text-[10px]">zalo-monitor-installer.bat</code>.
-                    <br /><span className="text-[10px] text-gray-500 dark:text-zinc-500">(Nếu Windows SmartScreen hỏi: bấm "More info" → "Run anyway")</span>
+                    Tìm file tên <strong>zalo-monitor-installer</strong> → <strong>bấm 2 lần</strong> vào file.
+                    <br />
+                    <span className="text-xs text-gray-600 dark:text-zinc-400">Nếu Windows hỏi <em>"Có chắc muốn chạy?"</em> → bấm <strong>"Thông tin thêm"</strong> rồi bấm <strong>"Vẫn chạy"</strong> (Run anyway).</span>
                   </span>
                 </li>
               )}
-              <li className="flex gap-2">
-                <span className="shrink-0 w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] font-bold flex items-center justify-center">3</span>
+              <li className="flex gap-2.5">
+                <span className="shrink-0 w-6 h-6 rounded-full bg-blue-500 text-white text-xs font-bold flex items-center justify-center">3</span>
                 <span>
-                  Cửa sổ <strong>Terminal/CMD tự mở</strong> và chạy.
+                  Một <strong>cửa sổ màu đen</strong> sẽ tự mở ra và chạy. Đợi 1-2 phút.
                   {os === 'mac' || os === 'other' ? (
-                    <span className="block mt-1 p-2 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded text-[11px] text-amber-800 dark:text-amber-300">
-                      ⚠️ <strong>Có thể hỏi mật khẩu máy 1 lần</strong> (Password). Nhập mật khẩu đăng nhập máy của bạn — <strong>màn hình KHÔNG hiện gì khi bạn gõ</strong> (ngay cả dấu *) — đó là bình thường, cứ gõ và bấm Enter.
+                    <span className="block mt-2 p-2.5 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded text-xs text-amber-900 dark:text-amber-200">
+                      <strong>Lưu ý quan trọng:</strong> nếu cửa sổ đen hỏi <strong>Password</strong> (mật khẩu máy):
+                      <br />→ Nhập mật khẩu đăng nhập máy của bạn (như khi mở khoá MacBook).
+                      <br />→ <strong>Màn hình sẽ KHÔNG hiện gì khi bạn gõ</strong> (kể cả dấu chấm). Cứ gõ bình thường rồi bấm <kbd className="bg-white dark:bg-zinc-700 px-1 py-0.5 rounded text-[10px]">Enter</kbd>. Đây là cách Mac bảo vệ mật khẩu.
                     </span>
                   ) : (
-                    <span className="block mt-1 p-2 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded text-[11px] text-amber-800 dark:text-amber-300">
-                      ⚠️ <strong>Có thể hiện UAC popup</strong> hỏi quyền admin (1-2 lần) → bấm <strong>"Yes"</strong>. Không cần nhập password (nếu account của bạn là Admin).
+                    <span className="block mt-2 p-2.5 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded text-xs text-amber-900 dark:text-amber-200">
+                      <strong>Lưu ý:</strong> Windows có thể hỏi <em>"Cho phép ứng dụng này thay đổi máy?"</em> → bấm <strong>"Có"</strong> (Yes). Không cần nhập gì.
                     </span>
                   )}
-                  <span className="block mt-1.5">
-                    Khi script hỏi <strong>"Đã mở Zalo? [Y/n]"</strong> → mở Zalo trên điện thoại trước → bấm <kbd className="bg-gray-100 dark:bg-white/10 px-1 rounded text-[10px]">Y</kbd> rồi <kbd className="bg-gray-100 dark:bg-white/10 px-1 rounded text-[10px]">Enter</kbd>.
+                  <span className="block mt-2">
+                    Khi cửa sổ hỏi <strong>"Đã mở Zalo trên điện thoại? [Y/n]"</strong>:
+                    <br />→ Mở Zalo trên điện thoại của bạn trước.
+                    <br />→ Sau đó gõ chữ <kbd className="bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded text-xs">Y</kbd> rồi bấm <kbd className="bg-gray-100 dark:bg-white/10 px-1.5 py-0.5 rounded text-xs">Enter</kbd>.
                   </span>
                 </span>
               </li>
-              <li className="flex gap-2">
-                <span className="shrink-0 w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold flex items-center justify-center">4</span>
+              <li className="flex gap-2.5">
+                <span className="shrink-0 w-6 h-6 rounded-full bg-emerald-500 text-white text-xs font-bold flex items-center justify-center">4</span>
                 <span>
-                  <strong>QR sẽ hiện 2 chỗ cùng lúc</strong> — quét chỗ nào cũng được:
-                  <ul className="mt-1 ml-3 space-y-0.5 text-[11px] text-gray-600 dark:text-zinc-400">
-                    <li>📱 <strong>Trên máy của bạn</strong>: cửa sổ {os === 'win' ? 'Photos' : 'Preview'} tự mở với hình QR.</li>
-                    <li>💻 <strong>Trên dashboard này</strong>: vào <Link href="/dashboard/settings/channels" className="text-blue-600 dark:text-blue-400 underline">Cài đặt → Kênh</Link> → QR hiện ở thẻ Zalo.</li>
+                  <strong>Mã QR sẽ tự hiện ra</strong>:
+                  <ul className="mt-1 ml-3 space-y-0.5 text-xs text-gray-700 dark:text-zinc-300">
+                    <li>• Trên máy bạn: cửa sổ xem ảnh tự mở với mã QR.</li>
+                    <li>• <Link href="/dashboard/settings/channels" className="text-blue-600 dark:text-blue-400 underline">Trên trang này</Link> cũng có mã QR (chỗ nào tiện thì quét).</li>
                   </ul>
-                  <span className="text-[11px] text-gray-600 dark:text-zinc-400">Mở Zalo → Cài đặt → <strong>Thiết bị đã đăng nhập</strong> → <strong>Thêm thiết bị</strong> → quét.</span>
+                  <span className="block mt-1.5 text-xs">
+                    Trên điện thoại: mở Zalo → vào phần <strong>Cài đặt</strong> → chọn <strong>Thiết bị đã đăng nhập</strong> → bấm <strong>Thêm thiết bị</strong> → giơ điện thoại quét mã QR.
+                  </span>
                 </span>
               </li>
             </ol>
-            <p className="text-[10px] text-gray-500 dark:text-zinc-400 mt-2.5 pt-2 border-t border-gray-200 dark:border-white/5">
-              Quét xong: dashboard tự refresh, listener chạy ngầm — không cần mở Terminal lại bao giờ.
-            </p>
+            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-white/5">
+              <p className="text-xs text-emerald-700 dark:text-emerald-400">
+                ✓ <strong>Quét xong là xong.</strong> Tin nhắn từ Zalo sẽ tự về trang này. Bạn không cần mở cửa sổ đen lại nữa.
+              </p>
+            </div>
           </div>
 
           <details className="mb-3">
-            <summary className="text-[11px] text-gray-500 dark:text-zinc-400 cursor-pointer hover:text-gray-700 dark:hover:text-zinc-200">⌨️ Tôi quen Terminal — dùng dòng lệnh thay file</summary>
+            <summary className="text-xs text-gray-500 dark:text-zinc-400 cursor-pointer hover:text-gray-700 dark:hover:text-zinc-200">Tôi rành máy tính — cho tôi dòng lệnh</summary>
             <div className="mt-2 bg-gray-900 dark:bg-black/60 rounded-xl p-2.5 font-mono text-[11px] text-green-400 break-all whitespace-pre-wrap">
               {installCmd}
             </div>
@@ -396,15 +406,15 @@ function OnboardBanner({ installCmd, copyCmd, copied }: { installCmd: string; co
             </div>
           </details>
 
-          <div className="flex flex-wrap items-center gap-2 text-[11px]">
-            <Link href="/docs/install" className="text-blue-600 dark:text-blue-400 hover:underline">📖 Hướng dẫn đầy đủ (Win/Mac/VPS/NAS)</Link>
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <Link href="/dashboard/docs/install" className="text-blue-600 dark:text-blue-400 hover:underline">📖 Hướng dẫn đầy đủ</Link>
             <span className="text-gray-300 dark:text-white/20">·</span>
             <Link href="/contact" className="text-blue-600 dark:text-blue-400 hover:underline">💬 Cần hỗ trợ</Link>
           </div>
 
           <div className="mt-3 pt-3 border-t border-blue-200/60 dark:border-blue-500/20">
-            <p className="text-[11px] text-gray-600 dark:text-zinc-400">
-              <strong>Chưa muốn cài?</strong> Vẫn dùng dashboard để xem board người khác chia sẻ — không phân tích được tin của bạn.
+            <p className="text-xs text-gray-600 dark:text-zinc-400">
+              <strong>Chỉ muốn xem trước?</strong> Bạn vẫn dùng được trang này để xem dữ liệu mà người khác chia sẻ cho bạn — không cần cài gì.
             </p>
           </div>
         </div>

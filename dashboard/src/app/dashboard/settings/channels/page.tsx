@@ -508,14 +508,14 @@ function ZaloChannelCard({
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
                 >
                   <span>{detectInstallerOs() === 'win' ? '🪟' : ''}</span>
-                  <span>Tải installer cho {detectInstallerOs() === 'win' ? 'Windows' : 'Mac'}</span>
+                  <span>Cài đặt cho {detectInstallerOs() === 'win' ? 'Windows' : 'Mac'}</span>
                 </button>
                 <button
                   onClick={() => setShowInstall(s => !s)}
                   className="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"
-                  title="Hoặc dùng lệnh dòng cho user tech"
+                  title="Cho người rành máy tính"
                 >
-                  {showInstall ? 'Ẩn lệnh' : '⌨️ Dùng dòng lệnh'}
+                  {showInstall ? 'Ẩn dòng lệnh' : '⌨️ Tôi rành máy tính'}
                 </button>
                 <a
                   href="/dashboard/docs/install"
