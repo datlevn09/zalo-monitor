@@ -1152,7 +1152,7 @@ if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
         if ! grep -q "node-$NODE_VER-darwin" "$SHELL_RC" 2>/dev/null; then
           echo "" >> "$SHELL_RC"
           echo "# Added by zalo-monitor installer" >> "$SHELL_RC"
-          echo "export PATH=\"$NODE_DIR/bin:\$PATH\"" >> "$SHELL_RC"
+          echo 'export PATH="'$NODE_DIR'/bin:$PATH"' >> "$SHELL_RC"
         fi
         echo "  ✅ Đã cài Node vào $NODE_DIR (no-sudo)"
       fi
@@ -1267,7 +1267,7 @@ if [ "$TEST_STATUS" = "200" ]; then
   # ── Kiểm tra Zalo đã login chưa ──────────────────
   ZALO_LOGGED_IN=false
   if command -v openzca >/dev/null 2>&1; then
-    if openzca --profile default auth status >/dev/null 2>&1; then
+    if openzca --profile zalo-monitor auth status >/dev/null 2>&1; then
       ZALO_LOGGED_IN=true
     fi
   fi
@@ -1287,7 +1287,8 @@ if [ "$TEST_STATUS" = "200" ]; then
     echo ""
     printf "  Đã mở Zalo trên điện thoại, sẵn sàng quét? [Y/n] "
     read -r QR_CONFIRM </dev/tty
-    if [ "\${QR_CONFIRM,,}" = "n" ]; then
+    QR_CONFIRM_LOWER=$(echo "$QR_CONFIRM" | tr '[:upper:]' '[:lower:]')
+    if [ "$QR_CONFIRM_LOWER" = "n" ]; then
       echo ""
       echo "  OK — mở Zalo rồi vào đây để quét:"
       echo "  🔗 $DASHBOARD_URL/dashboard/settings/channels"
@@ -1304,7 +1305,7 @@ if [ "$TEST_STATUS" = "200" ]; then
     if command -v openzca >/dev/null 2>&1; then
       echo ""
       echo "  Đang tạo QR..."
-      openzca --profile default auth login --qr-path /tmp/zalo-qr.png >/dev/null 2>&1 &
+      openzca --profile zalo-monitor auth login --qr-path /tmp/zalo-qr.png >/dev/null 2>&1 &
       OPENZCA_PID=$!
       # Chờ file QR xuất hiện tối đa 10s
       for _i in $(seq 1 10); do
