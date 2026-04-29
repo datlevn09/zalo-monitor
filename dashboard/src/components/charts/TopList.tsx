@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 type Item = {
   id: string
   name: string
@@ -27,12 +29,17 @@ export function TopList({
       {items.map((item, i) => {
         const pct = (item.value / max) * 100
         return (
-          <div key={item.id} className="group">
+          <Link
+            key={item.id}
+            href={`/dashboard/groups/${item.id}`}
+            className="block group rounded-md -mx-1 px-1 py-0.5 hover:bg-gray-50 dark:hover:bg-white/5 transition"
+            title="Mở chat"
+          >
             <div className="flex items-baseline gap-2 mb-1">
               <span className="text-[10px] font-semibold text-gray-400 dark:text-zinc-500 tabular-nums w-4">
                 #{i + 1}
               </span>
-              <p className="text-sm text-gray-900 dark:text-zinc-100 truncate flex-1 font-medium">{item.name}</p>
+              <p className="text-sm text-gray-900 dark:text-zinc-100 truncate flex-1 font-medium group-hover:text-blue-600 dark:group-hover:text-blue-400">{item.name}</p>
               <p className="text-sm font-bold tabular-nums text-gray-900 dark:text-zinc-100">
                 {item.value}
                 <span className="text-xs font-normal text-gray-500 dark:text-zinc-400 ml-0.5">{suffix}</span>
@@ -52,7 +59,7 @@ export function TopList({
                 />
               </div>
             )}
-          </div>
+          </Link>
         )
       })}
     </div>

@@ -19,17 +19,23 @@ export const statsRoutes: FastifyPluginAsync = async (app) => {
           '1 day'::interval
         )::date AS day
       ),
+      -- Đồng bộ với analytics: dùng sentAt + senderType=CONTACT
       msg_counts AS (
-        SELECT date_trunc('day', m."createdAt")::date AS day, COUNT(*)::bigint AS count
+        SELECT date_trunc('day', m."sentAt")::date AS day, COUNT(*)::bigint AS count
         FROM messages m
         JOIN groups g ON m."groupId" = g.id
-        WHERE g."tenantId" = $2 AND m."createdAt" >= $1
+        WHERE g."tenantId" = $2 AND m."sentAt" >= $1 AND m."senderType" = 'CONTACT'
         GROUP BY 1
       ),
+      -- "alerts" trên trend = số tin Cơ hội + Khiếu nại + Rủi ro (đồng bộ với pie chart)
       alert_counts AS (
-        SELECT date_trunc('day', "createdAt")::date AS day, COUNT(*)::bigint AS count
-        FROM alerts
-        WHERE "tenantId" = $2 AND "createdAt" >= $1
+        SELECT date_trunc('day', m."sentAt")::date AS day, COUNT(*)::bigint AS count
+        FROM messages m
+        JOIN groups g ON m."groupId" = g.id
+        JOIN message_analyses a ON a."messageId" = m.id
+        WHERE g."tenantId" = $2 AND m."sentAt" >= $1
+          AND m."senderType" = 'CONTACT'
+          AND a.label IN ('OPPORTUNITY', 'COMPLAINT', 'RISK')
         GROUP BY 1
       )
       SELECT d.day::text AS day,
@@ -55,9 +61,10 @@ export const statsRoutes: FastifyPluginAsync = async (app) => {
     const since24h = new Date(Date.now() - 24 * 3600 * 1000)
     const since7d = new Date(Date.now() - 7 * 24 * 3600 * 1000)
 
-    // Đồng bộ với trang Phân tích: dùng message_analyses (AI label) + sentAt
-    // thay vì alerts (alert chỉ trigger khi user config rule).
-    const baseAnalysis = { message: { group: { tenantId } }, createdAt: { gte: since7d } } as const
+    // Đồng bộ với trang Phân tích: filter theo message.sentAt + senderType=CONTACT.
+    const baseAnalysis = {
+      message: { group: { tenantId }, sentAt: { gte: since7d }, senderType: 'CONTACT' as const },
+    } as const
     const [totalGroups, activeGroups, totalMessages24h, openAlerts, complaints24h, opportunities24h, recentActivity] = await Promise.all([
       db.group.count({ where: { tenantId } }),
       db.group.count({ where: { tenantId, lastMessageAt: { gte: since24h } } }),
