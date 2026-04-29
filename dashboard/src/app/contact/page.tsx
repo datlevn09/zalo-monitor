@@ -143,7 +143,11 @@ export default function ContactPage() {
                 </div>
               </div>
               <p className="text-xs text-gray-600 dark:text-zinc-400 leading-relaxed">
-                Solo dev. Sản phẩm tự build, tự vận hành. Phản hồi từ vài giờ đến 1 ngày tuỳ múi giờ.
+                Ứng dụng này là <strong>dự án cá nhân</strong> mình tự "vibe code" để dùng và chia sẻ cho bạn bè trong cộng đồng startup.
+                Công việc chính của mình vẫn là <strong>sản xuất video / ảnh</strong> — đây chỉ là thứ làm thêm vì thấy hữu ích.
+              </p>
+              <p className="text-xs text-gray-500 dark:text-zinc-500 leading-relaxed mt-2">
+                Phản hồi vài giờ đến 1 ngày tuỳ thời điểm. Nếu cần nhanh — Telegram là kênh nhanh nhất.
               </p>
             </div>
 
