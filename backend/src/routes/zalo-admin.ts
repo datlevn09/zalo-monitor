@@ -14,8 +14,25 @@ const OPENCLAW_CONFIG = process.env.OPENCLAW_CONFIG ?? '/root/.openclaw/openclaw
 const OPENCLAW_LOG    = process.env.OPENCLAW_LOG ?? '/tmp/gw.log'
 const OPENCLAW_CONTAINER = process.env.OPENCLAW_CONTAINER ?? 'openclaw'
 
+// Cache check container running để không spam stderr khi container đã chết.
+let openclawAvailable: boolean | null = null
+let openclawCheckAt = 0
+function isOpenclawRunning(): boolean {
+  // Re-check mỗi 60s
+  if (openclawAvailable !== null && Date.now() - openclawCheckAt < 60_000) return openclawAvailable
+  try {
+    const out = execSync(`docker inspect -f '{{.State.Running}}' ${OPENCLAW_CONTAINER} 2>/dev/null`, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] })
+    openclawAvailable = out.trim() === 'true'
+  } catch {
+    openclawAvailable = false
+  }
+  openclawCheckAt = Date.now()
+  return openclawAvailable
+}
+
 function execInContainer(cmd: string): string {
-  return execSync(`docker exec ${OPENCLAW_CONTAINER} ${cmd}`, { encoding: 'utf-8' })
+  if (!isOpenclawRunning()) throw new Error('openclaw container not running')
+  return execSync(`docker exec ${OPENCLAW_CONTAINER} ${cmd}`, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] })
 }
 
 export const zaloAdminRoutes: FastifyPluginAsync = async (app) => {

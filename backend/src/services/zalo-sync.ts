@@ -23,11 +23,26 @@ function parseZaloTimestamp(raw: any): Date {
   return d
 }
 
+// Cache check container running — tránh spam stderr khi openclaw container chết.
+let openclawAvailable: boolean | null = null
+let openclawCheckAt = 0
+function isOpenclawRunning(): boolean {
+  if (openclawAvailable !== null && Date.now() - openclawCheckAt < 60_000) return openclawAvailable
+  try {
+    const out = execSync(`docker inspect -f '{{.State.Running}}' ${OPENCLAW_CONTAINER} 2>/dev/null`, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] })
+    openclawAvailable = out.trim() === 'true'
+  } catch { openclawAvailable = false }
+  openclawCheckAt = Date.now()
+  return openclawAvailable
+}
+
 function exec(cmd: string, timeoutMs = 60_000, maxBufferMB = 50): string {
+  if (!isOpenclawRunning()) throw new Error('openclaw container not running')
   return execSync(`docker exec ${OPENCLAW_CONTAINER} ${cmd}`, {
     encoding: 'utf-8',
     timeout: timeoutMs,
     maxBuffer: 1024 * 1024 * maxBufferMB,
+    stdio: ['ignore', 'pipe', 'ignore'],
   })
 }
 
