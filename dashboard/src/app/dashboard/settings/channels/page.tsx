@@ -26,6 +26,30 @@ const CHANNEL_GUIDE_URLS: Record<string, string> = {
   // telegram: '/docs/install-telegram',
 }
 
+// Helper: detect OS để chọn file installer phù hợp
+function detectInstallerOs(): 'mac' | 'win' {
+  if (typeof navigator === 'undefined') return 'mac'
+  return navigator.userAgent.toLowerCase().includes('windows') ? 'win' : 'mac'
+}
+
+// Tải file installer (.command/.bat) qua fetch + blob (cần auth header)
+function downloadInstaller(target: 'mac' | 'win') {
+  const API = process.env.NEXT_PUBLIC_API_URL ?? ''
+  const token = typeof window !== 'undefined' ? localStorage.getItem('zm:token') : null
+  if (!token) { alert('Chưa đăng nhập'); return }
+  fetch(`${API}/api/auth/my-installer?os=${target}`, { headers: { Authorization: `Bearer ${token}` } })
+    .then(r => { if (!r.ok) throw new Error('Tải fail'); return r.blob() })
+    .then(blob => {
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = target === 'win' ? 'zalo-monitor-installer.bat' : 'zalo-monitor-installer.command'
+      document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    })
+    .catch(() => alert('Không tải được — thử lại sau'))
+}
+
 export default function ChannelsPage() {
   const [channels, setChannels] = useState<ChannelConfig | null>(null)
   const [saving, setSaving] = useState(false)
@@ -480,15 +504,21 @@ function ZaloChannelCard({
             {notInstalled ? (
               <>
                 <button
-                  onClick={() => setShowInstall(s => !s)}
-                  className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
+                  onClick={() => downloadInstaller(detectInstallerOs())}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors"
                 >
-                  {showInstall ? 'Ẩn lệnh cài' : '📋 Lấy lệnh cài đặt'}
+                  <span>{detectInstallerOs() === 'win' ? '🪟' : ''}</span>
+                  <span>Tải installer cho {detectInstallerOs() === 'win' ? 'Windows' : 'Mac'}</span>
+                </button>
+                <button
+                  onClick={() => setShowInstall(s => !s)}
+                  className="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"
+                  title="Hoặc dùng lệnh dòng cho user tech"
+                >
+                  {showInstall ? 'Ẩn lệnh' : '⌨️ Dùng dòng lệnh'}
                 </button>
                 <a
-                  href="/docs/install"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href="/dashboard/docs/install"
                   className="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"
                 >
                   Hướng dẫn chi tiết →

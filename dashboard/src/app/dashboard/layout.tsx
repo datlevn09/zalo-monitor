@@ -27,7 +27,7 @@ const NAV = [
   { href: '/dashboard/team',              label: 'Team',        icon: IconTeam,     tint: 'bg-cyan-500' },
   { href: '/dashboard/settings/channels', label: 'Kênh',        icon: IconChannel,  tint: 'bg-violet-500' },
   { href: '/dashboard/settings',          label: 'Cài đặt',     icon: IconSettings, tint: 'bg-gray-500' },
-  { href: '/docs/install',                label: 'Hướng dẫn',   icon: IconHelp,     tint: 'bg-emerald-500' },
+  { href: '/dashboard/docs/install',      label: 'Hướng dẫn',   icon: IconHelp,     tint: 'bg-emerald-500' },
 ]
 
 
