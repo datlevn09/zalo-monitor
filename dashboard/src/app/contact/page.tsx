@@ -7,6 +7,7 @@ const AUTHOR = {
   name: 'Lê Đạt',
   handle: '@dat.thong.dong',
   telegram: 'datlevn',
+  email: 'datle@outlook.com',
   web: 'datthongdong.com',
 }
 
@@ -156,10 +157,12 @@ export default function ContactPage() {
               <h2 className="text-sm font-semibold text-gray-900 dark:text-zinc-100 mb-3">Kênh trực tiếp</h2>
               <ul className="space-y-2.5">
                 <ContactRow icon="✈️" label="Telegram" value={`@${AUTHOR.telegram}`} href={`https://t.me/${AUTHOR.telegram}`} />
+                <ContactRow icon="✉️" label="Email" value={AUTHOR.email} href={`mailto:${AUTHOR.email}`} />
                 <ContactRow icon="🌐" label="Website" value={AUTHOR.web} href={`https://${AUTHOR.web}`} />
               </ul>
               <p className="mt-4 text-[11px] text-gray-500 dark:text-zinc-400 leading-relaxed">
                 Khẩn cấp / bảo mật → Telegram (kênh nhanh nhất).
+                Hỗ trợ kỹ thuật cần log → email.
                 Hỏi chung → dùng form bên trái.
               </p>
             </div>
