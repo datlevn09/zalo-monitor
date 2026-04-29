@@ -12,6 +12,7 @@ import { zaloWebhookRoutes } from './routes/webhook-zalo.js'
 import { groupRoutes } from './routes/groups.js'
 import { alertRoutes } from './routes/alerts.js'
 import { authRoutes } from './routes/auth.js'
+import { contactRoutes } from './routes/contact.js'
 import { statsRoutes } from './routes/stats.js'
 import { messageRoutes } from './routes/messages.js'
 import { tenantRoutes } from './routes/tenants.js'
@@ -71,6 +72,7 @@ app.get('/ws', { websocket: true }, (socket) => {
 // Routes
 await app.register(installRoutes, { prefix: '/install' })
 await app.register(authRoutes,    { prefix: '/api/auth' })
+await app.register(contactRoutes, { prefix: '/api/contact' })
 await app.register(licenseValidateRoutes, { prefix: '/api/license' })
 await app.register(setupRoutes,   { prefix: '/api/setup' })
 await app.register(webhookRoutes,     { prefix: '/webhook' })

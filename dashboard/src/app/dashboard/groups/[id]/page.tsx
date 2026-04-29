@@ -6,6 +6,7 @@ import { api, connectWebSocket } from '@/lib/api'
 import { LABEL_CFG, PRIORITY_CFG, formatTime, formatDateTime } from '@/lib/format'
 import { channelDeepLink } from '@/lib/deeplink'
 import { Lightbox } from '@/components/Lightbox'
+import { ChatSidebar } from '@/components/chat/ChatSidebar'
 
 type Message = {
   id: string
@@ -271,7 +272,12 @@ export default function GroupDetailPage() {
   )
 
   return (
-    <div className="flex flex-col h-screen md:h-[calc(100vh)]">
+    <div className="flex h-screen md:h-[calc(100vh)]">
+      {/* Sidebar danh sách hội thoại — desktop only */}
+      <ChatSidebar activeId={id} />
+
+      {/* Right pane: chat detail */}
+      <div className="flex flex-col flex-1 min-w-0">
       {/* Header */}
       <header className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border-b border-gray-200 dark:border-white/10 px-4 py-3 sticky top-0 z-10">
         <div className="max-w-3xl mx-auto flex items-center gap-3">
@@ -680,6 +686,7 @@ export default function GroupDetailPage() {
       {lightbox && (
         <Lightbox url={lightbox.url} type={lightbox.type} onClose={() => setLightbox(null)} />
       )}
+      </div>
     </div>
   )
 }

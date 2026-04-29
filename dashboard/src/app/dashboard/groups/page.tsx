@@ -19,6 +19,33 @@ type Group = {
   lastMessageAt: string | null
   isActive: boolean
   _count: { messages: number; alerts: number }
+  messages?: Array<{
+    content: string | null
+    contentType: string
+    senderName: string | null
+    senderType: 'SELF' | 'CONTACT'
+    sentAt: string
+  }>
+}
+
+/** Render preview tin cuối: cắt ngắn, prefix 'Bạn:' nếu là SELF */
+function previewMessage(g: Group): string {
+  const m = g.messages?.[0]
+  if (!m) return 'Chưa có tin nhắn'
+  const prefix =
+    m.senderType === 'SELF' ? 'Bạn: '
+    : m.senderName ? `${m.senderName.split(' ').slice(-1)[0]}: `
+    : ''
+  let body = m.content ?? ''
+  if (m.contentType === 'IMAGE') body = '[Hình ảnh]'
+  else if (m.contentType === 'VIDEO') body = '[Video]'
+  else if (m.contentType === 'STICKER') body = '[Sticker]'
+  else if (m.contentType === 'VOICE') body = '[Tin nhắn thoại]'
+  else if (m.contentType === 'FILE') body = '[File]'
+  // Strip [media attached: ...] noise
+  body = body.replace(/\[media attached:[^\]]*\]/gi, '[Tệp đính kèm]').trim()
+  if (body.length > 60) body = body.slice(0, 60) + '…'
+  return prefix + (body || '...')
 }
 
 const CATEGORIES = ['Tất cả', 'Khách hàng', 'Đại lý', 'Nội bộ', 'Nhà cung cấp', 'Chưa phân loại']
@@ -290,12 +317,17 @@ export default function GroupsPage() {
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <p className="text-xs text-gray-500 dark:text-zinc-400 truncate">
-                    {g._count.messages} tin nhắn · {formatRelative(g.lastMessageAt)}
+                {/* Preview tin cuối — quan trọng nhất, hiển thị to */}
+                <p className="text-xs text-gray-600 dark:text-zinc-400 truncate mt-0.5">
+                  {previewMessage(g)}
+                </p>
+                {/* Meta: số tin · thời gian · category */}
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <p className="text-[10px] text-gray-400 dark:text-zinc-500 truncate">
+                    {formatRelative(g.lastMessageAt)} · {g._count.messages} tin
                   </p>
                   {g.category && (
-                    <span className="shrink-0 text-[10px] px-1.5 py-0.5 bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-400 rounded font-medium">
+                    <span className="shrink-0 text-[10px] px-1.5 py-0 bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-zinc-400 rounded font-medium">
                       {g.category}
                     </span>
                   )}

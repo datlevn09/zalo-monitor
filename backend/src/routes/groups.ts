@@ -36,7 +36,15 @@ export const groupRoutes: FastifyPluginAsync = async (app) => {
       const groups = await db.group.findMany({
         where,
         orderBy: { lastMessageAt: 'desc' },
-        include: { _count: { select: { messages: true, alerts: true } }, ownerUser: { select: { id: true, name: true } } },
+        include: {
+          _count: { select: { messages: true, alerts: true } },
+          ownerUser: { select: { id: true, name: true } },
+          messages: {
+            orderBy: { sentAt: 'desc' },
+            take: 1,
+            select: { content: true, contentType: true, senderName: true, senderType: true, sentAt: true },
+          },
+        },
       })
       return groups
     }
@@ -65,6 +73,11 @@ export const groupRoutes: FastifyPluginAsync = async (app) => {
       include: {
         _count: { select: { messages: true, alerts: true } },
         ownerUser: { select: { id: true, name: true } },
+        messages: {
+          orderBy: { sentAt: 'desc' },
+          take: 1,
+          select: { content: true, contentType: true, senderName: true, senderType: true, sentAt: true },
+        },
       },
     })
 

@@ -25,7 +25,8 @@ export default function ContactPage() {
     }
     setSending(true); setError(null)
     try {
-      const res = await fetch('/api/contact', {
+      const API = process.env.NEXT_PUBLIC_API_URL ?? ''
+      const res = await fetch(`${API}/api/contact`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
