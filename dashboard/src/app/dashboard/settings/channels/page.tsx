@@ -900,13 +900,14 @@ function ManualLoginFallback() {
     return navigator.userAgent.toLowerCase().includes('windows') ? 'windows' : 'linux'
   })
 
-  // Linux/Mac
+  // Linux/Mac — file-based: openzca xuất qr.png → đọc file, encode base64, push.
+  // Tránh phụ thuộc vào output stdout của --qr-base64 (có thể đổi format).
   const linuxRestart = 'systemctl --user restart zalo-monitor-listener'
-  const linuxPush = `set -a; . ~/.zalo-monitor/.env; set +a; openzca --profile zalo-monitor auth login --qr-base64 2>&1 | grep -oE 'data:image/[a-z]+;base64,[A-Za-z0-9+/=]+' | head -1 | xargs -I{} curl -s -X POST "$BACKEND_URL/api/setup/qr-push" -H "content-type: application/json" -H "x-webhook-secret: $WEBHOOK_SECRET" -H "x-tenant-id: $TENANT_ID" -d '{"dataUrl":"{}"}'`
+  const linuxPush = `set -a; . ~/.zalo-monitor/.env; set +a; QR=/tmp/zm-qr.png; rm -f $QR; openzca --profile zalo-monitor auth login --qr-path $QR >/dev/null 2>&1 & PID=$!; for i in 1 2 3 4 5 6 7 8 9 10; do [ -s $QR ] && break; sleep 1; done; kill $PID 2>/dev/null; if [ -s $QR ]; then B64=$(base64 -w0 < $QR 2>/dev/null || base64 < $QR | tr -d '\\n'); curl -s -X POST "$BACKEND_URL/api/setup/qr-push" -H 'content-type: application/json' -H "x-webhook-secret: $WEBHOOK_SECRET" -H "x-tenant-id: $TENANT_ID" -d "{\\"dataUrl\\":\\"data:image/png;base64,$B64\\"}"; echo 'QR pushed'; else echo 'QR file not generated'; fi`
 
-  // Windows PowerShell — Run as Admin
+  // Windows PowerShell — Run as Admin. File-based.
   const winRestart = 'schtasks /End /TN ZaloMonitorListener; Start-Sleep 1; schtasks /Run /TN ZaloMonitorListener'
-  const winPush = `$envFile = "$env:USERPROFILE\\.zalo-monitor\\.env"; Get-Content $envFile | ForEach-Object { if ($_ -match '^([^=]+)=(.*)$') { Set-Variable -Name $matches[1] -Value $matches[2] } }; $log = "$env:TEMP\\openzca-qr.log"; Start-Process openzca -ArgumentList @('--profile','zalo-monitor','auth','login','--qr-base64') -RedirectStandardOutput $log -WindowStyle Hidden; Start-Sleep 6; $qr = (Select-String -Path $log -Pattern 'data:image/[a-z]+;base64,[A-Za-z0-9+/=]+' | Select-Object -First 1).Matches.Value; if ($qr) { Invoke-WebRequest -Uri "$BACKEND_URL/api/setup/qr-push" -Method POST -Headers @{'Content-Type'='application/json';'x-webhook-secret'=$WEBHOOK_SECRET;'x-tenant-id'=$TENANT_ID} -Body (@{dataUrl=$qr}|ConvertTo-Json) -UseBasicParsing }`
+  const winPush = `$envFile = "$env:USERPROFILE\\.zalo-monitor\\.env"; Get-Content $envFile | ForEach-Object { if ($_ -match '^([^=]+)=(.*)$') { Set-Variable -Name $matches[1] -Value $matches[2] } }; $qr = "$env:TEMP\\zm-qr.png"; Remove-Item $qr -ErrorAction SilentlyContinue; $proc = Start-Process openzca -ArgumentList @('--profile','zalo-monitor','auth','login','--qr-path',$qr) -WindowStyle Hidden -PassThru; for ($i=0; $i -lt 30; $i++) { Start-Sleep 1; if (Test-Path $qr) { break } }; if (Test-Path $qr) { $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($qr)); $body = @{dataUrl="data:image/png;base64,$b64"} | ConvertTo-Json; Invoke-WebRequest -Uri "$BACKEND_URL/api/setup/qr-push" -Method POST -Headers @{'Content-Type'='application/json';'x-webhook-secret'=$WEBHOOK_SECRET;'x-tenant-id'=$TENANT_ID} -Body $body -UseBasicParsing | Out-Null; Write-Host 'QR pushed' } else { Write-Host 'QR file not generated' }`
 
   const restartCmd = os === 'windows' ? winRestart : linuxRestart
   const pushCmd = os === 'windows' ? winPush : linuxPush

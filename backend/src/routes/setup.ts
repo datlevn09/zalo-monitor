@@ -1320,7 +1320,16 @@ if [ "$TEST_STATUS" = "200" ]; then
     fi
 
     if [ -n "$QR_FILE" ]; then
-      # Thử mở QR file bằng GUI viewer
+      # Push QR lên dashboard (để user quét trên web nếu thuận tiện)
+      QR_B64=$(base64 -w0 < "$QR_FILE" 2>/dev/null || base64 < "$QR_FILE" | tr -d '\n')
+      if [ -n "$QR_B64" ]; then
+        curl -s -X POST "$BACKEND_URL/api/setup/qr-push" \
+          -H 'content-type: application/json' \
+          -H "x-webhook-secret: $WEBHOOK_SECRET" \
+          -H "x-tenant-id: $TENANT_ID" \
+          -d "{\\"dataUrl\\":\\"data:image/png;base64,$QR_B64\\"}" >/dev/null 2>&1 || true
+      fi
+      # Mở QR file bằng GUI viewer
       if command -v open >/dev/null 2>&1; then
         open "$QR_FILE" 2>/dev/null && echo "  📂 Đã mở QR trong Preview — quét bằng Zalo trên điện thoại." || true
       elif command -v xdg-open >/dev/null 2>&1; then
@@ -1330,7 +1339,7 @@ if [ "$TEST_STATUS" = "200" ]; then
         echo "     Mở file này và quét bằng Zalo trên điện thoại."
       fi
       echo ""
-      echo "  Hoặc quét trên dashboard (QR đang được đẩy tự động):"
+      echo "  Hoặc quét trên dashboard (QR đã được đẩy):"
       echo "  🔗 $DASHBOARD_URL/dashboard/settings/channels"
     else
       # Fallback: openclaw canvas UI
