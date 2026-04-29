@@ -10,6 +10,19 @@ import { db } from './db.js'
 
 const OPENCLAW_CONTAINER = process.env.OPENCLAW_CONTAINER ?? 'openclaw'
 
+/** Parse Zalo timestamp linh hoạt (seconds/ms/microseconds). Xem chi tiết ở webhook-zalo.ts */
+function parseZaloTimestamp(raw: any): Date {
+  if (raw == null) return new Date()
+  let n = typeof raw === 'string' ? Number(raw) : Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return new Date()
+  if (n < 1e12) n = n * 1000
+  else if (n > 1e14) n = Math.floor(n / 1000)
+  const d = new Date(n)
+  const y = d.getFullYear()
+  if (y < 2001 || y > 2100) return new Date()
+  return d
+}
+
 function exec(cmd: string, timeoutMs = 60_000, maxBufferMB = 50): string {
   return execSync(`docker exec ${OPENCLAW_CONTAINER} ${cmd}`, {
     encoding: 'utf-8',
@@ -170,7 +183,7 @@ export async function syncZaloGroupHistory(tenantId: string, groupId: string, li
           senderName: m.senderName ?? m.dName ?? null,
           contentType: detectContent(m),
           content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
-          sentAt: m.timestamp ? new Date(m.timestamp) : new Date(),
+          sentAt: parseZaloTimestamp(m.timestamp),
         },
       })
       imported++

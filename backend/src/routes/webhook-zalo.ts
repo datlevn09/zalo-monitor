@@ -11,6 +11,26 @@ import { db } from '../services/db.js'
 import { wsManager } from '../services/websocket.js'
 import { aiQueue } from '../services/queue.js'
 
+/**
+ * Zalo gửi timestamp dưới nhiều dạng:
+ *  - seconds (10 chữ số, ~1.7e9): cần *1000
+ *  - milliseconds (13 chữ số, ~1.7e12): dùng trực tiếp
+ *  - microseconds (16 chữ số): /1000
+ * Phát hiện theo độ lớn (cutoff: ms < 10^12 ⇒ seconds; > 10^14 ⇒ microseconds)
+ * Trả về Date hợp lệ (year 2001-2100), fallback now nếu sai.
+ */
+function parseZaloTimestamp(raw: any): Date {
+  if (raw == null) return new Date()
+  let n = typeof raw === 'string' ? Number(raw) : Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return new Date()
+  if (n < 1e12) n = n * 1000          // seconds → ms
+  else if (n > 1e14) n = Math.floor(n / 1000)  // microseconds → ms
+  const d = new Date(n)
+  const year = d.getFullYear()
+  if (year < 2001 || year > 2100) return new Date()
+  return d
+}
+
 export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
   app.post('/', async (req, reply) => {
     const secret = req.headers['x-webhook-secret'] as string
@@ -190,7 +210,7 @@ export const zaloWebhookRoutes: FastifyPluginAsync = async (app) => {
           if (fromText && !urls.includes(fromText)) urls.push(fromText)
           return urls.length > 0 ? urls : undefined
         })(),
-        sentAt: raw.timestamp ? new Date(raw.timestamp) : new Date(),
+        sentAt: parseZaloTimestamp(raw.timestamp),
       },
     })
 
