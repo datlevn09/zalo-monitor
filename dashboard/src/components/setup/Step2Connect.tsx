@@ -68,13 +68,75 @@ Tenant: ${setup.tenantId}
 Lệnh cần chạy trên máy chủ của tôi:
 ${commands.dockerCommand || commands.oneLineCommand}`
 
+  // Auto-detect OS for download installer button
+  const installerOs: 'mac' | 'win' = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('windows') ? 'win' : 'mac'
+
+  function downloadInstaller(target: 'mac' | 'win') {
+    const API = process.env.NEXT_PUBLIC_API_URL ?? ''
+    const token = typeof window !== 'undefined' ? localStorage.getItem('zm:token') : null
+    if (!token) { alert('Chưa đăng nhập'); return }
+    fetch(`${API}/api/auth/my-installer?os=${target}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => { if (!r.ok) throw new Error('Tải fail'); return r.blob() })
+      .then(blob => {
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = target === 'win' ? 'zalo-monitor-installer.bat' : 'zalo-monitor-installer.zip'
+        document.body.appendChild(a); a.click(); a.remove()
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+      })
+      .catch(() => alert('Không tải được — thử lại sau'))
+  }
+
   return (
     <div className="space-y-5">
       <div>
         <h2 className="text-lg font-semibold text-gray-900 dark:text-zinc-100">Kết nối Zalo</h2>
-        <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1">Chạy lệnh sau trên máy chủ để cài listener Zalo Monitor</p>
+        <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1">Cài listener trên máy có Zalo của bạn — chọn 1 trong 2 cách dưới</p>
       </div>
 
+      {/* CÁCH 1: Tải installer — khuyên dùng */}
+      <div className="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 rounded-xl p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-base">📦</span>
+          <h3 className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">Cách dễ — Tải file cài đặt</h3>
+          <span className="text-[10px] bg-emerald-500 text-white px-1.5 py-0.5 rounded font-semibold">Khuyên dùng</span>
+        </div>
+        <p className="text-xs text-emerald-800 dark:text-emerald-300 mb-3">Tải về → double-click → tự cài. Không cần biết Terminal.</p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => downloadInstaller('mac')}
+            className={`flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 px-3 py-2.5 ${installerOs === 'mac' ? 'bg-blue-500 hover:bg-blue-600 text-white shadow' : 'bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10'} text-sm font-semibold rounded-lg transition-colors`}
+          >
+            <span></span><span>Tải cho Mac</span>
+            {installerOs === 'mac' && <span className="text-[10px] bg-white/25 px-1 rounded">Máy bạn</span>}
+          </button>
+          <button
+            type="button"
+            onClick={() => downloadInstaller('win')}
+            className={`flex-1 min-w-[140px] inline-flex items-center justify-center gap-2 px-3 py-2.5 ${installerOs === 'win' ? 'bg-blue-500 hover:bg-blue-600 text-white shadow' : 'bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10'} text-sm font-semibold rounded-lg transition-colors`}
+          >
+            <span>🪟</span><span>Tải cho Windows</span>
+            {installerOs === 'win' && <span className="text-[10px] bg-white/25 px-1 rounded">Máy bạn</span>}
+          </button>
+        </div>
+        <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-2.5">
+          Sau khi tải về: double-click → cửa sổ đen tự mở → đợi 1-2 phút → vào dashboard quét QR.
+        </p>
+      </div>
+
+      {/* CÁCH 2: Lệnh dòng — collapsed */}
+      <details className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-3.5">
+      <summary className="cursor-pointer text-sm font-semibold text-gray-700 dark:text-zinc-300 flex items-center gap-2 list-none select-none">
+        <span>⌨️</span>
+        <span>Cách 2 — Tôi rành máy tính, dùng dòng lệnh</span>
+        <svg className="w-3.5 h-3.5 ml-auto transition-transform" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/>
+        </svg>
+      </summary>
+
+      <div className="mt-3 space-y-3">
       {/* Mode selector - iOS segmented */}
       <div>
         <p className="text-[11px] text-gray-500 dark:text-zinc-400 mb-1.5">Chọn loại máy anh sẽ chạy listener:</p>
@@ -158,6 +220,8 @@ ${commands.dockerCommand || commands.oneLineCommand}`
           <GuideStep num={mode === 'host' ? 4 : (mode === 'windows' ? 4 : 3)} title="Nhấn Enter" desc="Đợi 2-3 giây, hook sẽ tự tải và enable. Nếu thấy '🎉 Hoàn tất!' là OK." />
           <GuideStep num={mode === 'host' ? 5 : (mode === 'windows' ? 5 : 4)} title="Gửi thử 1 tin" desc="Nhắn bất kỳ tin trong nhóm Telegram/Zalo có bot → dashboard sẽ tự detect ở dưới" />
         </div>
+      </details>
+      </div>
       </details>
 
       {/* What it does */}
