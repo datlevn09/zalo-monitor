@@ -8,6 +8,7 @@ import { api, connectWebSocket } from '@/lib/api'
 import { LABEL_CFG, formatRelative } from '@/lib/format'
 import { DigestModal } from '@/components/dashboard/DigestModal'
 import { TrendChart } from '@/components/dashboard/TrendChart'
+import { useBoardScope } from '@/lib/board-context'
 
 type TenantInfo = {
   plan: string
@@ -100,8 +101,11 @@ export default function OverviewPage() {
 
   return (
     <div className="p-4 md:p-8 max-w-6xl mx-auto">
-      {/* Onboarding banner — chỉ hiện khi chưa có kết nối Zalo nào */}
-      {myGroupsCount === 0 && installCmd && zaloConnected === false && <OnboardBanner installCmd={installCmd} copyCmd={copyCmd} copied={copied} />}
+      {/* Status: đang xem board người khác (cho user chưa kết nối Zalo riêng) */}
+      <ViewingBoardNotice />
+
+      {/* Banner cài listener — hiện khi user CHƯA tự kết nối Zalo (kể cả đang xem board share) */}
+      {installCmd && zaloConnected === false && <OnboardBanner installCmd={installCmd} copyCmd={copyCmd} copied={copied} />}
 
       {/* Header */}
       <div className="mb-6 md:mb-8 flex items-start md:items-center justify-between flex-col md:flex-row gap-3">
@@ -265,6 +269,25 @@ export default function OverviewPage() {
   )
 }
 
+/** Status: đang xem board của người khác (cho user chưa kết nối Zalo riêng) */
+function ViewingBoardNotice() {
+  const { activeBoard, isReady } = useBoardScope()
+  if (!isReady || !activeBoard || activeBoard.isOwn) return null
+  return (
+    <div className="mb-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-xl p-3.5 flex items-start gap-3">
+      <span className="text-xl">👁️</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+          Đang xem board của <strong>{activeBoard.userName}</strong>
+        </p>
+        <p className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
+          Bạn đang xem dữ liệu được chia sẻ. Để có dữ liệu Zalo của riêng bạn, kết nối Zalo cá nhân ở phần dưới.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 /** Onboarding banner với 2 nút download installer + lệnh copy fallback */
 function OnboardBanner({ installCmd, copyCmd, copied }: { installCmd: string; copyCmd: () => void; copied: boolean }) {
   const [os, setOs] = useState<'mac' | 'win' | 'other'>('other')
@@ -305,24 +328,48 @@ function OnboardBanner({ installCmd, copyCmd, copied }: { installCmd: string; co
             Bấm nút bên dưới để tải file cài đặt. Sau đó <strong>double-click</strong> vào file là xong.
           </p>
 
-          {/* Primary CTA: download buttons */}
-          <div className="flex flex-wrap gap-2 mb-4">
-            <button
-              onClick={() => downloadInstaller('mac')}
-              className={`inline-flex items-center gap-2 px-5 py-3 ${os === 'mac' ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-md' : 'bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10'} text-base font-semibold rounded-xl transition-colors`}
-            >
-              <span></span>
-              <span>Cài đặt cho Mac</span>
-              {os === 'mac' && <span className="text-[11px] bg-white/20 px-1.5 py-0.5 rounded">Máy của bạn</span>}
-            </button>
-            <button
-              onClick={() => downloadInstaller('win')}
-              className={`inline-flex items-center gap-2 px-5 py-3 ${os === 'win' ? 'bg-blue-500 hover:bg-blue-600 text-white shadow-md' : 'bg-white dark:bg-white/10 hover:bg-gray-50 dark:hover:bg-white/15 text-gray-800 dark:text-zinc-200 border border-gray-200 dark:border-white/10'} text-base font-semibold rounded-xl transition-colors`}
-            >
-              <span>🪟</span>
-              <span>Cài đặt cho Windows</span>
-              {os === 'win' && <span className="text-[11px] bg-white/20 px-1.5 py-0.5 rounded">Máy của bạn</span>}
-            </button>
+          {/* 2 lựa chọn cài đặt — hiện cả copy lệnh và tải file */}
+          <div className="grid md:grid-cols-2 gap-3 mb-4">
+            {/* Option 1 — Tải file */}
+            <div className="bg-white dark:bg-white/5 ring-1 ring-gray-200 dark:ring-white/10 rounded-xl p-3.5">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-base">📦</span>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Cách 1 — Tải file cài đặt</h3>
+                <span className="text-[10px] bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-1.5 py-0.5 rounded font-semibold">Khuyên dùng</span>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-zinc-400 mb-2.5">Tải về → double-click → tự cài. Không cần biết Terminal.</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => downloadInstaller('mac')}
+                  className={`flex-1 min-w-[120px] inline-flex items-center justify-center gap-1.5 px-3 py-2 ${os === 'mac' ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 text-gray-800 dark:text-zinc-200'} text-sm font-medium rounded-lg transition-colors`}
+                >
+                  <span></span>
+                  <span>Cho Mac</span>
+                </button>
+                <button
+                  onClick={() => downloadInstaller('win')}
+                  className={`flex-1 min-w-[120px] inline-flex items-center justify-center gap-1.5 px-3 py-2 ${os === 'win' ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 text-gray-800 dark:text-zinc-200'} text-sm font-medium rounded-lg transition-colors`}
+                >
+                  <span>🪟</span>
+                  <span>Cho Windows</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Option 2 — Copy lệnh */}
+            <div className="bg-white dark:bg-white/5 ring-1 ring-gray-200 dark:ring-white/10 rounded-xl p-3.5">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-base">⌨️</span>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Cách 2 — Copy lệnh chạy Terminal</h3>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-zinc-400 mb-2.5">Cho người rành máy tính. Mở Terminal → paste → Enter.</p>
+              <div className="bg-gray-900 dark:bg-black/60 rounded-lg p-2 font-mono text-[10px] text-green-400 break-all whitespace-pre-wrap leading-relaxed mb-2 max-h-20 overflow-y-auto">
+                {installCmd}
+              </div>
+              <button onClick={copyCmd} className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-gray-700 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors">
+                {copied ? '✓ Đã copy' : '📋 Copy lệnh'}
+              </button>
+            </div>
           </div>
 
           {/* Hướng dẫn dưới nút — viết cho người không rành máy tính */}
@@ -395,18 +442,6 @@ function OnboardBanner({ installCmd, copyCmd, copied }: { installCmd: string; co
               </p>
             </div>
           </div>
-
-          <details className="mb-3">
-            <summary className="text-xs text-gray-500 dark:text-zinc-400 cursor-pointer hover:text-gray-700 dark:hover:text-zinc-200">Tôi rành máy tính — cho tôi dòng lệnh</summary>
-            <div className="mt-2 bg-gray-900 dark:bg-black/60 rounded-xl p-2.5 font-mono text-[11px] text-green-400 break-all whitespace-pre-wrap">
-              {installCmd}
-            </div>
-            <div className="flex flex-wrap gap-2 mt-2">
-              <button onClick={copyCmd} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-800 text-white text-xs font-medium rounded-lg">
-                {copied ? '✓ Đã copy' : '📋 Copy lệnh'}
-              </button>
-            </div>
-          </details>
 
           <div className="flex flex-wrap items-center gap-3 text-xs">
             <Link href="/dashboard/docs/install" className="text-blue-600 dark:text-blue-400 hover:underline">📖 Hướng dẫn đầy đủ</Link>
