@@ -108,18 +108,23 @@ export default function OverviewPage() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-gray-900 dark:text-zinc-100">Chào mừng! Cài listener để bắt đầu theo dõi Zalo của bạn</p>
               <p className="text-xs text-gray-600 dark:text-zinc-400 mt-0.5 mb-3">
-                Chạy lệnh sau trên máy chủ có Zalo cá nhân của bạn. Tin nhắn sẽ forward về đây và chỉ bạn (và OWNER/MANAGER) thấy được.
+                Chạy lệnh sau trên máy có Zalo PC của bạn. Tin nhắn sẽ forward về đây và chỉ bạn (và OWNER/MANAGER) thấy được.
               </p>
               <div className="bg-gray-900 dark:bg-black/60 rounded-xl p-2.5 font-mono text-[11px] text-green-400 break-all whitespace-pre-wrap">
                 {installCmd}
               </div>
-              <div className="flex gap-2 mt-2">
+              <div className="flex flex-wrap gap-2 mt-2">
                 <button onClick={copyCmd} className="px-3 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg">
                   {copied ? '✓ Đã copy' : '📋 Copy lệnh'}
                 </button>
-                <Link href="/dashboard/settings" className="px-3 py-1.5 bg-white dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 text-xs font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-white/15">
-                  Hướng dẫn chi tiết
+                <Link href="/docs/install" className="px-3 py-1.5 bg-white dark:bg-white/10 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-zinc-300 text-xs font-medium rounded-lg hover:bg-gray-50 dark:hover:bg-white/15">
+                  📖 Hướng dẫn chi tiết (Win/Mac/VPS/NAS)
                 </Link>
+              </div>
+              <div className="mt-3 pt-3 border-t border-blue-200/60 dark:border-blue-500/20">
+                <p className="text-[11px] text-gray-600 dark:text-zinc-400">
+                  <strong>Chưa muốn cài listener?</strong> Bạn vẫn có thể dùng dashboard để xem board mà người khác chia sẻ cho bạn (nếu có). Lúc đó hệ thống <em>không phân tích được tin nhắn từ Zalo cá nhân của bạn</em> — chỉ xem dữ liệu từ board được chia sẻ.
+                </p>
               </div>
             </div>
           </div>
