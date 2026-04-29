@@ -1243,8 +1243,48 @@ EOF
   else
     echo "  ⚠️  Service chưa active. Check log: journalctl --user -u zalo-monitor-listener -n 30"
   fi
+elif [ "$(uname)" = "Darwin" ]; then
+  # macOS: dùng launchd (systemd alternative). Service tự khởi động khi user login.
+  PLIST_DIR="$HOME/Library/LaunchAgents"
+  PLIST="$PLIST_DIR/com.datthongdong.zalo-monitor-listener.plist"
+  mkdir -p "$PLIST_DIR"
+  cat > "$PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.datthongdong.zalo-monitor-listener</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$NODE_BIN</string>
+    <string>$LISTENER_DIR/zalo-listener.mjs</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>BACKEND_URL</key><string>$BACKEND_URL</string>
+    <key>WEBHOOK_SECRET</key><string>$SECRET</string>
+    <key>TENANT_ID</key><string>$TENANT_ID</string>
+    <key>PROFILE</key><string>zalo-monitor</string>
+    <key>PATH</key><string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:$HOME/.local/node-v20.18.1-darwin-arm64/bin:$HOME/.local/node-v20.18.1-darwin-x64/bin</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$LISTENER_DIR/listener.log</string>
+  <key>StandardErrorPath</key><string>$LISTENER_DIR/listener.err</string>
+</dict>
+</plist>
+EOF
+  # Unload nếu đã có (tránh xung đột)
+  launchctl unload "$PLIST" 2>/dev/null || true
+  launchctl load "$PLIST" 2>&1 | head -3
+  sleep 2
+  if launchctl list | grep -q "com.datthongdong.zalo-monitor-listener"; then
+    echo "  ✅ launchd service đang chạy (tự khởi động khi login Mac)"
+  else
+    echo "  ⚠️  Service chưa load được. Check log: tail $LISTENER_DIR/listener.err"
+  fi
 else
-  echo "  ℹ️  systemd không có. Chạy thủ công:"
+  echo "  ℹ️  Không tìm thấy systemd/launchd. Chạy thủ công:"
   echo "     BACKEND_URL=$BACKEND_URL WEBHOOK_SECRET=$SECRET TENANT_ID=$TENANT_ID node $LISTENER_DIR/zalo-listener.mjs"
 fi
 
