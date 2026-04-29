@@ -6,10 +6,7 @@ import { useState } from 'react'
 const AUTHOR = {
   name: 'Lê Đạt',
   handle: '@dat.thong.dong',
-  phone: '0869999664',
-  phoneFmt: '0869.999.664',
   telegram: 'datlevn',
-  email: 'datle@outlook.com',
   web: 'datthongdong.com',
 }
 
@@ -32,19 +29,23 @@ export default function ContactPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       })
-      if (!res.ok) {
-        // Fallback: mở mail client với nội dung pre-filled
-        const subject = encodeURIComponent(`[Zalo Monitor] ${form.topic} — ${form.name}`)
-        const body = encodeURIComponent(`Họ tên: ${form.name}\nEmail: ${form.email || '(chưa nhập)'}\nChủ đề: ${form.topic}\n\n${form.message}`)
-        window.location.href = `mailto:${AUTHOR.email}?subject=${subject}&body=${body}`
+      if (res.ok) {
+        setSent(true)
+        setForm({ name: '', email: '', topic: 'general', message: '' })
+      } else {
+        // Fallback: mở Telegram với nội dung pre-filled (kênh chính)
+        const text = encodeURIComponent(
+          `[Zalo Monitor · ${form.topic}]\nHọ tên: ${form.name}\n${form.email ? `Email: ${form.email}\n` : ''}\n${form.message}`
+        )
+        window.open(`https://t.me/${AUTHOR.telegram}?text=${text}`, '_blank')
+        setSent(true)
       }
-      setSent(true)
-      setForm({ name: '', email: '', topic: 'general', message: '' })
     } catch {
-      // Fallback mailto như trên
-      const subject = encodeURIComponent(`[Zalo Monitor] ${form.topic} — ${form.name}`)
-      const body = encodeURIComponent(`Họ tên: ${form.name}\nEmail: ${form.email || '(chưa nhập)'}\nChủ đề: ${form.topic}\n\n${form.message}`)
-      window.location.href = `mailto:${AUTHOR.email}?subject=${subject}&body=${body}`
+      const text = encodeURIComponent(
+        `[Zalo Monitor · ${form.topic}]\nHọ tên: ${form.name}\n${form.email ? `Email: ${form.email}\n` : ''}\n${form.message}`
+      )
+      window.open(`https://t.me/${AUTHOR.telegram}?text=${text}`, '_blank')
+      setSent(true)
     } finally {
       setSending(false)
     }
@@ -154,14 +155,12 @@ export default function ContactPage() {
             <div className="bg-white dark:bg-zinc-900 dark:ring-1 dark:ring-white/5 rounded-2xl p-5 shadow-sm">
               <h2 className="text-sm font-semibold text-gray-900 dark:text-zinc-100 mb-3">Kênh trực tiếp</h2>
               <ul className="space-y-2.5">
-                <ContactRow icon="📞" label="Hotline" value={AUTHOR.phoneFmt} href={`tel:${AUTHOR.phone}`} />
                 <ContactRow icon="✈️" label="Telegram" value={`@${AUTHOR.telegram}`} href={`https://t.me/${AUTHOR.telegram}`} />
-                <ContactRow icon="✉️" label="Email" value={AUTHOR.email} href={`mailto:${AUTHOR.email}`} />
                 <ContactRow icon="🌐" label="Website" value={AUTHOR.web} href={`https://${AUTHOR.web}`} />
               </ul>
               <p className="mt-4 text-[11px] text-gray-500 dark:text-zinc-400 leading-relaxed">
-                Khẩn cấp về bảo mật → ưu tiên Telegram.
-                Hỗ trợ kỹ thuật chung → email cho có log.
+                Khẩn cấp / bảo mật → Telegram (kênh nhanh nhất).
+                Hỏi chung → dùng form bên trái.
               </p>
             </div>
           </aside>

@@ -14,16 +14,18 @@ const PLATFORMS: { key: Platform; icon: string; label: string; tag: string }[] =
 ]
 
 export default function InstallGuidePage() {
-  const [tab, setTab] = useState<Platform>('windows')
+  // Auto-detect OS ngay khi mount (lazy init → không bị flash sai tab trước render)
+  const [tab, setTab] = useState<Platform>(() => {
+    if (typeof navigator === 'undefined') return 'windows'
+    const ua = navigator.userAgent.toLowerCase()
+    if (ua.includes('mac')) return 'mac'
+    if (ua.includes('linux') && !ua.includes('android')) return 'vps'
+    return 'windows'
+  })
   const [cmd, setCmd] = useState<{ oneLineCommand?: string; windowsCommand?: string; dockerCommand?: string }>({})
   const [copied, setCopied] = useState(false)
 
-  // Auto-detect OS từ user-agent
   useEffect(() => {
-    const ua = navigator.userAgent.toLowerCase()
-    if (ua.includes('mac')) setTab('mac')
-    else if (ua.includes('linux')) setTab('vps')
-    else setTab('windows')
     api<typeof cmd>('/api/auth/my-install-command').then(setCmd).catch(() => undefined)
   }, [])
 

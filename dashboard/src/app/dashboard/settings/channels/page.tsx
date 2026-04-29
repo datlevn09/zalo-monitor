@@ -252,7 +252,13 @@ function ZaloChannelCard({
   const [resettingSync, setResettingSync] = useState(false)
   const [nativeMode, setNativeMode] = useState(false)
   const [installCmd, setInstallCmd] = useState<{ oneLineCommand?: string; windowsCommand?: string; dockerCommand?: string } | null>(null)
-  const [installOS, setInstallOS] = useState<'linux' | 'windows' | 'docker'>('linux')
+  const [installOS, setInstallOS] = useState<'linux' | 'windows' | 'docker'>(() => {
+    if (typeof navigator === 'undefined') return 'linux'
+    const ua = navigator.userAgent.toLowerCase()
+    if (ua.includes('windows')) return 'windows'
+    if (ua.includes('mac')) return 'linux' // Mac dùng tab linux (cùng bash command)
+    return 'linux'
+  })
   const [showInstall, setShowInstall] = useState(false)
   const [copied, setCopied] = useState(false)
 
