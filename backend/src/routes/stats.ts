@@ -55,13 +55,16 @@ export const statsRoutes: FastifyPluginAsync = async (app) => {
     const since24h = new Date(Date.now() - 24 * 3600 * 1000)
     const since7d = new Date(Date.now() - 7 * 24 * 3600 * 1000)
 
+    // Đồng bộ với trang Phân tích: dùng message_analyses (AI label) + sentAt
+    // thay vì alerts (alert chỉ trigger khi user config rule).
+    const baseAnalysis = { message: { group: { tenantId } }, createdAt: { gte: since7d } } as const
     const [totalGroups, activeGroups, totalMessages24h, openAlerts, complaints24h, opportunities24h, recentActivity] = await Promise.all([
       db.group.count({ where: { tenantId } }),
       db.group.count({ where: { tenantId, lastMessageAt: { gte: since24h } } }),
-      db.message.count({ where: { group: { tenantId }, createdAt: { gte: since24h } } }),
+      db.message.count({ where: { group: { tenantId }, sentAt: { gte: since24h }, senderType: 'CONTACT' } }),
       db.alert.count({ where: { tenantId, status: 'OPEN' } }),
-      db.alert.count({ where: { tenantId, label: 'COMPLAINT', createdAt: { gte: since7d } } }),
-      db.alert.count({ where: { tenantId, label: 'OPPORTUNITY', createdAt: { gte: since7d } } }),
+      db.messageAnalysis.count({ where: { ...baseAnalysis, label: 'COMPLAINT' } }),
+      db.messageAnalysis.count({ where: { ...baseAnalysis, label: 'OPPORTUNITY' } }),
       db.message.findMany({
         where: { group: { tenantId } },
         orderBy: { createdAt: 'desc' },
