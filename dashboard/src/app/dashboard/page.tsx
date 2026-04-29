@@ -19,10 +19,10 @@ type Overview = {
   stats: {
     totalGroups: number
     activeGroups: number
-    messages24h: number
+    messagesInRange: number
     openAlerts: number
-    complaints7d: number
-    opportunities7d: number
+    complaintsInRange: number
+    opportunitiesInRange: number
   }
   recentActivity: Array<{
     id: string
@@ -51,7 +51,16 @@ export default function OverviewPage() {
     lastAutoSyncAt: string | null
   } | null>(null)
 
-  const load = () => api<Overview>('/api/stats/overview').then(setData).catch(() => undefined)
+  // Khoảng thời gian: 1 (24h) hoặc 7 (ngày). Persist localStorage.
+  const [range, setRange] = useState<1 | 7>(() => {
+    if (typeof window === 'undefined') return 1
+    return (localStorage.getItem('zm:overview-range') === '7' ? 7 : 1)
+  })
+  useEffect(() => {
+    if (typeof window !== 'undefined') localStorage.setItem('zm:overview-range', String(range))
+  }, [range])
+
+  const load = () => api<Overview>(`/api/stats/overview?days=${range}`).then(setData).catch(() => undefined)
 
   useEffect(() => {
     load()
@@ -76,7 +85,7 @@ export default function OverviewPage() {
     })
     const i = setInterval(load, 30_000)
     return () => { close(); clearInterval(i) }
-  }, [])
+  }, [range])
 
   function copyCmd() {
     if (!installCmd) return
@@ -148,6 +157,27 @@ export default function OverviewPage() {
       {sessionHealth && <ZaloStatusWidget health={sessionHealth} />}
 
       {/* Stats Grid - iOS widget style */}
+      {/* Range selector: 24h / 7 ngày */}
+      <div className="flex items-center justify-end gap-2 mb-3">
+        <span className="text-xs text-gray-500 dark:text-zinc-400">Thời gian:</span>
+        <div className="inline-flex rounded-lg bg-gray-100 dark:bg-white/5 p-0.5">
+          {([
+            { v: 1 as const, label: '24 giờ' },
+            { v: 7 as const, label: '7 ngày' },
+          ]).map(o => (
+            <button
+              key={o.v}
+              onClick={() => setRange(o.v)}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition ${
+                range === o.v
+                  ? 'bg-white dark:bg-white/15 text-gray-900 dark:text-zinc-100 shadow-sm'
+                  : 'text-gray-600 dark:text-zinc-400 hover:text-gray-800 dark:hover:text-zinc-200'
+              }`}
+            >{o.label}</button>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-6">
         <StatCard
           icon={<span className="text-xl">💬</span>}
@@ -159,9 +189,9 @@ export default function OverviewPage() {
         <StatCard
           icon={<span className="text-xl">📨</span>}
           tint="bg-purple-500/10 text-purple-600"
-          label="Tin nhắn hôm nay"
-          value={s?.messages24h ?? '—'}
-          sub="trong 24 giờ qua"
+          label="Tin nhắn"
+          value={s?.messagesInRange ?? '—'}
+          sub={range === 1 ? 'trong 24 giờ qua' : 'trong 7 ngày qua'}
         />
         <StatCard
           icon={<span className="text-xl">🚨</span>}
@@ -175,22 +205,22 @@ export default function OverviewPage() {
           icon={<span className="text-xl">⚠️</span>}
           tint="bg-orange-500/10 text-orange-600"
           label="Khiếu nại"
-          value={s?.complaints7d ?? '—'}
-          sub="trong 7 ngày"
+          value={s?.complaintsInRange ?? '—'}
+          sub={range === 1 ? '24 giờ qua' : '7 ngày qua'}
         />
         <StatCard
           icon={<span className="text-xl">💰</span>}
           tint="bg-green-500/10 text-green-600"
           label="Cơ hội"
-          value={s?.opportunities7d ?? '—'}
-          sub="trong 7 ngày"
+          value={s?.opportunitiesInRange ?? '—'}
+          sub={range === 1 ? '24 giờ qua' : '7 ngày qua'}
         />
         <StatCard
           icon={<span className="text-xl">✨</span>}
           tint="bg-indigo-500/10 text-indigo-600"
           label="AI đã phân tích"
-          value={s?.messages24h ?? '—'}
-          sub="tin nhắn hôm nay"
+          value={s?.messagesInRange ?? '—'}
+          sub={range === 1 ? 'tin trong 24h' : 'tin trong 7 ngày'}
         />
       </div>
 

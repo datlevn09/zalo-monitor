@@ -12,7 +12,7 @@ import { BoardSwitcher } from '@/components/BoardSwitcher'
 
 const NAV = [
   { href: '/',                    label: 'Home',       icon: IconHome,     tint: 'bg-blue-500',   exact: true },
-  { href: '/dashboard',           label: 'Dashboard',  icon: IconDashboard, tint: 'bg-indigo-600', exact: true },
+  { href: '/dashboard',           label: 'Tổng quan',  icon: IconDashboard, tint: 'bg-indigo-600', exact: true },
   { href: '/dashboard/ai',        label: 'AI Chat',    icon: IconSparkle,  tint: 'bg-indigo-500' },
   { href: '/dashboard/analytics', label: 'Phân tích',  icon: IconChart,    tint: 'bg-purple-500' },
   { href: '/dashboard/search',    label: 'Tìm kiếm',   icon: IconSearch,   tint: 'bg-amber-500' },

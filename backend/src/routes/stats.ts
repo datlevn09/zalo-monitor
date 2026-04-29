@@ -58,17 +58,18 @@ export const statsRoutes: FastifyPluginAsync = async (app) => {
     const tenantId = req.headers['x-tenant-id'] as string
     if (!tenantId) return reply.status(400).send({ error: 'Missing tenant id' })
 
-    const since24h = new Date(Date.now() - 24 * 3600 * 1000)
-    const since7d = new Date(Date.now() - 7 * 24 * 3600 * 1000)
+    const days = Math.max(1, Number((req.query as any)?.days ?? 1))  // default 24h
+    const since = new Date(Date.now() - days * 24 * 3600 * 1000)
+    const since24h = new Date(Date.now() - 24 * 3600 * 1000)  // luôn 24h cho activeGroups
 
     // Đồng bộ với trang Phân tích: filter theo message.sentAt + senderType=CONTACT.
     const baseAnalysis = {
-      message: { group: { tenantId }, sentAt: { gte: since7d }, senderType: 'CONTACT' as const },
+      message: { group: { tenantId }, sentAt: { gte: since }, senderType: 'CONTACT' as const },
     } as const
-    const [totalGroups, activeGroups, totalMessages24h, openAlerts, complaints24h, opportunities24h, recentActivity] = await Promise.all([
+    const [totalGroups, activeGroups, totalMessages, openAlerts, complaints, opportunities, recentActivity] = await Promise.all([
       db.group.count({ where: { tenantId } }),
       db.group.count({ where: { tenantId, lastMessageAt: { gte: since24h } } }),
-      db.message.count({ where: { group: { tenantId }, sentAt: { gte: since24h }, senderType: 'CONTACT' } }),
+      db.message.count({ where: { group: { tenantId }, sentAt: { gte: since }, senderType: 'CONTACT' } }),
       db.alert.count({ where: { tenantId, status: 'OPEN' } }),
       db.messageAnalysis.count({ where: { ...baseAnalysis, label: 'COMPLAINT' } }),
       db.messageAnalysis.count({ where: { ...baseAnalysis, label: 'OPPORTUNITY' } }),
@@ -86,10 +87,14 @@ export const statsRoutes: FastifyPluginAsync = async (app) => {
     return {
       stats: {
         totalGroups, activeGroups,
-        messages24h: totalMessages24h,
+        messagesInRange: totalMessages,
         openAlerts,
-        complaints7d: complaints24h,
-        opportunities7d: opportunities24h,
+        complaintsInRange: complaints,
+        opportunitiesInRange: opportunities,
+        // Aliases backward-compat (cũ): để không vỡ caller cũ
+        messages24h: totalMessages,
+        complaints7d: complaints,
+        opportunities7d: opportunities,
       },
       recentActivity,
     }
