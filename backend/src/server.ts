@@ -41,7 +41,16 @@ import { installRoutes } from './routes/install.js'
 import { licenseValidateRoutes } from './routes/license-validate.js'
 import { startSessionMonitor } from './services/session-monitor.js'
 
-const app = Fastify({ logger: true })
+// Logger:
+//  - level=warn trong production → bỏ 95% log noise (incoming/completed request)
+//  - level=info trong dev để debug. Set LOG_LEVEL env để override.
+//  - disableRequestLogging: bỏ log mọi request, chỉ log khi có error (giảm 10x volume).
+const app = Fastify({
+  logger: {
+    level: process.env.LOG_LEVEL ?? (process.env.NODE_ENV === 'production' ? 'warn' : 'info'),
+  },
+  disableRequestLogging: process.env.NODE_ENV === 'production',
+})
 
 await app.register(cors, { origin: true })
 await app.register(jwt, { secret: process.env.JWT_SECRET ?? 'dev-secret' })
@@ -97,7 +106,17 @@ await app.register(conversationAiRoutes, { prefix: '/api/groups' })
 await app.register(appointmentRoutes,    { prefix: '/api/appointments' })
 await app.register(boardRoutes, { prefix: '/api/board' })
 
-app.get('/health', async () => ({ status: 'ok', ts: Date.now() }))
+// /health — healthcheck cho Docker. Check DB connect được không (cách deep test)
+app.get('/health', async (_req, reply) => {
+  try {
+    const { db } = await import('./services/db.js')
+    await db.$queryRaw`SELECT 1`
+    return { status: 'ok', ts: Date.now() }
+  } catch (e: any) {
+    reply.status(503)
+    return { status: 'unhealthy', error: e?.message ?? 'DB error' }
+  }
+})
 
 // Manual trigger digest with range (day/week/month)
 app.post('/api/digest/trigger', async (req, reply) => {
